@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: cad-extractor-3d
+    runtime: node
+    plan: free              # free tier: 512 MB RAM, shared CPU
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000        # Render assigns this automatically, but set as default
+    healthCheckPath: /
+    autoDeploy: true        # auto-deploy on every git push to main branch
