@@ -749,11 +749,12 @@ if(isDxf){isExportingPDF=false;draw();}else{manIsExportingPDF=false;drawManualCa
 // STEP 3: Build tables HTML
 // Auto font size: fit all rows in ~150mm height
 var totalRows=pts.length+dims.length+lines.length+(_savedArea>0?3:0);
-// Use 2-column layout when many rows (>20)
-var _twoCol=totalRows>20;
-var fontPt=Math.min(5.5,Math.max(3.5,Math.floor(380/(Math.max(totalRows/_twoCol?2:1,1)*2.0))));
+// Auto font: fit all rows in stamp column (~150mm = 425pt)
+var _twoCol=pts.length>14; // 2-col coords when >14 points
+var effRows=(_twoCol?Math.ceil(pts.length/2):pts.length)+dims.length+lines.length+(_savedArea>0?4:0);
+var fontPt=Math.min(5.5,Math.max(3.0,Math.floor(420/Math.max(effRows*2.1,1))));
 var thFontPt=Math.min(6.0,fontPt+0.5);
-var cp='0.2mm 0.8mm';
+var cp=fontPt<=4?'0.15mm 0.6mm':'0.2mm 0.8mm';
 
 function _th(txt){return '<th style="font-size:'+thFontPt+'pt;padding:'+cp+';background:#1e293b;color:#fff;border:0.3pt solid #334155;text-align:left;white-space:nowrap;">'+txt+'</th>';}
 function _td(txt,bg){return '<td style="font-size:'+fontPt+'pt;padding:'+cp+';border:0.3pt solid #e2e8f0;font-family:monospace;white-space:nowrap;'+(bg?'background:#f8fafc;':'')+'">'+txt+'</td>';}
@@ -766,7 +767,7 @@ function _tbl(hdrs,rows){
 var tables='';
 if(pts.length>0){
   tables+=_h2('Координаты точек');
-  if(_twoCol&&pts.length>12){
+  if(_twoCol&&pts.length>14){
     var _half=Math.ceil(pts.length/2);
     var _pA=pts.slice(0,_half),_pB=pts.slice(_half);
     var _cell='font-size:'+fontPt+'pt;padding:'+cp+';border:0.3pt solid #e2e8f0;font-family:monospace;';
@@ -2826,3 +2827,149 @@ var _origClearContour=clearContour;
 clearContour=function(){_origClearContour();_updateQuickBar();};
 var _origCloseContour=closeContour;
 closeContour=function(){_origCloseContour();_updateQuickBar();};
+
+
+
+// ─── AI Analysis (ZvenoAI) ────────────────────────────────────────────────────
+var _aiHistory = [];
+
+function openAIPanel(){
+  document.getElementById('ai-panel').classList.remove('hidden');
+}
+function closeAIPanel(){
+  document.getElementById('ai-panel').classList.add('hidden');
+}
+
+function _buildProjectContext(){
+  var ctx = 'ДАННЫЕ ГЕОДЕЗИЧЕСКОГО ПРОЕКТА:\n\n';
+  // Points
+  var pts = (currentMode==='dxf'?points:manualPoints)||[];
+  if(pts.length>0){
+    ctx += 'Точки ('+pts.length+' шт):\n';
+    pts.forEach(function(p){
+      ctx += '  P'+p.id+': X='+p.x.toFixed(3)+' Y='+p.y.toFixed(3)+
+             (p.z!==null&&p.z!==undefined?' Z='+p.z.toFixed(3):'')+'\n';
+    });
+    ctx += '\n';
+  }
+  // Dimensions
+  if(dimensions&&dimensions.length>0){
+    ctx += 'Размеры ('+dimensions.length+' шт):\n';
+    dimensions.forEach(function(d){
+      ctx += '  '+d.label+': '+d.distance.toFixed(3)+' м\n';
+    });
+    ctx += '\n';
+  }
+  // Area/Volume
+  if(_savedArea>0){
+    ctx += 'Площадь: '+_savedArea.toFixed(3)+' м²\n';
+    ctx += 'Периметр: '+_savedPerimeter.toFixed(3)+' м\n';
+    if(_savedVolume>0) ctx += 'Объём грунта: '+_savedVolume.toFixed(3)+' м³\n';
+    if(typeof _savedPileVolume!=='undefined'&&_savedPileVolume>0)
+      ctx += 'Объём бетона (сваи): '+_savedPileVolume.toFixed(3)+' м³\n';
+    ctx += '\n';
+  }
+  // Symbols
+  if(cadSymbols&&cadSymbols.length>0){
+    ctx += 'Условные обозначения ('+cadSymbols.length+' шт):\n';
+    cadSymbols.forEach(function(s){
+      ctx += '  '+s.label+' '+JSON.stringify(s.props)+'\n';
+    });
+    ctx += '\n';
+  }
+  // DXF info
+  if(dxfData&&dxfData.entities){
+    ctx += 'DXF: '+dxfData.entities.length+' объектов, '+
+           Object.keys(dxfLayers||{}).length+' слоёв\n';
+  }
+  return ctx;
+}
+
+var _aiQuickPrompts = {
+  summary:  'Дай краткую сводку этого геодезического проекта: основные параметры, размеры, площади, объёмы.',
+  quality:  'Проанализируй качество геодезических данных: проверь координаты на аномалии, пропуски Z-отметок, подозрительные значения.',
+  volume:   'Рассчитай и проанализируй объёмы земляных работ. Дай рекомендации по точности расчётов.',
+  pdf:      'Подготовь текст для исполнительной схемы PDF: наименование работ, характеристики объекта, основные параметры.',
+  anomaly:  'Найди аномалии и потенциальные ошибки в данных. Укажи точки с подозрительными координатами или Z-отметками.'
+};
+
+function aiQuick(type){
+  var prompt = _aiQuickPrompts[type];
+  if(!prompt)return;
+  document.getElementById('ai-input').value = prompt;
+  sendAIMessage();
+}
+
+function _aiAppendMsg(role, text){
+  var box = document.getElementById('ai-messages');
+  var div = document.createElement('div');
+  div.className = role==='user'
+    ? 'self-end bg-violet-600 text-white rounded-2xl rounded-br-sm px-3 py-2 max-w-[85%]'
+    : 'self-start bg-slate-100 text-slate-800 rounded-2xl rounded-bl-sm px-3 py-2 max-w-[85%] whitespace-pre-wrap';
+  div.style.lineHeight='1.5';
+  div.textContent = text;
+  // Remove empty state
+  var empty = box.querySelector('.text-center');
+  if(empty)empty.remove();
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendAIMessage(){
+  var input = document.getElementById('ai-input');
+  var text = (input.value||'').trim();
+  if(!text)return;
+  input.value='';
+
+  _aiAppendMsg('user', text);
+  _aiHistory.push({role:'user', content: text});
+
+  var typing = document.getElementById('ai-typing');
+  var sendBtn = document.getElementById('ai-send-btn');
+  if(typing) typing.classList.remove('hidden');
+  if(sendBtn) sendBtn.disabled=true;
+
+  // Build messages with context
+  var systemMsg = {
+    role: 'system',
+    content: 'Ты геодезический ИИ-помощник. Анализируй данные точно и кратко. Отвечай на русском языке.\n\n' +
+             _buildProjectContext()
+  };
+  var messages = [systemMsg].concat(_aiHistory.slice(-10));
+  var model = document.getElementById('ai-model').value;
+
+  try{
+    var resp = await fetch('/api/ai',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:model, messages:messages, max_tokens:1500})
+    });
+    if(resp.status===401){
+      window.location.href='/login'; return;
+    }
+    var data = await resp.json();
+    if(data.error){
+      _aiAppendMsg('assistant','⚠ Ошибка: '+data.error);
+    } else {
+      var reply = data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+      if(reply){
+        _aiHistory.push({role:'assistant',content:reply});
+        _aiAppendMsg('assistant',reply);
+      } else {
+        _aiAppendMsg('assistant','⚠ Пустой ответ от модели');
+      }
+    }
+  }catch(e){
+    _aiAppendMsg('assistant','⚠ Ошибка сети: '+e.message);
+  }finally{
+    if(typing)typing.classList.add('hidden');
+    if(sendBtn)sendBtn.disabled=false;
+  }
+}
+
+// Check auth on load
+window.addEventListener('load',function(){
+  fetch('/api/me').then(function(r){
+    if(r.status===401)window.location.href='/login';
+  });
+});
