@@ -786,8 +786,9 @@ if(isDxf){isExportingPDF=false;draw();}else{manIsExportingPDF=false;drawManualCa
 // Auto font size: fit all rows in ~150mm height
 var totalRows=pts.length+dims.length+lines.length+(_savedArea>0?3:0);
 // Use 2-column layout when many rows (>20)
-var _twoCol=totalRows>20;
-var fontPt=Math.min(5.5,Math.max(3.5,Math.floor(380/(Math.max(totalRows/_twoCol?2:1,1)*2.0))));
+var _twoCol=pts.length>10;
+var _effRows=(_twoCol?Math.ceil(pts.length/2):pts.length)+dims.length+lines.length+(_savedArea>0?4:0);
+var fontPt=Math.min(5.0,Math.max(2.8,Math.floor(400/Math.max(_effRows*2.2,1))));
 var thFontPt=Math.min(6.0,fontPt+0.5);
 var cp='0.2mm 0.8mm';
 
@@ -802,7 +803,7 @@ function _tbl(hdrs,rows){
 var tables='';
 if(pts.length>0){
   tables+=_h2('Координаты точек');
-  if(_twoCol&&pts.length>12){
+  if(_twoCol&&pts.length>10){
     var _half=Math.ceil(pts.length/2);
     var _pA=pts.slice(0,_half),_pB=pts.slice(_half);
     var _cell='font-size:'+fontPt+'pt;padding:'+cp+';border:0.3pt solid #e2e8f0;font-family:monospace;';
