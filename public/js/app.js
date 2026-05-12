@@ -1,4 +1,4 @@
-// CAD Extractor 3D — main application
+// CAD Extractor 3D
 
 let georefPickMode=null,secondDxfElements=[],secondDxfVisible=true,secondDxfLinesVisible=true,secondDxfPointsVisible=true,georefTransform=null;
 let northAngle=0,showGrid=false,northPickMode=false,northPickP1=null,northPickHover=null;
@@ -1073,38 +1073,45 @@ function loadSecondDxfFile(input){
   input.value='';
 }
 function georefLoadPreview(input){
-  var file=input.files[0];
-  if(!file)return;
+  var file=input.files[0];if(!file)return;
   document.getElementById('gr-file-name').textContent=file.name;
-  // Store file reference
-  var fi=document.getElementById('georef-file-input');
-  fi._pendingFile=file;
+  var fi=document.getElementById('georef-file-input');if(fi)fi._pendingFile=file;
   input.value='';
-  // Parse and render preview
-  var ParserClass=window.DxfParser||(typeof DxfParser!=='undefined'?DxfParser:null);
-  if(!ParserClass){document.getElementById('georef-mini-hint').textContent='DXF парсер не загружен';return;}
-  var reader=new FileReader();
-  reader.onload=function(ev){
+  _grMiniMsg('Загрузка: '+file.name+'...','#78350f','#fefce8');
+  var PC=window.DxfParser||(typeof DxfParser!=='undefined'?DxfParser:null);
+  if(!PC){_grMiniMsg('DxfParser не загружен','#be123c','#fff1f2');return;}
+  function tryParse(text){
     try{
-      var parser=new ParserClass();
-      var dxf=parser.parseSync(ev.target.result);
-      _georefParsedDxf=dxf;
-      _georefExtractMiniSnaps(dxf);
-      ['gr-mini-x1','gr-mini-y1','gr-mini-x2','gr-mini-y2',
-       'gr-p1-lx','gr-p1-ly','gr-p2-lx','gr-p2-ly'].forEach(function(id){
-        var el=document.getElementById(id);if(el)el.value='';});
-      _georefMiniP1=null;_georefMiniP2=null;
-      _grP1L=null;_grP2L=null;
-      _georefRenderMini();
-      _georefPopulateSnapList();
-      document.getElementById('georef-mini-hint').style.display='none';
-      document.getElementById('gr-mini-status').textContent='Файл загружен. Укажите базовые точки кнопками выше.';
-    }catch(err){
-      document.getElementById('georef-mini-hint').textContent='Ошибка: '+err.message;
-    }
-  };
-  reader.readAsText(file,'windows-1251');
+      var dxf=(new PC()).parseSync(text);
+      if(!dxf||!dxf.entities){_grMiniMsg('Нет секции ENTITIES','#be123c','#fff1f2');return;}
+      _georefParsedDxf=dxf;_georefExtractMiniSnaps(dxf);_georefRenderMini();_georefPopulateSnapList();
+      var hint=document.getElementById('georef-mini-hint');if(hint)hint.style.display='none';
+      var st=document.getElementById('gr-mini-status');
+      var cnt=(_georefMiniElems||[]).length;
+      if(st)st.textContent='Файл: '+file.name+' ('+cnt+' эл.). Укажите базовые точки.';
+      if(cnt===0){
+        var r2=new FileReader();
+        r2.onload=function(ev2){try{var d2=(new PC()).parseSync(ev2.target.result);
+          if(d2&&d2.entities){_georefParsedDxf=d2;_georefExtractMiniSnaps(d2);_georefRenderMini();_georefPopulateSnapList();
+            if(st)st.textContent='CP1251: '+file.name+' ('+(_georefMiniElems||[]).length+' эл.)';}
+        }catch(e2){}};
+        r2.readAsText(file,'windows-1251');
+      }
+      ['gr-mini-x1','gr-mini-y1','gr-mini-x2','gr-mini-y2','gr-p1-lx','gr-p1-ly','gr-p2-lx','gr-p2-ly'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+      _georefMiniP1=null;_georefMiniP2=null;_grP1L=null;_grP2L=null;
+    }catch(err){_grMiniMsg('Ошибка:\n'+err.message,'#be123c','#fff1f2');}
+  }
+  var r=new FileReader();r.onload=function(ev){tryParse(ev.target.result);};r.onerror=function(){_grMiniMsg('Ошибка чтения','#be123c','#fff1f2');};
+  r.readAsText(file,'UTF-8');
 }
+function _grMiniMsg(text,color,bg){
+  var cv=document.getElementById('georef-mini-canvas');if(!cv)return;
+  var ctx=cv.getContext('2d'),W=cv.width||460,H=cv.height||320;
+  ctx.fillStyle=bg||'#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle=color||'#334155';ctx.font='13px sans-serif';ctx.textAlign='center';
+  text.split('\n').forEach(function(l,i,a){ctx.fillText(l,W/2,H/2+(i-(a.length-1)/2)*20);});ctx.textAlign='left';
+}
+
+
 
 function applyGeoref(){
   // Read from JS vars (primary) — survives modal reopen
@@ -1635,102 +1642,54 @@ var _georefPickTarget=0;   // 0=none, 1=picking P1, 2=picking P2
 var _georefMiniP1=null, _georefMiniP2=null;
 
 function _georefExtractMiniSnaps(dxf){
-  _georefMiniSnaps=[];
-  _georefMiniElems=[];
+  _georefMiniSnaps=[];_georefMiniElems=[];_georefMiniScale=1;_georefMiniOX=0;_georefMiniOY=0;
   var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-  function addPt(x,y){
-    if(!isFinite(x)||!isFinite(y))return;
-    _georefMiniSnaps.push({x:x,y:y});
-    if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
-  }
-  function traverse(entities,tx,ty,sx,sy){
-    if(!entities)return;
-    entities.forEach(function(en){
-      if(!en)return;
-      try{
-        if(en.type==='INSERT'&&dxf.blocks&&en.name&&dxf.blocks[en.name]){
-          var _blk=dxf.blocks[en.name];
-          var bx=(en.position?(en.position.x||0):0)*sx+tx;
-          var by=(en.position?(en.position.y||0):0)*sy+ty;
-          var bsx=sx*(en.scaleX||en.scale&&en.scale.x||1);
-          var bsy=sy*(en.scaleY||en.scale&&en.scale.y||1);
-          if(_blk.entities)traverse(_blk.entities,bx,by,bsx,bsy);
-          return;
-        }
-        var pts=[];
-        if(en.type==='LINE'){
-          // dxf-parser v1.x uses start/end; some versions use vertices
-          if(en.start&&en.end){
-            pts.push({x:en.start.x*sx+tx,y:en.start.y*sy+ty});
-            pts.push({x:en.end.x*sx+tx,y:en.end.y*sy+ty});
-          } else if(en.vertices&&en.vertices.length>=2){
-            en.vertices.forEach(function(v){pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
-          }
-        } else if((en.type==='LWPOLYLINE'||en.type==='POLYLINE'||en.type==='SPLINE')){
-          var _verts=en.vertices||[];
-          _verts.forEach(function(v){pts.push({x:(v.x||0)*sx+tx,y:(v.y||0)*sy+ty});});
-        } else if(en.type==='TEXT'||en.type==='MTEXT'){
-          if(en.startPoint)pts.push({x:en.startPoint.x*sx+tx,y:en.startPoint.y*sy+ty});
-          else if(en.position)pts.push({x:en.position.x*sx+tx,y:en.position.y*sy+ty});
-        } else if((en.type==='CIRCLE'||en.type==='ARC')&&en.center){
-          pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
-        } else if(en.type==='ELLIPSE'&&en.center){
-          pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
-        } else if(en.type==='POINT'){
-          var _pp=en.position||en.point;
-          if(_pp)pts.push({x:_pp.x*sx+tx,y:_pp.y*sy+ty});
-        }
-        pts.forEach(function(p){addPt(p.x,p.y);});
-        if(pts.length>=2)_georefMiniElems.push({type:'line',pts:pts});
-        else if(pts.length===1)_georefMiniElems.push({type:'point',pt:pts[0]});
-        if((en.type==='CIRCLE'||en.type==='ARC')&&en.center&&en.radius)
-          _georefMiniElems.push({type:'circle',cx:en.center.x*sx+tx,cy:en.center.y*sy+ty,r:en.radius*Math.abs(sx)});
-      }catch(_){}
-    });
-  }
-  traverse(dxf.entities,0,0,1,1);
-  // Compute transform for mini canvas
-  var cv=document.getElementById('georef-mini-canvas');
-  if(!cv||!isFinite(minX))return;
-  var W=cv.width,H=cv.height,pad=20;
-  var rangeX=maxX-minX||1,rangeY=maxY-minY||1;
-  _georefMiniScale=Math.min((W-2*pad)/rangeX,(H-2*pad)/rangeY);
-  _georefMiniOX=minX-(W/2-rangeX*_georefMiniScale/2)/_georefMiniScale;
-  _georefMiniOY=minY-(H/2-rangeY*_georefMiniScale/2)/_georefMiniScale;
+  function addPt(x,y){if(!isFinite(x)||!isFinite(y)||Math.abs(x)>1e12||Math.abs(y)>1e12)return;_georefMiniSnaps.push({x:x,y:y});if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}
+  function getPts(en,tx,ty,sx,sy){var pts=[];try{var t=en.type;
+    if(t==='LINE'){if(en.start&&en.end){pts.push({x:en.start.x*sx+tx,y:en.start.y*sy+ty});pts.push({x:en.end.x*sx+tx,y:en.end.y*sy+ty});}if(en.vertices&&en.vertices.length>=2)en.vertices.forEach(function(v){pts.push({x:(v.x||0)*sx+tx,y:(v.y||0)*sy+ty});});}
+    else if(t==='LWPOLYLINE'||t==='POLYLINE'||t==='SPLINE')(en.vertices||[]).forEach(function(v){pts.push({x:(v.x||0)*sx+tx,y:(v.y||0)*sy+ty});});
+    else if(t==='CIRCLE'||t==='ARC'){if(en.center&&isFinite(en.center.x)){var R=en.radius||0;for(var a=0;a<Math.PI*2;a+=Math.PI/6)pts.push({x:(en.center.x+Math.cos(a)*R)*sx+tx,y:(en.center.y+Math.sin(a)*R)*sy+ty});}}
+    else if(t==='POINT'){var pp=en.position||en.point;if(pp&&isFinite(pp.x))pts.push({x:pp.x*sx+tx,y:pp.y*sy+ty});}
+    else if(t==='TEXT'||t==='MTEXT'){var tp=en.startPoint||en.position||en.insertionPoint;if(tp&&isFinite(tp.x))pts.push({x:tp.x*sx+tx,y:tp.y*sy+ty});}
+    else if(t==='DIMENSION'&&en.definitionPoint)pts.push({x:en.definitionPoint.x*sx+tx,y:en.definitionPoint.y*sy+ty});
+    else if(t==='LEADER'&&en.vertices)en.vertices.forEach(function(v){pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
+  }catch(e){}return pts;}
+  function traverse(entities,tx,ty,sx,sy,depth){if(!entities||!entities.length||depth>8)return;entities.forEach(function(en){if(!en||!en.type)return;
+    if(en.type==='INSERT'){try{var blk=dxf.blocks&&en.name?dxf.blocks[en.name]:null;if(blk&&blk.entities){var bx=(en.position?(en.position.x||0):0)*(sx||1)+(tx||0),by=(en.position?(en.position.y||0):0)*(sy||1)+(ty||0);traverse(blk.entities,bx,by,(sx||1)*(en.scaleX||en.scale&&en.scale.x||1),(sy||1)*(en.scaleY||en.scale&&en.scale.y||1),(depth||0)+1);}}catch(e){}return;}
+    var pts=getPts(en,tx||0,ty||0,sx||1,sy||1);if(!pts.length)return;pts.forEach(function(p){addPt(p.x,p.y);});
+    var isC=en.type==='CIRCLE'||en.type==='ARC';
+    if(pts.length>=2&&!isC)_georefMiniElems.push({type:'line',pts:pts});else if(pts.length===1)_georefMiniElems.push({type:'point',pt:pts[0]});
+    if(isC&&en.center&&isFinite(en.center.x)&&en.radius)_georefMiniElems.push({type:'circle',cx:en.center.x*(sx||1)+(tx||0),cy:en.center.y*(sy||1)+(ty||0),r:en.radius*Math.abs(sx||1)});
+  });}
+  traverse(dxf.entities,0,0,1,1,0);
+  var cv=document.getElementById('georef-mini-canvas');if(!cv)return;
+  var W=cv.width||460,H=cv.height||320;
+  if(!isFinite(minX)){_grMiniMsg('Геометрия не найдена\nЭлементов: '+(dxf.entities?dxf.entities.length:0),'#b45309','#fffbeb');return;}
+  var pad=28,rX=maxX-minX||1,rY=maxY-minY||1;
+  var s=Math.min((W-pad*2)/rX,(H-pad*2)/rY);
+  _georefMiniScale=isFinite(s)&&s>0?s:1;
+  _georefMiniOX=minX-pad/_georefMiniScale;_georefMiniOY=minY-pad/_georefMiniScale;
 }
+
+
 
 function _georefRenderMini(){
   var cv=document.getElementById('georef-mini-canvas');if(!cv)return;
-  var ctx=cv.getContext('2d'),W=cv.width,H=cv.height;
-  var sc=_georefMiniScale,oX=_georefMiniOX,oY=_georefMiniOY;
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
-  // Draw elements
-  ctx.save();ctx.translate(0,H);ctx.scale(sc,-sc);ctx.translate(-oX,-oY);
-  ctx.strokeStyle='#334155';ctx.lineWidth=0.8/sc;ctx.lineCap='round';
-  _georefMiniElems.forEach(function(el){
-    if(el.type==='line'&&el.pts.length>=2){
-      ctx.beginPath();el.pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();
-    } else if(el.type==='circle'){
-      ctx.beginPath();ctx.arc(el.cx,el.cy,el.r,0,Math.PI*2);ctx.stroke();
-    } else if(el.type==='point'){
-      ctx.beginPath();ctx.arc(el.pt.x,el.pt.y,1.5/sc,0,Math.PI*2);ctx.fillStyle='#334155';ctx.fill();
-    }
-  });
-  // Draw snap points
-  ctx.fillStyle='rgba(100,150,220,0.4)';
-  _georefMiniSnaps.forEach(function(p){ctx.beginPath();ctx.arc(p.x,p.y,2/sc,0,Math.PI*2);ctx.fill();});
-  // Draw picked points
-  if(_georefMiniP1){
-    ctx.fillStyle='#f97316';ctx.beginPath();ctx.arc(_georefMiniP1.x,_georefMiniP1.y,5/sc,0,Math.PI*2);ctx.fill();
-    ctx.save();ctx.scale(1,-1);ctx.fillStyle='#f97316';ctx.font='bold '+(9/sc)+'px Arial';
-    ctx.textAlign='center';ctx.fillText('P1',_georefMiniP1.x,-_georefMiniP1.y-6/sc);ctx.restore();
-  }
-  if(_georefMiniP2){
-    ctx.fillStyle='#8b5cf6';ctx.beginPath();ctx.arc(_georefMiniP2.x,_georefMiniP2.y,5/sc,0,Math.PI*2);ctx.fill();
-    ctx.save();ctx.scale(1,-1);ctx.fillStyle='#8b5cf6';ctx.font='bold '+(9/sc)+'px Arial';
-    ctx.textAlign='center';ctx.fillText('P2',_georefMiniP2.x,-_georefMiniP2.y-6/sc);ctx.restore();
-  }
-  ctx.restore();
+  var ctx=cv.getContext('2d'),W=cv.width||460,H=cv.height||320;
+  var sc=_georefMiniScale||1,oX=_georefMiniOX||0,oY=_georefMiniOY||0;
+  ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
+  if(!_georefMiniElems||!_georefMiniElems.length)return;
+  function wx(x){return(x-oX)*sc;}function wy(y){return H-(y-oY)*sc;}
+  ctx.strokeStyle='#1e293b';ctx.lineWidth=0.8;ctx.lineCap='round';ctx.lineJoin='round';
+  _georefMiniElems.forEach(function(el){try{
+    if(el.type==='line'&&el.pts&&el.pts.length>=2){ctx.beginPath();el.pts.forEach(function(p,i){i?ctx.lineTo(wx(p.x),wy(p.y)):ctx.moveTo(wx(p.x),wy(p.y));});ctx.stroke();}
+    else if(el.type==='circle'&&isFinite(el.cx)){var sR=Math.abs(el.r*sc);if(sR>0.3&&sR<W){ctx.beginPath();ctx.arc(wx(el.cx),wy(el.cy),sR,0,Math.PI*2);ctx.stroke();}}
+    else if(el.type==='point'&&el.pt){ctx.fillStyle='#ef4444';ctx.beginPath();ctx.arc(wx(el.pt.x),wy(el.pt.y),2.5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#1e293b';}
+  }catch(e){}});
+  function drawCtrl(p,label,col){ctx.fillStyle=col;ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(wx(p.x),wy(p.y),8,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle='#fff';ctx.font='bold 10px sans-serif';ctx.textAlign='center';ctx.fillText(label,wx(p.x),wy(p.y)+4);ctx.textAlign='left';ctx.lineWidth=0.8;ctx.strokeStyle='#1e293b';}
+  if(_georefMiniP1)drawCtrl(_georefMiniP1,'P1','#16a34a');if(_georefMiniP2)drawCtrl(_georefMiniP2,'P2','#dc2626');
+  ctx.fillStyle='rgba(255,255,255,0.85)';ctx.fillRect(3,3,170,19);ctx.fillStyle='#475569';ctx.font='9px monospace';
+  ctx.fillText('Эл: '+_georefMiniElems.length+' | Узл: '+(_georefMiniSnaps||[]).length+' | sc:'+sc.toFixed(2),7,14);
 }
 
 
@@ -2685,4 +2644,3 @@ var _origClearContour=clearContour;
 clearContour=function(){_origClearContour();_updateQuickBar();};
 var _origCloseContour=closeContour;
 closeContour=function(){_origCloseContour();_updateQuickBar();};
-
