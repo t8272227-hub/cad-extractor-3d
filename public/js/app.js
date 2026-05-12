@@ -551,11 +551,13 @@ window.addEventListener('mouseup',(e)=>{
     var _cv3=document.getElementById('cad-canvas');if(_cv3)_cv3.style.cursor='';
     if(pdfFrame&&Math.abs(pdfFrame.x1-pdfFrame.x2)>0.01&&Math.abs(pdfFrame.y1-pdfFrame.y2)>0.01){
       showMessage('PDF-рамка ✓','Область выделена. Нажмите кнопку PDF.','success');
+    var _pfBtn=document.getElementById('btn-clear-pdf-frame');
+    if(_pfBtn)_pfBtn.classList.remove('hidden');
     }else{pdfFrame=null;}
     requestDraw();return;
   }
   if(currentMode!=='dxf')return;
-  if(e.button===0&&e.target===dxfCanvasEv&&contourActive&&!contourClosed){
+  if(e.button===0&&e.target===dxfCanvasEv&&contourActive&&!contourClosed&&!(typeof _sdpActive!=='undefined'&&_sdpActive)){
     var _cr2=dxfCanvasEv.getBoundingClientRect();
     var _cmx2=e.clientX-_cr2.left,_cmy2=e.clientY-_cr2.top;
     var _cad2=screenToCad(_cmx2,_cmy2);
@@ -2127,7 +2129,13 @@ function startPdfFrame(){
   if(cv)cv.style.cursor='crosshair';
   requestDraw();
 }
-function clearPdfFrame(){pdfFrame=null;pdfFrameDrawing=false;requestDraw();}
+function clearPdfFrame(){
+  pdfFrame=null;pdfFrameDrawing=false;pdfFrameStart=null;
+  var cv=document.getElementById('cad-canvas');if(cv)cv.style.cursor='';
+  var btn=document.getElementById('btn-clear-pdf-frame');
+  if(btn)btn.classList.add('hidden');
+  requestDraw();
+}
 var _savedPileVolume=0,_savedWellsInside=[];
 
 function saveContourToReport(){
