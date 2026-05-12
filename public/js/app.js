@@ -366,10 +366,13 @@ draw();
 }
 function cadToScreen(x,y){return{x:panX+(x-cadOriginX)*scale,y:panY-(y-cadOriginY)*scale};}
 function screenToCad(x,y){if(northAngle!==0){var _cv=document.getElementById('cad-canvas'),_cx=_cv.width/2,_cy=_cv.height/2;var _a=northAngle*Math.PI/180,_dx=x-_cx,_dy=y-_cy;x=_cx+_dx*Math.cos(_a)-_dy*Math.sin(_a);y=_cy+_dx*Math.sin(_a)+_dy*Math.cos(_a);}return{x:cadOriginX+(x-panX)/scale,y:cadOriginY+(panY-y)/scale};}
-function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=isExportingPDF?4:1;if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';return;}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid&&cadMaxX>cadMinX){var _rw=cadMaxX-cadMinX;var _mag=Math.pow(10,Math.floor(Math.log10(_rw/8)));var _gs=[1,2,5].reduce(function(p,v){return Math.abs(_rw/8-v*_mag)<Math.abs(_rw/8-p*_mag)?v:p;})*_mag;cx.save();cx.strokeStyle="rgba(100,140,220,0.18)";cx.lineWidth=0.4/scale;for(var _xi=Math.floor(cadMinX/_gs)*_gs;_xi<=cadMaxX+_gs;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,cadMinY-_gs);cx.lineTo(_xi,cadMaxY+_gs);cx.stroke();}for(var _yi=Math.floor(cadMinY/_gs)*_gs;_yi<=cadMaxY+_gs;_yi+=_gs){cx.beginPath();cx.moveTo(cadMinX-_gs,_yi);cx.lineTo(cadMaxX+_gs,_yi);cx.stroke();}cx.restore();}if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}_drawSymbols(cx,scale,cadOriginX,cadOriginY,pr);
+function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=isExportingPDF?4:1;if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';return;}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid&&cadMaxX>cadMinX){var _rw=cadMaxX-cadMinX;var _mag=Math.pow(10,Math.floor(Math.log10(_rw/8)));var _gs=[1,2,5].reduce(function(p,v){return Math.abs(_rw/8-v*_mag)<Math.abs(_rw/8-p*_mag)?v:p;})*_mag;cx.save();cx.strokeStyle="rgba(100,140,220,0.18)";cx.lineWidth=0.4/scale;for(var _xi=Math.floor(cadMinX/_gs)*_gs;_xi<=cadMaxX+_gs;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,cadMinY-_gs);cx.lineTo(_xi,cadMaxY+_gs);cx.stroke();}for(var _yi=Math.floor(cadMinY/_gs)*_gs;_yi<=cadMaxY+_gs;_yi+=_gs){cx.beginPath();cx.moveTo(cadMinX-_gs,_yi);cx.lineTo(cadMaxX+_gs,_yi);cx.stroke();}cx.restore();}if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}
+  // Draw symbols in world space
+  _drawSymbols(cx,scale,cadOriginX,cadOriginY,pr);
   // Live preview for symbol drawing panel
   if(typeof _sdpActive!=='undefined'&&_sdpActive&&typeof _sdpDrawPreview==='function')
-    _sdpDrawPreview(cx,scale,cadOriginX,cadOriginY,pr);cx.restore();cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.fillStyle='#334155';cx.beginPath();cadPoints.forEach(p=>{const sp=cadToScreen(p.x,p.y);cx.moveTo(sp.x+1.2*pr,sp.y);cx.arc(sp.x,sp.y,1.2*pr,0,Math.PI*2);});cx.fill();if(earthworksData&&earthworksData.polygon){cx.beginPath();earthworksData.polygon.forEach((p,i)=>{const sp=cadToScreen(p.x,p.y);if(i===0)cx.moveTo(sp.x,sp.y);else cx.lineTo(sp.x,sp.y);});cx.closePath();cx.fillStyle='rgba(249, 115, 22, 0.15)';cx.fill();cx.strokeStyle='#f97316';cx.lineWidth=0.8*pr;cx.setLineDash([4*pr,4*pr]);cx.stroke();cx.setLineDash([]);}if(dxfShowContours&&dxfCachedContours.length>0){cx.lineWidth=1.2*pr;cx.globalAlpha=typeof dxfContourOpacity!=='undefined'?dxfContourOpacity:0.55;cx.strokeStyle=dxfContourColor||'#78716c';cx.beginPath();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length<2)return;const s0=cadToScreen(pt[0].x,pt[0].y);cx.moveTo(s0.x,s0.y);if(pt.length===2){const s1=cadToScreen(pt[1].x,pt[1].y);cx.lineTo(s1.x,s1.y);}else{for(let i=1;i<pt.length-1;i++){const sc=cadToScreen(pt[i].x,pt[i].y),sn=cadToScreen(pt[i+1].x,pt[i+1].y),mx=(sc.x+sn.x)/2,my=(sc.y+sn.y)/2;cx.quadraticCurveTo(sc.x,sc.y,mx,my);}const sl=cadToScreen(pt[pt.length-1].x,pt[pt.length-1].y);cx.lineTo(sl.x,sl.y);}});cx.stroke();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length>=2){const mid=Math.floor(pt.length/2),p1=pt[mid-1]||pt[0],p2=pt[mid]||pt[1],s1=cadToScreen(p1.x,p1.y),s2=cadToScreen(p2.x,p2.y);let a=Math.atan2(s2.y-s1.y,s2.x-s1.x);if(a>Math.PI/2||a<-Math.PI/2)a+=Math.PI;cx.save();cx.translate((s1.x+s2.x)/2,(s1.y+s2.y)/2);cx.rotate(a);cx.textAlign='center';cx.textBaseline='middle';const t=c.z.toFixed(2);cx.font=`bold ${8*pr}px sans-serif`;cx.lineWidth=1.5*pr;cx.strokeStyle='#ffffff';cx.strokeText(t,0,0);cx.fillStyle='#78350f';cx.fillText(t,0,0);cx.restore();}});}const padX=100/scale,padY=100/scale,mx=cadOriginX-panX/scale-padX,Mx=cadOriginX+(cv.width-panX)/scale+padX,my=cadOriginY+(panY-cv.height)/scale-padY,My=cadOriginY+panY/scale+padY;for(let i=0;i<cadTexts.length;i++){const t=cadTexts[i];if(t.x<mx||t.x>Mx||t.y<my||t.y>My)continue;if(points.some(p=>`P${p.id}`===t.text.trim()||p.id.toString()===t.text.trim()))continue;let sh=t.h*scale;
+    _sdpDrawPreview(cx,scale,cadOriginX,cadOriginY,pr);
+  cx.restore();cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.fillStyle='#334155';cx.beginPath();cadPoints.forEach(p=>{const sp=cadToScreen(p.x,p.y);cx.moveTo(sp.x+1.2*pr,sp.y);cx.arc(sp.x,sp.y,1.2*pr,0,Math.PI*2);});cx.fill();if(earthworksData&&earthworksData.polygon){cx.beginPath();earthworksData.polygon.forEach((p,i)=>{const sp=cadToScreen(p.x,p.y);if(i===0)cx.moveTo(sp.x,sp.y);else cx.lineTo(sp.x,sp.y);});cx.closePath();cx.fillStyle='rgba(249, 115, 22, 0.15)';cx.fill();cx.strokeStyle='#f97316';cx.lineWidth=0.8*pr;cx.setLineDash([4*pr,4*pr]);cx.stroke();cx.setLineDash([]);}if(dxfShowContours&&dxfCachedContours.length>0){cx.lineWidth=1.2*pr;cx.globalAlpha=typeof dxfContourOpacity!=='undefined'?dxfContourOpacity:0.55;cx.strokeStyle=dxfContourColor||'#78716c';cx.beginPath();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length<2)return;const s0=cadToScreen(pt[0].x,pt[0].y);cx.moveTo(s0.x,s0.y);if(pt.length===2){const s1=cadToScreen(pt[1].x,pt[1].y);cx.lineTo(s1.x,s1.y);}else{for(let i=1;i<pt.length-1;i++){const sc=cadToScreen(pt[i].x,pt[i].y),sn=cadToScreen(pt[i+1].x,pt[i+1].y),mx=(sc.x+sn.x)/2,my=(sc.y+sn.y)/2;cx.quadraticCurveTo(sc.x,sc.y,mx,my);}const sl=cadToScreen(pt[pt.length-1].x,pt[pt.length-1].y);cx.lineTo(sl.x,sl.y);}});cx.stroke();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length>=2){const mid=Math.floor(pt.length/2),p1=pt[mid-1]||pt[0],p2=pt[mid]||pt[1],s1=cadToScreen(p1.x,p1.y),s2=cadToScreen(p2.x,p2.y);let a=Math.atan2(s2.y-s1.y,s2.x-s1.x);if(a>Math.PI/2||a<-Math.PI/2)a+=Math.PI;cx.save();cx.translate((s1.x+s2.x)/2,(s1.y+s2.y)/2);cx.rotate(a);cx.textAlign='center';cx.textBaseline='middle';const t=c.z.toFixed(2);cx.font=`bold ${8*pr}px sans-serif`;cx.lineWidth=1.5*pr;cx.strokeStyle='#ffffff';cx.strokeText(t,0,0);cx.fillStyle='#78350f';cx.fillText(t,0,0);cx.restore();}});}const padX=100/scale,padY=100/scale,mx=cadOriginX-panX/scale-padX,Mx=cadOriginX+(cv.width-panX)/scale+padX,my=cadOriginY+(panY-cv.height)/scale-padY,My=cadOriginY+panY/scale+padY;for(let i=0;i<cadTexts.length;i++){const t=cadTexts[i];if(t.x<mx||t.x>Mx||t.y<my||t.y>My)continue;if(points.some(p=>`P${p.id}`===t.text.trim()||p.id.toString()===t.text.trim()))continue;let sh=t.h*scale;
 // Clamp: tiny when zoomed out, capped at 9px max — unobtrusive
 let shClamp=Math.max(6,Math.min(sh,9));
 if(sh>0.5&&sh<5000){let sp=cadToScreen(t.x,t.y);cx.save();cx.font=`${shClamp}px sans-serif`;cx.fillStyle='rgba(100, 116, 139, 0.75)';cx.textBaseline='bottom';cx.translate(sp.x,sp.y);if(t.rot!==0)cx.rotate(-t.rot);cx.fillText(t.text,0,0);cx.restore();}}// Fixed small screen-size labels (pr=1 normally, 4 for PDF export)
@@ -1517,7 +1520,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
           ctx.lineWidth=_minW;ctx.lineCap='round';ctx.lineJoin='round';
           ctx.beginPath();
           _axisPts.forEach(function(p,_i){
-            _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
+            _i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
           });
           ctx.stroke();
 
@@ -1527,7 +1530,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
           ctx.setLineDash([Math.max(0.08,2/scl),Math.max(0.08,2/scl)]);
           ctx.beginPath();
           _axisPts.forEach(function(p,_i){
-            _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
+            _i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
           });
           ctx.stroke();ctx.setLineDash([]);
 
@@ -1539,7 +1542,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
             ctx.setLineDash([Math.max(0.05,1.5/scl),Math.max(0.05,1.5/scl)]);
             ctx.beginPath();
             _edgePts.forEach(function(p,_i){
-              _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
+              _i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
             });
             ctx.stroke();ctx.setLineDash([]);
           }
@@ -1551,7 +1554,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
             var _dl=Math.hypot(_dx,_dy)||1;
             var _tx=_dx/_dl,_ty=_dy/_dl; // tangent
             var _nx=-_ty,_ny=_tx;         // normal
-            var _sx=_p0.x-oX,_sy=_p0.y-oY;
+            var _sx=_p0.x,_sy=_p0.y;
             var _hs=_ww/2; // half-width
             ctx.strokeStyle=col;ctx.fillStyle=col;
             ctx.lineWidth=Math.max(0.04,1.5/scl);
@@ -1584,7 +1587,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
           // ── Alignment label next to start ─────────────────────────────────
           if(_align!=='center'&&pts.length>=1){
             var _p0s=_axisPts[0];
-            ctx.save();ctx.translate(_p0s.x-oX,_p0s.y-oY);ctx.scale(1/scl,-1/scl);
+            ctx.save();ctx.translate(_p0s.x,_p0s.y);ctx.scale(1/scl,-1/scl);
             ctx.font=(Math.min(9,Math.max(_ww*scl*0.8,6)))+'px sans-serif';
             ctx.fillStyle=col;ctx.textBaseline='top';ctx.textAlign='left';
             ctx.fillText(_align==='outer'?'нар.':'вн.',2,2);
@@ -1594,7 +1597,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
           // ── Height label at midpoint ──────────────────────────────────────
           if(_wh&&_axisPts.length>=2){
             var _wm=_axisPts[Math.floor(_axisPts.length/2)];
-            ctx.save();ctx.translate(_wm.x-oX,_wm.y-oY);ctx.scale(1/scl,-1/scl);
+            ctx.save();ctx.translate(_wm.x,_wm.y);ctx.scale(1/scl,-1/scl);
             ctx.font='bold '+Math.min(9,Math.max(_ww*scl*1.2,7))+'px sans-serif';
             ctx.fillStyle=col;ctx.textBaseline='bottom';ctx.textAlign='center';
             ctx.fillText('h='+_wh+'м',0,-2);ctx.restore();
@@ -1603,7 +1606,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
         case 'column':{
           var _cr=parseFloat(sym.props.d||0.3)/2,_ch=sym.props.h||'3.0';
           var _cshape=sym.props.shape||'circle';
-          var _cpx=pts[0].x-oX,_cpy=pts[0].y-oY;
+          var _cpx=pts[0].x,_cpy=pts[0].y;
           ctx.lineWidth=1.5/scl;
           if(_cshape==='square'){
             ctx.beginPath();ctx.rect(_cpx-_cr,_cpy-_cr,_cr*2,_cr*2);ctx.stroke();
@@ -1623,9 +1626,9 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
           break;}
         case 'well':
           var dw=parseFloat(sym.props.d||1.0)/2;
-          ctx.lineWidth=2/scl;ctx.beginPath();ctx.arc(pts[0].x-oX,pts[0].y-oY,dw,0,Math.PI*2);ctx.stroke();
-          ctx.beginPath();ctx.moveTo(pts[0].x-oX-dw,pts[0].y-oY);ctx.lineTo(pts[0].x-oX+dw,pts[0].y-oY);ctx.moveTo(pts[0].x-oX,pts[0].y-oY-dw);ctx.lineTo(pts[0].x-oX,pts[0].y-oY+dw);ctx.stroke();
-          ctx.save();ctx.scale(1,-1);ctx.font='bold '+(dw*0.9)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(sym.props.t||'К',pts[0].x-oX,-(pts[0].y-oY));ctx.restore();
+          ctx.lineWidth=2/scl;ctx.beginPath();ctx.arc(pts[0].x,pts[0].y,dw,0,Math.PI*2);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(pts[0].x-dw,pts[0].y);ctx.lineTo(pts[0].x+dw,pts[0].y);ctx.moveTo(pts[0].x,pts[0].y-dw);ctx.lineTo(pts[0].x,pts[0].y+dw);ctx.stroke();
+          ctx.save();ctx.scale(1,-1);ctx.font='bold '+(dw*0.9)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(sym.props.t||'К',pts[0].x,-(pts[0].y));ctx.restore();
           break;
         case 'sewage':_pipe(ctx,pts,oX,oY,scl,col,[0.3/scl,0.15/scl],'К');break;
         case 'water': _pipe(ctx,pts,oX,oY,scl,col,[],'В');break;
@@ -1637,7 +1640,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
           var _pd=parseFloat(sym.props.d||0.3),_pr=_pd/2;
           var _ph=parseFloat(sym.props.h||3.0);
           var _ptop=sym.props.top!==undefined?sym.props.top:'-0.00';
-          var _px=pts[0].x-oX,_py=pts[0].y-oY;
+          var _px=pts[0].x,_py=pts[0].y;
           ctx.lineWidth=0.05;ctx.beginPath();ctx.arc(_px,_py,_pr,0,Math.PI*2);ctx.stroke();
           ctx.fillStyle=sym.color||'#7f1d1d';ctx.beginPath();ctx.arc(_px,_py,_pr*0.35,0,Math.PI*2);ctx.fill();
           ctx.lineWidth=0.03;ctx.beginPath();ctx.moveTo(_px,_py+_pr*0.4);ctx.lineTo(_px,_py+_pr*1.5);ctx.stroke();
@@ -1647,8 +1650,8 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
           ctx.fillText('h='+_ph+'м ('+_ptop+')',2,0);ctx.restore();break;}
         case 'fence':
           if(pts.length<2)break;ctx.lineWidth=1.5/scl;
-          ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);});ctx.stroke();
-          for(var i=0;i<pts.length-1;i++){var dx2=pts[i+1].x-pts[i].x,dy2=pts[i+1].y-pts[i].y,seg=Math.hypot(dx2,dy2);for(var t2=1.5;t2<seg;t2+=2){var fx=pts[i].x+dx2/seg*t2-oX,fy=pts[i].y+dy2/seg*t2-oY;var nx=-dy2/seg*0.4,ny=dx2/seg*0.4;ctx.beginPath();ctx.moveTo(fx,fy);ctx.lineTo(fx+nx,fy+ny);ctx.stroke();}}
+          ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();
+          for(var i=0;i<pts.length-1;i++){var dx2=pts[i+1].x-pts[i].x,dy2=pts[i+1].y-pts[i].y,seg=Math.hypot(dx2,dy2);for(var t2=1.5;t2<seg;t2+=2){var fx=pts[i].x+dx2/seg*t2,fy=pts[i].y+dy2/seg*t2;var nx=-dy2/seg*0.4,ny=dx2/seg*0.4;ctx.beginPath();ctx.moveTo(fx,fy);ctx.lineTo(fx+nx,fy+ny);ctx.stroke();}}
           break;
       }
       ctx.restore();
@@ -2965,48 +2968,29 @@ function _sdpFindSnap(wx,wy){
 function _sdpDrawPreview(ctx,scl,oX,oY,pr){
   if(!_sdpActive||!_sdpType||_sdpPts.length===0)return;
   var t=_ST[_sdpType];
-  var col=document.getElementById('sdp-color');
-  var c=col?col.value:'#2563eb';
+  var colEl=document.getElementById('sdp-color');
+  var c=colEl?colEl.value:'#2563eb';
   var pts=_sdpPts.slice();
-
-  // Add mouse position as rubber-band endpoint
-  if(_sdpMouse&&t.clicks!=='one'){
-    pts.push({x:_sdpMouse.x,y:_sdpMouse.y});
-  }
-
+  if(_sdpMouse&&t.clicks!=='one')pts.push({x:_sdpMouse.x,y:_sdpMouse.y});
   if(pts.length<2)return;
-
-  // Draw rubber-band preview line
   ctx.save();
-  ctx.setLineDash([4/scl,4/scl]);
-  ctx.strokeStyle=c;ctx.lineWidth=1.5/scl;ctx.globalAlpha=0.7;
+  // Canvas has world transform active — use raw world coords
+  ctx.strokeStyle=c;ctx.lineWidth=2/scl;ctx.globalAlpha=0.7;
+  ctx.setLineDash([5/scl,3/scl]);
   ctx.beginPath();
-  pts.forEach(function(p,i){
-    i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
-  });
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Draw placed points
-  ctx.globalAlpha=1;
+  pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+  ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
   _sdpPts.forEach(function(p,i){
     ctx.fillStyle=i===0?'#16a34a':c;
-    ctx.beginPath();ctx.arc(p.x-oX,p.y-oY,4/scl,0,Math.PI*2);ctx.fill();
-    // Point number
-    ctx.save();ctx.translate(p.x-oX,p.y-oY);ctx.scale(1/scl,-1/scl);
-    ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
-    ctx.fillText(i+1,0,3);ctx.restore();
+    ctx.beginPath();ctx.arc(p.x,p.y,4/scl,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.translate(p.x,p.y);ctx.scale(1/scl,-1/scl);
+    ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(i+1,0,0);ctx.restore();
   });
-
-  // Snap indicator on mouse
-  if(_sdpMouse){
-    var snap=_sdpFindSnap(_sdpMouse.x,_sdpMouse.y);
-    if(snap){
-      ctx.strokeStyle='#f59e0b';ctx.lineWidth=1.5/scl;
-      ctx.beginPath();ctx.arc(snap.x-oX,snap.y-oY,8/scl,0,Math.PI*2);ctx.stroke();
-    }
-  }
-
+  if(_sdpMouse){var sn=_sdpFindSnap(_sdpMouse.x,_sdpMouse.y);
+    if(sn){ctx.strokeStyle='#f59e0b';ctx.lineWidth=1.5/scl;
+      ctx.beginPath();ctx.arc(sn.x,sn.y,8/scl,0,Math.PI*2);ctx.stroke();}}
   ctx.restore();
 }
 
