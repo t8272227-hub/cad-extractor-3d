@@ -2,13 +2,22 @@ services:
   - type: web
     name: cad-extractor-3d
     runtime: node
-    plan: free              # free tier: 512 MB RAM, shared CPU
+    plan: free
     buildCommand: npm install
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000        # Render assigns this automatically, but set as default
-    healthCheckPath: /
-    autoDeploy: true        # auto-deploy on every git push to main branch
+      - key: APP_LOGIN
+        generateValue: false
+        # Set in Render dashboard → Environment
+      - key: APP_PASSWORD
+        generateValue: false
+        # Set in Render dashboard → Environment
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ZVENO_API_KEY
+        generateValue: false
+        # Set in Render dashboard → Environment
+    healthCheckPath: /login
+    autoDeploy: true
