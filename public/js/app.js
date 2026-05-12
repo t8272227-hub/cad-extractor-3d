@@ -433,18 +433,7 @@ if(contourPts.length>0){
   }
   cx.textAlign='left';cx.textBaseline='alphabetic';
 }
-// ─── Draw pdfFrame ────────────────────────────────────────────────────────────
-if(pdfFrame&&Number.isFinite(pdfFrame.x1)){
-  var _pf1=cadToScreen(pdfFrame.x1,pdfFrame.y1),_pf2=cadToScreen(pdfFrame.x2,pdfFrame.y2);
-  var _pfx=Math.min(_pf1.x,_pf2.x),_pfy=Math.min(_pf1.y,_pf2.y);
-  var _pfw=Math.abs(_pf2.x-_pf1.x),_pfh=Math.abs(_pf2.y-_pf1.y);
-  cx.strokeStyle='#2563eb';cx.lineWidth=0.8*pr;cx.setLineDash([6*pr,3*pr]);
-  cx.strokeRect(_pfx,_pfy,_pfw,_pfh);cx.setLineDash([]);
-  cx.fillStyle='rgba(37,99,235,0.04)';cx.fillRect(_pfx,_pfy,_pfw,_pfh);
-  cx.fillStyle='#2563eb';cx.font=(8*pr)+'px sans-serif';
-  cx.fillText('📄 PDF',_pfx+3*pr,_pfy+10*pr);
-}
-// Leader callouts
+// ─── Draw // Leader callouts
 if(!isExportingPDF)_drawLeaders(cx,pr);
 if(!isExportingPDF&&currentSnapPoint&&(currentTool==='point'||currentTool==='dimension'||currentTool==='interpolate')){const sp=cadToScreen(currentSnapPoint.x,currentSnapPoint.y),sz=8*pr;var _stp=currentSnapType||'node';
 if(_stp==='node'){
@@ -460,10 +449,31 @@ if(_stp==='node'){
   cx.fillStyle='rgba(124,58,237,0.2)';cx.strokeStyle='#7c3aed';cx.lineWidth=1.5*pr;
   cx.beginPath();cx.moveTo(sp.x,sp.y-sz/2);cx.lineTo(sp.x+sz/2,sp.y+sz/2);
   cx.lineTo(sp.x-sz/2,sp.y+sz/2);cx.closePath();cx.fill();cx.stroke();
-}}cx.restore();}
+}}cx.restore()
+// ── pdfFrame & preview (screen-space, after all transforms) ─────────
+// ── pdfFrame ─────────────────────────────────────────────────────────
+if(pdfFrame&&Number.isFinite(pdfFrame.x1)){
+  var _pf1=cadToScreen(pdfFrame.x1,pdfFrame.y1),_pf2=cadToScreen(pdfFrame.x2,pdfFrame.y2);
+  var _pfx=Math.min(_pf1.x,_pf2.x),_pfy=Math.min(_pf1.y,_pf2.y);
+  var _pfw=Math.abs(_pf2.x-_pf1.x),_pfh=Math.abs(_pf2.y-_pf1.y);
+  cx.strokeStyle='#2563eb';cx.lineWidth=0.8*pr;cx.setLineDash([6*pr,3*pr]);
+  cx.strokeRect(_pfx,_pfy,_pfw,_pfh);cx.setLineDash([]);
+  cx.fillStyle='rgba(37,99,235,0.04)';cx.fillRect(_pfx,_pfy,_pfw,_pfh);
+  cx.fillStyle='#2563eb';cx.font=(8*pr)+'px sans-serif';
+  cx.fillText('📄 PDF',_pfx+3*pr,_pfy+10*pr);
+}
+;}
 
 const dxfCanvasEv=document.getElementById('cad-canvas');
-dxfCanvasEv.addEventListener('mousedown',(e)=>{if(georefPickMode!==null&&e.button===0&&currentMode==='dxf'){const rb=dxfCanvasEv.getBoundingClientRect(),wc=screenToCad(e.clientX-rb.left,e.clientY-rb.top);if(georefPickMode===1){document.getElementById('gr-p1-gx').value=wc.x.toFixed(3);document.getElementById('gr-p1-gy').value=wc.y.toFixed(3);_grP1G={x:wc.x,y:wc.y};}else{document.getElementById('gr-p2-gx').value=wc.x.toFixed(3);document.getElementById('gr-p2-gy').value=wc.y.toFixed(3);_grP2G={x:wc.x,y:wc.y};}stopGeorefPick();openGeoreferenceModal();return;}if(currentMode!=='dxf')return;if(e.button===0&&currentTool==='area'){isDrawingArea=true;const r=dxfCanvasEv.getBoundingClientRect(),c=screenToCad(e.clientX-r.left,e.clientY-r.top);exportArea={x1:c.x,y1:c.y,x2:c.x,y2:c.y};requestDraw();}else if(e.button===0||e.button===1){if(e.button===1)e.preventDefault();isDragging=true;dragMoved=false;lastMouseX=e.clientX;lastMouseY=e.clientY;}});
+dxfCanvasEv.addEventListener('mousedown',(e)=>{if(georefPickMode!==null&&e.button===0&&currentMode==='dxf'){const rb=dxfCanvasEv.getBoundingClientRect(),wc=screenToCad(e.clientX-rb.left,e.clientY-rb.top);if(georefPickMode===1){document.getElementById('gr-p1-gx').value=wc.x.toFixed(3);document.getElementById('gr-p1-gy').value=wc.y.toFixed(3);_grP1G={x:wc.x,y:wc.y};}else{document.getElementById('gr-p2-gx').value=wc.x.toFixed(3);document.getElementById('gr-p2-gy').value=wc.y.toFixed(3);_grP2G={x:wc.x,y:wc.y};}stopGeorefPick();openGeoreferenceModal();return;}if(currentMode!=='dxf')return;if(e.button===0&&currentTool==='area'){isDrawingArea=true;const r=dxfCanvasEv.getBoundingClientRect(),c=screenToCad(e.clientX-r.left,e.clientY-r.top);exportArea={x1:c.x,y1:c.y,x2:c.x,y2:c.y};requestDraw();}else if(e.button===0||e.button===1){if(e.button===1)e.preventDefault();
+// pdfFrame: set start on mousedown
+if(e.button===0&&pdfFrameDrawing){
+  const _rpf=dxfCanvasEv.getBoundingClientRect();
+  pdfFrameStart=screenToCad(e.clientX-_rpf.left,e.clientY-_rpf.top);
+  pdfFrame=null;
+  return;
+}
+isDragging=true;dragMoved=false;lastMouseX=e.clientX;lastMouseY=e.clientY;}});
 dxfCanvasEv.addEventListener('mousemove',(e)=>{if(currentMode!=='dxf')return;if(isDragging){const dx=e.clientX-lastMouseX,dy=e.clientY-lastMouseY;if(!dragMoved&&(Math.abs(dx)>3||Math.abs(dy)>3))dragMoved=true;if(dragMoved){if(northAngle!==0){var _a=northAngle*Math.PI/180,_c=Math.cos(_a),_s=Math.sin(_a);panX+=dx*_c-dy*_s;panY+=dx*_s+dy*_c;}else{panX+=dx;panY+=dy;}lastMouseX=e.clientX;lastMouseY=e.clientY;currentSnapPoint=null;requestDraw();return;}}const r=dxfCanvasEv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;// Track mouse for contour live preview and pdfFrame drawing
 if(contourActive&&!contourClosed){contourMousePos=screenToCad(mx,my);requestDraw();}
 if(pdfFrameDrawing&&pdfFrameStart){
@@ -525,8 +535,13 @@ window.addEventListener('mouseup',(e)=>{
   if(currentMode!=='dxf')return;
   if(e.button===0&&pdfFrameDrawing){
     pdfFrameDrawing=false;
-    if(pdfFrame){
-      showMessage('PDF-рамка','Область для PDF выделена. Используйте кнопку PDF для экспорта.','success');
+    var cv2=document.getElementById('cad-canvas');
+    if(cv2)cv2.style.cursor='';
+    if(pdfFrame&&Math.abs(pdfFrame.x1-pdfFrame.x2)>0.1&&Math.abs(pdfFrame.y1-pdfFrame.y2)>0.1){
+      showMessage('PDF-рамка ✓','Область выделена. Нажмите кнопку PDF для экспорта.','success');
+    } else {
+      pdfFrame=null;
+      showMessage('PDF-рамка','Область слишком мала — попробуйте ещё раз.','warning');
     }
     requestDraw();return;
   }
@@ -546,7 +561,12 @@ window.addEventListener('mouseup',(e)=>{
       if(Math.hypot(contourPts[0].x-_cad2.x,contourPts[0].y-_cad2.y)<_TH2*2){
         closeContour();return;}
     }
-    contourPts.push({x:_cad2.x,y:_cad2.y});
+    // Guard: no duplicate points (min 5px world distance)
+    var _minDist=8/scale;
+    var _isDup=contourPts.some(function(p){
+      return Math.hypot(p.x-_cad2.x,p.y-_cad2.y)<_minDist;
+    });
+    if(!_isDup)contourPts.push({x:_cad2.x,y:_cad2.y});
     updateContourPanel();requestDraw();return;
   }
   if(isDragging){isDragging=false;if(!dragMoved&&e.target===dxfCanvasEv&&e.button===0&&currentTool!=='area'){if(!currentSnapPoint)return;const t=currentSnapPoint;if(currentTool==='point')addPoint(t.x,t.y);else if(currentTool==='interpolate')addInterpolatedPoint(t.x,t.y);else if(currentTool==='dimension'){if(!currentDimStart)currentDimStart=t;else{if(currentDimStart.x!==t.x||currentDimStart.y!==t.y)addDimension(currentDimStart,t);currentDimStart=null;}}requestDraw();}}else if(isDrawingArea){isDrawingArea=false;if(exportArea&&Math.abs(exportArea.x1-exportArea.x2)<0.1)exportArea=null;requestDraw();}});
@@ -1408,6 +1428,8 @@ function _symInit(){
     var el=document.getElementById(cid);if(!el)return;
     el.addEventListener('click',function(ev){
       if(!symTool)return;
+      if(contourActive)return;    // contour mode has priority
+      if(pdfFrameDrawing)return;  // pdf frame mode has priority
       var t=_ST[symTool];var rect=el.getBoundingClientRect();
       var sx=ev.clientX-rect.left,sy=ev.clientY-rect.top;
       // Snap to nearest point
@@ -1425,7 +1447,13 @@ function _symInit(){
   });
 }
 function _symSel(id){
-  symTool=id;symPoints=[];symProp={};var t=_ST[id];
+  // ── Отменить конкурирующие режимы ─────────────────────────────
+  if(contourActive){clearContour();}
+  pdfFrameDrawing=false; pdfFrameStart=null;
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='crosshair';
+  // ────────────────────────────────────────────────────────────────
+  symTool=id; symPoints=[]; symProp={};var t=_ST[id];
   Object.keys(_ST).forEach(function(k){var b=document.getElementById('sb-'+k);if(b){b.style.background=k===id?'#eff6ff':'white';b.style.borderColor=k===id?'#3b82f6':'#e2e8f0';}});
   var fld=document.getElementById('sym-props');fld.innerHTML='';
   t.props.forEach(function(prop){
@@ -2104,17 +2132,21 @@ function saveAreaVolToReport(){
 
 // ─── Contour drawing tool ─────────────────────────────────────────────────────
 function startContour(){
-  contourPts=[];contourActive=true;contourClosed=false;contourMousePos=null;
-  // Change cursor to crosshair to indicate drawing mode
+  // ── Отменить все конкурирующие режимы ──────────────────────────
+  if(symTool){_symCancel();}
+  pdfFrameDrawing=false; pdfFrameStart=null;
+  setTool('point'); // сбросить dimension и прочие
+
+  contourPts=[]; contourActive=true; contourClosed=false; contourMousePos=null;
+
   var cv=document.getElementById('cad-canvas');
   if(cv)cv.style.cursor='crosshair';
-  // Highlight the contour button
   var btn=document.getElementById('btn-contour-tool');
   if(btn){btn.style.background='rgba(124,58,237,0.2)';btn.style.borderRadius='8px';}
-  showMessage('Контур','Кликайте на плане для добавления точек контура.\nКлик у первой точки — замкнуть.\nESC — отмена.','info');
-  _savedArea=0;_savedPerimeter=0;_savedVolume=0;
-  var p=document.getElementById('contour-panel');if(p)p.classList.remove('hidden');
-  updateContourPanel();requestDraw();
+  showMessage('Контур активен',
+    'Кликайте по плану — добавляете вершины.\nКлик у 1-й точки (≥3 вершин) — замкнуть.\nESC — отмена.',
+    'info');
+  requestDraw();
 }
 function undoContourPt(){if(contourPts.length>0){contourPts.pop();contourClosed=false;updateContourPanel();requestDraw();}}
 function closeContour(){
@@ -2151,14 +2183,19 @@ function closeContour(){
   updateContourPanel();requestDraw();
 }
 function clearContour(){
-  contourPts=[];contourActive=false;
+  contourPts=[]; contourActive=false; contourClosed=false; contourMousePos=null;
   var cv=document.getElementById('cad-canvas');
   if(cv)cv.style.cursor='';
   var btn=document.getElementById('btn-contour-tool');
-  if(btn){btn.style.background='';}contourClosed=false;contourMousePos=null;
-  _savedArea=0;_savedPerimeter=0;_savedVolume=0;_savedPileVolume=0;_savedWellsInside=[];
-  var p=document.getElementById('contour-panel');if(p)p.classList.add('hidden');
-  requestDraw();
+  if(btn){btn.style.background=''; btn.style.borderRadius='';}
+  // Hide quick-bar close/cancel buttons
+  var qc=document.getElementById('qb-close-ctr');
+  var qa=document.getElementById('qb-cancel-ctr');
+  var qn=document.getElementById('qb-contour');
+  if(qc)qc.style.display='none';
+  if(qa)qa.style.display='none';
+  if(qn)qn.style.display='flex';
+  updateContourPanel(); requestDraw();
 }
 function updateContourPanel(){
   var el=document.getElementById('ctr-pt-count');if(el)el.textContent=contourPts.length;
@@ -2190,8 +2227,17 @@ function _ptInContour(px,py,poly){
 }
 // ─── PDF Frame ────────────────────────────────────────────────────────────────
 function startPdfFrame(){
-  pdfFrame=null;pdfFrameDrawing=true;pdfFrameStart=null;
-  showMessage('PDF-рамка','Нарисуйте прямоугольник на плане — эта область попадёт в PDF','info');
+  // ── Отменить конкурирующие режимы ─────────────────────────────
+  if(contourActive){clearContour();}
+  if(symTool){_symCancel();}
+  // ────────────────────────────────────────────────────────────────
+  pdfFrame=null; pdfFrameDrawing=true; pdfFrameStart=null;
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='crosshair';
+  showMessage('PDF-рамка',
+    'Зажмите ЛКМ и нарисуйте прямоугольник — эта область войдёт в PDF.\nESC — отмена.',
+    'info');
+  requestDraw();
 }
 function clearPdfFrame(){pdfFrame=null;pdfFrameDrawing=false;requestDraw();}
 var _savedPileVolume=0,_savedWellsInside=[];
