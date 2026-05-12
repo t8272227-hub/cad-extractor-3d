@@ -1,62 +1,42 @@
 const express = require('express');
 const compression = require('compression');
-const helmet = require('helmet');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security headers (relaxed CSP for canvas, CDN libs, file API)
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: [
-        "'self'",
-        "'unsafe-inline'",   // inline scripts in HTML
-        "'unsafe-eval'",     // three.js / Delaunator eval
-        "cdn.tailwindcss.com",
-        "cdnjs.cloudflare.com",
-        "unpkg.com",
-        "cdn.jsdelivr.net",
-      ],
-      styleSrc: [
-        "'self'",
-        "'unsafe-inline'",
-        "cdn.tailwindcss.com",
-        "cdnjs.cloudflare.com",
-        "fonts.googleapis.com",
-      ],
-      fontSrc: ["'self'", "fonts.gstatic.com", "cdnjs.cloudflare.com"],
-      imgSrc: ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'", "api.anthropic.com"],
-      workerSrc: ["'self'", "blob:"],
-      frameSrc: ["'none'"],
-    },
-  },
-  crossOriginEmbedderPolicy: false,
-}));
-
-// Gzip compression for all responses
+// Gzip compression
 app.use(compression());
 
-// Cache static assets
+// Minimal headers — no CSP that blocks CDN libs or FileReader API
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Static files
 app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: process.env.NODE_ENV === 'production' ? '1d' : '0',
+  maxAge: process.env.NODE_ENV === 'production' ? '1h' : '0',
   etag: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
 }));
 
-// SPA fallback — all routes serve index.html
+// SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Error handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).send('Internal Server Error');
+  res.status(500).send('Server Error');
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🗺  CAD Extractor 3D запущен на http://localhost:${PORT}\n`);
+  console.log(`\n🗺  CAD Extractor 3D → http://localhost:${PORT}\n`);
 });
