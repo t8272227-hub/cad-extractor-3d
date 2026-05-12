@@ -65,7 +65,9 @@ if(dxfElements&&dxfElements.length){
 }
 // Marked points
 var _ptMat=new THREE.MeshStandardMaterial({color:0xef4444,roughness:0.4});
-var _ptR=md*0.008;
+// Use fixed screen-proportional size, not bounding box (avoids huge spheres for cadastral coords)
+var _dataRange=Math.min(Mx-mx,My-my)||Math.max(Mx-mx,My-my)||1;
+var _ptR=Math.max(0.3,Math.min(_dataRange*0.015,md*0.003));
 pts.forEach(function(p){
   if(!Number.isFinite(p.z))return;
   var _sg=new THREE.SphereGeometry(_ptR,6,6);
@@ -521,6 +523,13 @@ else currentSnapType='';
 if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-currentDimStart.x,dy=cm.y-currentDimStart.y;if(Math.abs(dx)>Math.abs(dy))cm.y=currentDimStart.y;else cm.x=currentDimStart.x;}currentMouseCAD=cm;let nr=false;if(cp!==currentSnapPoint){currentSnapPoint=cp;nr=true;}if(currentTool==='dimension'&&currentDimStart)nr=true;if(nr)requestDraw();}});
 window.addEventListener('mouseup',(e)=>{
   if(currentMode!=='dxf')return;
+  if(e.button===0&&pdfFrameDrawing){
+    pdfFrameDrawing=false;
+    if(pdfFrame){
+      showMessage('PDF-рамка','Область для PDF выделена. Используйте кнопку PDF для экспорта.','success');
+    }
+    requestDraw();return;
+  }
   if(e.button===0&&e.target===dxfCanvasEv&&contourActive&&!contourClosed){
     var _cr2=dxfCanvasEv.getBoundingClientRect();
     var _cmx2=e.clientX-_cr2.left,_cmy2=e.clientY-_cr2.top;
@@ -750,9 +759,10 @@ if(isDxf){isExportingPDF=false;draw();}else{manIsExportingPDF=false;drawManualCa
 // Auto font size: fit all rows in ~150mm height
 var totalRows=pts.length+dims.length+lines.length+(_savedArea>0?3:0);
 // Auto font: fit all rows in stamp column (~150mm = 425pt)
-var _twoCol=pts.length>14; // 2-col coords when >14 points
-var effRows=(_twoCol?Math.ceil(pts.length/2):pts.length)+dims.length+lines.length+(_savedArea>0?4:0);
-var fontPt=Math.min(5.5,Math.max(3.0,Math.floor(420/Math.max(effRows*2.1,1))));
+var _twoCol=pts.length>10; // 2-col coords when >10 points
+var _symRows=(typeof cadSymbols!=='undefined'&&cadSymbols.length)?Math.ceil(cadSymbols.length/1):0;
+var effRows=(_twoCol?Math.ceil(pts.length/2):pts.length)+dims.length+lines.length+(_savedArea>0?4:0)+_symRows;
+var fontPt=Math.min(5.0,Math.max(2.8,Math.floor(400/Math.max(effRows*2.2,1))));
 var thFontPt=Math.min(6.0,fontPt+0.5);
 var cp=fontPt<=4?'0.15mm 0.6mm':'0.2mm 0.8mm';
 
@@ -1467,27 +1477,17 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
           if(pts.length<2)break;
           var _ww=parseFloat(sym.props.w||0.25);
           var _wh=sym.props.h||'';
-          var _align=sym.props.align||'center'; // center/outer/inner
-          var _mark=sym.props.mark||'none';     // none/tick/circle/arrow
+          var _align=sym.props.align||'center';
+          var _mark=sym.props.mark||'none';
           var _minW=Math.max(_ww,2.5/scl);
 
-          // ── Helper: compute offset polyline in world coords ──────────────
-          // offset>0 = shift right of travel direction, offset<0 = left
-          function _offsetPts(pArr,off){
+          // Offset helper
+          function _offsetPts2(pArr,off){
             var res=[];
             for(var _i=0;_i<pArr.length;_i++){
-              // Average normal at each vertex
               var nx=0,ny=0,cnt=0;
-              if(_i<pArr.length-1){
-                var dx=pArr[_i+1].x-pArr[_i].x,dy=pArr[_i+1].y-pArr[_i].y;
-                var ln=Math.hypot(dx,dy)||1;
-                nx+=(-dy/ln);ny+=(dx/ln);cnt++;
-              }
-              if(_i>0){
-                var dx2=pArr[_i].x-pArr[_i-1].x,dy2=pArr[_i].y-pArr[_i-1].y;
-                var ln2=Math.hypot(dx2,dy2)||1;
-                nx+=(-dy2/ln2);ny+=(dx2/ln2);cnt++;
-              }
+              if(_i<pArr.length-1){var dx=pArr[_i+1].x-pArr[_i].x,dy=pArr[_i+1].y-pArr[_i].y,ln=Math.hypot(dx,dy)||1;nx+=(-dy/ln);ny+=(dx/ln);cnt++;}
+              if(_i>0){var dx2=pArr[_i].x-pArr[_i-1].x,dy2=pArr[_i].y-pArr[_i-1].y,ln2=Math.hypot(dx2,dy2)||1;nx+=(-dy2/ln2);ny+=(dx2/ln2);cnt++;}
               if(cnt){nx/=cnt;ny/=cnt;}
               var nln=Math.hypot(nx,ny)||1;
               res.push({x:pArr[_i].x+off*(nx/nln),y:pArr[_i].y+off*(ny/nln)});
@@ -1495,99 +1495,57 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
             return res;
           }
 
-          // ── Compute axis pts based on alignment ───────────────────────────
-          // 'center': axis = drawn pts (lineWidth = _ww centered)
-          // 'outer' : drawn line is OUTER face → axis shifted inward by _ww/2
-          // 'inner' : drawn line is INNER face → axis shifted outward by _ww/2
+          // Axis based on alignment
           var _axisPts=pts;
-          if(_align==='outer')  _axisPts=_offsetPts(pts,-_ww/2);
-          if(_align==='inner')  _axisPts=_offsetPts(pts, _ww/2);
+          if(_align==='outer') _axisPts=_offsetPts2(pts,-_ww/2);
+          if(_align==='inner') _axisPts=_offsetPts2(pts,+_ww/2);
 
-          // ── Draw outer body line (thick) ──────────────────────────────────
-          ctx.lineWidth=_minW;ctx.lineCap='round';ctx.lineJoin='round';
+          // Draw OUTER edge line
+          var _outPts=_offsetPts2(_axisPts,+_ww/2);
+          // Draw INNER edge line
+          var _inPts=_offsetPts2(_axisPts,-_ww/2);
+
+          // Fill between edges (hatch for wall material)
+          ctx.fillStyle='rgba(100,100,120,0.12)';
           ctx.beginPath();
-          _axisPts.forEach(function(p,_i){
-            _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
-          });
-          ctx.stroke();
+          _outPts.forEach(function(p,i){i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);});
+          for(var _ri=_inPts.length-1;_ri>=0;_ri--)
+            ctx.lineTo(_inPts[_ri].x-oX,_inPts[_ri].y-oY);
+          ctx.closePath();ctx.fill();
 
-          // ── Draw center axis (thin dashed) ────────────────────────────────
-          ctx.strokeStyle='rgba(255,255,255,0.35)';
-          ctx.lineWidth=Math.max(0.02,0.7/scl);
-          ctx.setLineDash([Math.max(0.08,2/scl),Math.max(0.08,2/scl)]);
-          ctx.beginPath();
-          _axisPts.forEach(function(p,_i){
-            _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
-          });
-          ctx.stroke();ctx.setLineDash([]);
-
-          // ── Draw alignment reference lines (outer/inner edges) ────────────
-          if(_align!=='center'){
-            var _edgePts=_offsetPts(_axisPts, _align==='outer'?-_ww/2:_ww/2);
-            ctx.strokeStyle='rgba(0,0,0,0.25)';
-            ctx.lineWidth=Math.max(0.01,0.4/scl);
-            ctx.setLineDash([Math.max(0.05,1.5/scl),Math.max(0.05,1.5/scl)]);
-            ctx.beginPath();
-            _edgePts.forEach(function(p,_i){
-              _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
-            });
-            ctx.stroke();ctx.setLineDash([]);
+          // Outer edge (solid, col)
+          ctx.strokeStyle=col;ctx.lineWidth=Math.max(0.03,1/scl);ctx.lineCap='round';ctx.lineJoin='round';
+          ctx.beginPath();_outPts.forEach(function(p,i){i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);});ctx.stroke();
+          // Inner edge (solid, col)
+          ctx.beginPath();_inPts.forEach(function(p,i){i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);});ctx.stroke();
+          // End caps
+          if(pts.length>=2){
+            ctx.beginPath();ctx.moveTo(_outPts[0].x-oX,_outPts[0].y-oY);ctx.lineTo(_inPts[0].x-oX,_inPts[0].y-oY);ctx.stroke();
+            var _n=_outPts.length-1;
+            ctx.beginPath();ctx.moveTo(_outPts[_n].x-oX,_outPts[_n].y-oY);ctx.lineTo(_inPts[_n].x-oX,_inPts[_n].y-oY);ctx.stroke();
           }
 
-          // ── Draw start mark symbol ────────────────────────────────────────
-          if(_mark!=='none'&&pts.length>=2){
-            var _p0=_axisPts[0],_p1=_axisPts[1];
-            var _dx=_p1.x-_p0.x,_dy=_p1.y-_p0.y;
-            var _dl=Math.hypot(_dx,_dy)||1;
-            var _tx=_dx/_dl,_ty=_dy/_dl; // tangent
-            var _nx=-_ty,_ny=_tx;         // normal
-            var _sx=_p0.x-oX,_sy=_p0.y-oY;
-            var _hs=_ww/2; // half-width
-            ctx.strokeStyle=col;ctx.fillStyle=col;
-            ctx.lineWidth=Math.max(0.04,1.5/scl);
-            if(_mark==='tick'){
-              // Perpendicular tick ⊥
-              ctx.beginPath();
-              ctx.moveTo(_sx+_nx*_hs*1.5,_sy+_ny*_hs*1.5);
-              ctx.lineTo(_sx-_nx*_hs*1.5,_sy-_ny*_hs*1.5);
-              ctx.stroke();
-            } else if(_mark==='circle'){
-              // Circle ○
-              ctx.beginPath();
-              ctx.arc(_sx,_sy,_hs*0.8,0,Math.PI*2);
-              ctx.stroke();
-            } else if(_mark==='arrow'){
-              // Arrow → pointing in wall direction
-              var _ar=_hs*1.2;
-              ctx.beginPath();
-              ctx.moveTo(_sx,_sy);
-              ctx.lineTo(_sx+_tx*_ar,_sy+_ty*_ar);
-              ctx.stroke();
-              ctx.beginPath();
-              ctx.moveTo(_sx+_tx*_ar,_sy+_ty*_ar);
-              ctx.lineTo(_sx+_tx*_ar*0.6+_nx*_ar*0.4,_sy+_ty*_ar*0.6+_ny*_ar*0.4);
-              ctx.lineTo(_sx+_tx*_ar*0.6-_nx*_ar*0.4,_sy+_ty*_ar*0.6-_ny*_ar*0.4);
-              ctx.closePath();ctx.fill();
-            }
-          }
-
-          // ── Alignment label next to start ─────────────────────────────────
-          if(_align!=='center'&&pts.length>=1){
-            var _p0s=_axisPts[0];
-            ctx.save();ctx.translate(_p0s.x-oX,_p0s.y-oY);ctx.scale(1/scl,-1/scl);
-            ctx.font=(Math.min(9,Math.max(_ww*scl*0.8,6)))+'px sans-serif';
-            ctx.fillStyle=col;ctx.textBaseline='top';ctx.textAlign='left';
-            ctx.fillText(_align==='outer'?'нар.':'вн.',2,2);
-            ctx.restore();
-          }
-
-          // ── Height label at midpoint ──────────────────────────────────────
-          if(_wh&&_axisPts.length>=2){
+          // Dimension labels: width
+          if(_axisPts.length>=2){
             var _wm=_axisPts[Math.floor(_axisPts.length/2)];
             ctx.save();ctx.translate(_wm.x-oX,_wm.y-oY);ctx.scale(1/scl,-1/scl);
-            ctx.font='bold '+Math.min(9,Math.max(_ww*scl*1.2,7))+'px sans-serif';
+            ctx.font='bold '+Math.min(9,Math.max(_ww*scl*1.1,6))+'px sans-serif';
             ctx.fillStyle=col;ctx.textBaseline='bottom';ctx.textAlign='center';
-            ctx.fillText('h='+_wh+'м',0,-2);ctx.restore();
+            var _lbl='w='+_ww+'м'+(_wh?(' h='+_wh+'м'):'');
+            ctx.fillText(_lbl,0,-2);ctx.restore();
+          }
+
+          // Start mark symbol
+          if(_mark!=='none'&&pts.length>=2){
+            var _p0=_axisPts[0],_p1=_axisPts[1];
+            var _dx=_p1.x-_p0.x,_dy=_p1.y-_p0.y,_dl=Math.hypot(_dx,_dy)||1;
+            var _tx=_dx/_dl,_ty=_dy/_dl;
+            var _nx=-_ty,_ny=_tx;
+            var _sx=_p0.x-oX,_sy=_p0.y-oY,_hs=_ww/2;
+            ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=Math.max(0.04,1.5/scl);
+            if(_mark==='tick'){ctx.beginPath();ctx.moveTo(_sx+_nx*_hs*1.5,_sy+_ny*_hs*1.5);ctx.lineTo(_sx-_nx*_hs*1.5,_sy-_ny*_hs*1.5);ctx.stroke();}
+            else if(_mark==='circle'){ctx.beginPath();ctx.arc(_sx,_sy,_hs*0.8,0,Math.PI*2);ctx.stroke();}
+            else if(_mark==='arrow'){var _ar=_hs*1.2;ctx.beginPath();ctx.moveTo(_sx,_sy);ctx.lineTo(_sx+_tx*_ar,_sy+_ty*_ar);ctx.stroke();ctx.beginPath();ctx.moveTo(_sx+_tx*_ar,_sy+_ty*_ar);ctx.lineTo(_sx+_tx*_ar*0.6+_nx*_ar*0.4,_sy+_ty*_ar*0.6+_ny*_ar*0.4);ctx.lineTo(_sx+_tx*_ar*0.6-_nx*_ar*0.4,_sy+_ty*_ar*0.6-_ny*_ar*0.4);ctx.closePath();ctx.fill();}
           }
           break;}
         case 'column':{
@@ -2147,6 +2105,13 @@ function saveAreaVolToReport(){
 // ─── Contour drawing tool ─────────────────────────────────────────────────────
 function startContour(){
   contourPts=[];contourActive=true;contourClosed=false;contourMousePos=null;
+  // Change cursor to crosshair to indicate drawing mode
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='crosshair';
+  // Highlight the contour button
+  var btn=document.getElementById('btn-contour-tool');
+  if(btn){btn.style.background='rgba(124,58,237,0.2)';btn.style.borderRadius='8px';}
+  showMessage('Контур','Кликайте на плане для добавления точек контура.\nКлик у первой точки — замкнуть.\nESC — отмена.','info');
   _savedArea=0;_savedPerimeter=0;_savedVolume=0;
   var p=document.getElementById('contour-panel');if(p)p.classList.remove('hidden');
   updateContourPanel();requestDraw();
@@ -2186,7 +2151,11 @@ function closeContour(){
   updateContourPanel();requestDraw();
 }
 function clearContour(){
-  contourPts=[];contourActive=false;contourClosed=false;contourMousePos=null;
+  contourPts=[];contourActive=false;
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='';
+  var btn=document.getElementById('btn-contour-tool');
+  if(btn){btn.style.background='';}contourClosed=false;contourMousePos=null;
   _savedArea=0;_savedPerimeter=0;_savedVolume=0;_savedPileVolume=0;_savedWellsInside=[];
   var p=document.getElementById('contour-panel');if(p)p.classList.add('hidden');
   requestDraw();
@@ -2711,8 +2680,8 @@ function _getSymLeaderText(sym){
 
 function _drawLeaders(ctx,pr){
   if(!showLeaders||!cadSymbols.length)return;
-  var FONT_SZ=6.5*pr, LINE_H=8*pr;
-  var DIST=38*pr;   // leader length in screen px
+  var FONT_SZ=5.5*pr, LINE_H=7*pr;
+  var DIST=28*pr;   // leader length in screen px
   var DOT_R=1.8*pr; // dot at symbol
   
   cadSymbols.forEach(function(sym,idx){
@@ -2973,3 +2942,84 @@ window.addEventListener('load',function(){
     if(r.status===401)window.location.href='/login';
   });
 });
+
+
+// AI Panel setup
+function _setupAIPanel(){
+  if(document.getElementById('ai-panel'))return;
+  var p=document.createElement('div');
+  p.id='ai-panel';
+  p.style.cssText='position:fixed;top:0;right:0;bottom:0;width:400px;background:#fff;'+
+    'box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:200;display:none;flex-direction:column;border-left:2px solid #7c3aed;';
+  
+  var header=document.createElement('div');
+  header.style.cssText='display:flex;align-items:center;justify-content:space-between;'+
+    'padding:10px 14px;background:linear-gradient(90deg,#4c1d95,#7c3aed);flex-shrink:0;';
+  header.innerHTML='<span style="color:#fff;font-weight:700;font-size:14px">🤖 ИИ Анализ — ZvenoAI</span>';
+  
+  var closeBtn=document.createElement('button');
+  closeBtn.textContent='✕';
+  closeBtn.style.cssText='color:rgba(255,255,255,.8);background:none;border:none;cursor:pointer;font-size:18px;';
+  closeBtn.onclick=closeAIPanel;
+  header.appendChild(closeBtn);
+  p.appendChild(header);
+
+  // Model selector row
+  var mrow=document.createElement('div');
+  mrow.style.cssText='padding:6px 12px;border-bottom:1px solid #f1f5f9;background:#faf5ff;flex-shrink:0;';
+  var sel=document.createElement('select');
+  sel.id='ai-model';
+  sel.style.cssText='font-size:11px;border-radius:6px;padding:3px 8px;border:1px solid #e2e8f0;';
+  [['openai/gpt-4o-mini','GPT-4o mini'],['openai/gpt-4o','GPT-4o'],
+   ['anthropic/claude-3-5-haiku','Claude 3.5 Haiku'],['google/gemini-2.0-flash','Gemini 2.0 Flash']]
+  .forEach(function(m){var o=document.createElement('option');o.value=m[0];o.textContent=m[1];sel.appendChild(o);});
+  mrow.appendChild(sel);
+  p.appendChild(mrow);
+
+  // Quick buttons
+  var qrow=document.createElement('div');
+  qrow.style.cssText='padding:6px 12px;border-bottom:1px solid #f1f5f9;display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0;';
+  [['summary','📊 Сводка','#f3f0ff','#6d28d9'],['quality','✅ Качество','#eff6ff','#1d4ed8'],
+   ['volume','📦 Объёмы','#f0fdf4','#15803d'],['pdf','📄 Для PDF','#fff7ed','#c2410c'],
+   ['anomaly','⚠ Аномалии','#fef2f2','#be123c']]
+  .forEach(function(q){
+    var b=document.createElement('button');
+    b.textContent=q[1];b.dataset.key=q[0];
+    b.style.cssText='font-size:10px;background:'+q[2]+';color:'+q[3]+';border:none;border-radius:12px;padding:4px 10px;cursor:pointer;';
+    b.onclick=function(){aiQuick(this.dataset.key);};
+    qrow.appendChild(b);
+  });
+  p.appendChild(qrow);
+
+  // Messages area
+  var msgs=document.createElement('div');
+  msgs.id='ai-messages';
+  msgs.style.cssText='flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:13px;';
+  msgs.innerHTML='<div style="text-align:center;color:#94a3b8;padding:20px 0;font-size:12px">🤖<br>Выберите запрос или напишите вопрос</div>';
+  p.appendChild(msgs);
+
+  // Input area
+  var inp=document.createElement('div');
+  inp.style.cssText='border-top:1px solid #f1f5f9;padding:10px 12px;flex-shrink:0;';
+  var typing=document.createElement('div');
+  typing.id='ai-typing';
+  typing.style.cssText='display:none;font-size:11px;color:#94a3b8;margin-bottom:6px;';
+  typing.textContent='ИИ анализирует...';
+  inp.appendChild(typing);
+  var row=document.createElement('div');
+  row.style.cssText='display:flex;gap:6px;';
+  var ta=document.createElement('textarea');
+  ta.id='ai-input';ta.rows=2;ta.placeholder='Спросите об этом проекте...';
+  ta.style.cssText='flex:1;border:1.5px solid #e2e8f0;border-radius:8px;padding:7px 10px;font-size:13px;resize:none;outline:none;';
+  ta.addEventListener('keydown',function(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendAIMessage();}});
+  row.appendChild(ta);
+  var sb=document.createElement('button');
+  sb.textContent='→';sb.id='ai-send-btn';
+  sb.style.cssText='background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:0 14px;cursor:pointer;font-size:16px;';
+  sb.onclick=sendAIMessage;
+  row.appendChild(sb);
+  inp.appendChild(row);
+  p.appendChild(inp);
+  document.body.appendChild(p);
+}
+window.addEventListener('load',_setupAIPanel);
