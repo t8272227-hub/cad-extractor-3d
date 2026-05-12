@@ -2054,7 +2054,7 @@ function startContour(){
   if(cv)cv.style.cursor='crosshair';
   // Show compact contour panel
   var p=document.getElementById('contour-panel');
-  if(p)p.classList.remove('hidden');
+  if(p)p.style.display='flex';
   updateContourPanel();
   requestDraw();
 }
@@ -2097,7 +2097,7 @@ function clearContour(){
   var cv=document.getElementById('cad-canvas');
   if(cv)cv.style.cursor='';
   var p=document.getElementById('contour-panel');
-  if(p)p.classList.add('hidden');
+  if(p)p.style.display='none';
   updateContourPanel();
   requestDraw();
 }
