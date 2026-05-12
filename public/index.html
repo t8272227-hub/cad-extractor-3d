@@ -1718,661 +1718,249 @@ function georefLoadPreview(input){
   var file=input.files[0];
   if(!file)return;
   document.getElementById('gr-file-name').textContent=file.name;
-  // Store file reference
   var fi=document.getElementById('georef-file-input');
-  fi._pendingFile=file;
+  if(fi)fi._pendingFile=file;
   input.value='';
-  // Parse and render preview
-  var ParserClass=window.DxfParser||(typeof DxfParser!=='undefined'?DxfParser:null);
-  if(!ParserClass){document.getElementById('georef-mini-hint').textContent='DXF парсер не загружен';return;}
-  var reader=new FileReader();
-  reader.onload=function(ev){
+
+  // Show loading state on canvas
+  var cv=document.getElementById('georef-mini-canvas');
+  if(cv){
+    var ctx=cv.getContext('2d');
+    ctx.fillStyle='#fefce8';ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle='#78350f';ctx.font='14px sans-serif';ctx.textAlign='center';
+    ctx.fillText('Загрузка '+file.name+'...',cv.width/2,cv.height/2);
+    ctx.textAlign='left';
+  }
+
+  // Try UTF-8 first, then windows-1251
+  function tryParse(text){
+    var PC=window.DxfParser||(typeof DxfParser!=='undefined'?DxfParser:null);
+    if(!PC){
+      _grShowError('DxfParser не загружен. Перезагрузите страницу.');return;
+    }
     try{
-      var parser=new ParserClass();
-      var dxf=parser.parseSync(ev.target.result);
+      var dxf=(new PC()).parseSync(text);
+      if(!dxf){_grShowError('Файл не распознан как DXF');return;}
       _georefParsedDxf=dxf;
-      _georefExtractMiniSnaps(dxf);
-      ['gr-mini-x1','gr-mini-y1','gr-mini-x2','gr-mini-y2',
-       'gr-p1-lx','gr-p1-ly','gr-p2-lx','gr-p2-ly'].forEach(function(id){
-        var el=document.getElementById(id);if(el)el.value='';});
-      _georefMiniP1=null;_georefMiniP2=null;
-      _grP1L=null;_grP2L=null;
+      _georefBuildElems(dxf);
       _georefRenderMini();
       _georefPopulateSnapList();
-      document.getElementById('georef-mini-hint').style.display='none';
-      document.getElementById('gr-mini-status').textContent='Файл загружен. Укажите базовые точки кнопками выше.';
+      var hint=document.getElementById('georef-mini-hint');
+      if(hint)hint.style.display='none';
+      var st=document.getElementById('gr-mini-status');
+      if(st)st.textContent='Файл загружен: '+file.name+'. Укажите базовые точки кнопками выше.';
+      ['gr-mini-x1','gr-mini-y1','gr-mini-x2','gr-mini-y2',
+       'gr-p1-lx','gr-p1-ly','gr-p2-lx','gr-p2-ly'].forEach(function(id){
+        var el=document.getElementById(id);if(el)el.value='';
+      });
+      _georefMiniP1=null;_georefMiniP2=null;_grP1L=null;_grP2L=null;
     }catch(err){
-      document.getElementById('georef-mini-hint').textContent='Ошибка: '+err.message;
+      _grShowError('Ошибка разбора DXF: '+err.message);
     }
-  };
-  reader.readAsText(file,'windows-1251');
-}
-
-function applyGeoref(){
-  // Read from JS vars (primary) — survives modal reopen
-  var _missing=[];
-  if(!_grP1L)_missing.push('P1 съёмки — выберите точку в разделе 1б');
-  if(!_grP2L)_missing.push('P2 съёмки — выберите точку в разделе 1б');
-  if(!_grP1G)_missing.push('P1 на основном чертеже — нажмите «На карте» в разделе 2');
-  if(!_grP2G)_missing.push('P2 на основном чертеже — нажмите «На карте» в разделе 2');
-  if(_missing.length>0){
-    showMessage('Не указаны точки','Не заполнены:\n• '+_missing.join('\n• '),'warning');return;
   }
-  var p1lx=_grP1L.x,p1ly=_grP1L.y,p2lx=_grP2L.x,p2ly=_grP2L.y;
-  var p1gx=_grP1G.x,p1gy=_grP1G.y,p2gx=_grP2G.x,p2gy=_grP2G.y;
-
-  var p1s={x:p1lx,y:p1ly}, p2s={x:p2lx,y:p2ly};
-  var p1d={x:p1gx,y:p1gy}, p2d={x:p2gx,y:p2gy};
-  var t=computeHelmert(p1s,p2s,p1d,p2d);
-  if(!t){showMessage('Ошибка','Базовые точки совпадают — расстояние между точками должно быть ненулевым.','error');return;}
-  georefTransform=t;
-
-  // Show transform info
-  var _ib=document.getElementById('gr-info-box');if(_ib)_ib.classList.remove('hidden');
-  var _gs=document.getElementById('gr-scale');if(_gs)_gs.textContent=t.s.toFixed(6);
-  var _ga=document.getElementById('gr-angle');if(_ga)_ga.textContent=t.angleDeg.toFixed(4)+'°';
-  var _gac=document.getElementById('gr-accuracy');if(_gac)_gac.textContent=t.residual.toFixed(4)+' м';
-  var _gtx=document.getElementById('gr-tx');if(_gtx)_gtx.textContent=t.tx.toFixed(3);
-  var _gty=document.getElementById('gr-ty');if(_gty)_gty.textContent=t.ty.toFixed(3);
-
-  // Use DXF already parsed in 1б preview section
-  try{
-    var dxf=_georefParsedDxf;
-    if(!dxf||!dxf.entities||dxf.entities.length===0)throw new Error('Загрузите файл съёмки в разделе «Предпросмотр» (1б)');
-    var _mx_el=document.getElementById('gr-mirror-x');var _my_el=document.getElementById('gr-mirror-y');var mX=_mx_el?_mx_el.checked:false;var mY=_my_el?_my_el.checked:false;secondDxfElements=processSecondDxfData(dxf,t,mX,mY);
-      secondDxfVisible=true;
-      // Points stay in secondDxfElements (no auto-merge).
-      // User can import Z via Layers panel → "Импортировать Z-высоты"
-      rebuildCachedPath();
-      _updateDxf2LayerPanel();
-      document.getElementById('gr-clear-btn').classList.remove('hidden');
-      closeGeoreferenceModal();
-      requestDraw();
-      showMessage('Успешно',
-        'Наложение выполнено.\nОбъектов в съёмочном файле: '+secondDxfElements.length+
-        '\nМасштаб: '+t.s.toFixed(4)+' | Поворот: '+t.angleDeg.toFixed(2)+'°'+
-        (mX?' | Зерк.X':'')+
-        (mY?' | Зерк.Y':'')+
-        '\n\nСъёмочный чертёж — оранжевым.\nZ-высоты: импортируйте через Слои → Вложенный DXF',
-        'success');
-  }catch(err){
-    showMessage('Ошибка','Не удалось обработать DXF: '+err.message,'error');
-  }
-}
-
-function clearGeoref(){
-  secondDxfElements=[];secondDxfVisible=false;georefTransform=null;
-  document.getElementById('gr-clear-btn').classList.add('hidden');
-  document.getElementById('gr-info-box').classList.add('hidden');
-  document.getElementById('gr-file-name').textContent='файл не выбран';
-  requestDraw();
-  closeGeoreferenceModal();
-  showMessage('Очищено','Наложение второго чертежа удалено.','info');
-}
-
-function showHelpTab(id){
-  document.querySelectorAll('.help-panel').forEach(function(p){p.classList.add('hidden');});
-  document.querySelectorAll('.help-tab').forEach(function(t){
-    t.classList.remove('active','border-blue-600','text-blue-600');
-    t.classList.add('inactive','border-transparent','text-slate-500');
-  });
-  var panel=document.getElementById(id);
-  if(panel)panel.classList.remove('hidden');
-  var tab=document.getElementById('ht-'+id.replace('h-',''));
-  if(tab){tab.classList.remove('inactive','border-transparent','text-slate-500');tab.classList.add('active','border-blue-600','text-blue-600');}
-}
-
-function mirrorManualPoints(axis){
-  if(!manualPoints||manualPoints.length===0){
-    showMessage('Нет точек','Добавьте точки для зеркального отображения.','warning');
-    return;
-  }
-  saveManState();
-  // Centroid
-  var cx=0,cy=0;
-  manualPoints.forEach(function(p){cx+=p.x;cy+=p.y;});
-  cx/=manualPoints.length;
-  cy/=manualPoints.length;
-  // Mirror around centroid
-  manualPoints.forEach(function(p){
-    if(axis==='x'){
-      p.y=2*cy-p.y;          // reflect around horizontal centre line
-    }else{
-      p.x=2*cx-p.x;          // reflect around vertical centre line
+  function _grShowError(msg){
+    var cv2=document.getElementById('georef-mini-canvas');
+    if(cv2){
+      var c2=cv2.getContext('2d');
+      c2.fillStyle='#fff1f2';c2.fillRect(0,0,cv2.width,cv2.height);
+      c2.fillStyle='#be123c';c2.font='13px sans-serif';c2.textAlign='center';
+      var lines=msg.match(/.{1,50}/g)||[msg];
+      lines.forEach(function(l,i){c2.fillText(l,cv2.width/2,cv2.height/2-10+i*18);});
+      c2.textAlign='left';
     }
-  });
-  updateManualTable();
-  updateManualLinesTable();
-  requestManualDraw();
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// NORTH ARROW
-// ══════════════════════════════════════════════════════════════════════════════
-function _northInit(){_northDraw();}
-function _northApply(){
-  northAngle=parseFloat(document.getElementById('nw-deg').value)||0;
-  var r=document.getElementById('nw-range');if(r)r.value=northAngle;
-  _northDraw();requestDraw();
-}
-function _northDraw(){
-  var ang=northAngle,r=ang*Math.PI/180,sA=Math.sin(r),cA=Math.cos(r);
-  var tks=[0,90,180,270].map(function(a){
-    var ra=(a+ang)*Math.PI/180,s=Math.sin(ra),c=Math.cos(ra);
-    return '<line x1="'+(s*27).toFixed(1)+'" y1="'+(-c*27).toFixed(1)+'" x2="'+(s*31).toFixed(1)+'" y2="'+(-c*31).toFixed(1)+'" stroke="#cbd5e1" stroke-width="1"/>';
-  }).join('');
-  var svg='<svg width="64" height="64" viewBox="-32 -32 64 64" xmlns="http://www.w3.org/2000/svg">'
-    +'<circle r="30" fill="rgba(255,255,255,.95)" stroke="#94a3b8" stroke-width="1.2"/>'+tks
-    +'<g transform="rotate('+ang+')">'
-      +'<polygon points="0,-22 6,2 0,4 -6,2" fill="#1e293b"/>'
-      +'<polygon points="0,22 6,-2 0,-4 -6,-2" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>'
-    +'</g><circle r="2.5" fill="#475569"/>'
-    +'<text x="'+(sA*24).toFixed(1)+'" y="'+(-cA*24).toFixed(1)+'" text-anchor="middle" dominant-baseline="middle" font-size="10" font-weight="bold" fill="#1e293b" font-family="Arial">\u0421</text>'
-    +'</svg>';
-  var el=document.getElementById('nw-svg');if(el)el.innerHTML=svg;
-}
-function _northFindSnap(cx,cy){
-  var cad=screenToCad(cx,cy);
-  if(!cadSnapPoints||!cadSnapPoints.length)return{x:cad.x,y:cad.y,sx:cx,sy:cy};
-  var th=15/scale,best=null,bd=Infinity;
-  cadSnapPoints.forEach(function(p){var d=Math.hypot(p.x-cad.x,p.y-cad.y);if(d<th&&d<bd){bd=d;best=p;}});
-  if(best){var scr=cadToScreen(best.x,best.y);return{x:best.x,y:best.y,sx:scr.x,sy:scr.y};}
-  return{x:cad.x,y:cad.y,sx:cx,sy:cy};
-}
-function _northStartPick(){
-  northPickMode=true;northPickP1=null;northPickHover=null;
-  document.getElementById('nw-overlay').style.display='block';
-  document.getElementById('nw-hint').style.display='block';
-  document.getElementById('nw-hint').textContent='Клик 1/2: ЮЖНЫЙ конец линии (привязка к узлам \u25cb)';
-  document.getElementById('nw-pick-btn').style.display='none';
-}
-function _northCancelPick(){
-  northPickMode=false;northPickP1=null;northPickHover=null;
-  document.getElementById('nw-overlay').style.display='none';
-  document.getElementById('nw-snap').style.display='none';
-  document.getElementById('nw-p1').style.display='none';
-  document.getElementById('nw-hint').style.display='none';
-  document.getElementById('nw-pick-btn').style.display='block';
-  requestDraw();
-}
-function _northPickMove(e){
-  var snap=_northFindSnap(e.clientX,e.clientY);
-  northPickHover={x:snap.x,y:snap.y};requestDraw();
-  var dot=document.getElementById('nw-snap');
-  dot.style.display='block';dot.style.left=snap.sx+'px';dot.style.top=snap.sy+'px';
-}
-function _northPickClick(e){
-  var snap=_northFindSnap(e.clientX,e.clientY);
-  if(!northPickP1){
-    northPickP1={x:snap.x,y:snap.y};
-    var d=document.getElementById('nw-p1');d.style.display='block';d.style.left=snap.sx+'px';d.style.top=snap.sy+'px';
-    document.getElementById('nw-hint').textContent='Клик 2/2: СЕВЕРНЫЙ конец (P1: '+snap.x.toFixed(2)+', '+snap.y.toFixed(2)+')';
-  } else {
-    var dx=snap.x-northPickP1.x,dy=snap.y-northPickP1.y;
-    if(Math.hypot(dx,dy)<0.001){_northCancelPick();return;}
-    var b=((Math.atan2(dx,dy)*180/Math.PI)%360+360)%360;
-    northAngle=Math.round(b*10)/10;
-    document.getElementById('nw-deg').value=northAngle;
-    _northApply();_northCancelPick();
-    var h=document.getElementById('nw-hint');
-    h.style.display='block';h.textContent='\u2713 Az='+northAngle.toFixed(1)+'\u00b0 — холст повёрнут';
-    setTimeout(function(){h.style.display='none';},3000);
+    var st=document.getElementById('gr-mini-status');
+    if(st)st.textContent=msg;
   }
-}
-document.addEventListener('keydown',function(e){if(e.key==='Escape'&&northPickMode)_northCancelPick();});
-function _northDrawPDF(ctx,W,H,PR){
-  if(northAngle===0&&!showGrid)return;
-  var ang=northAngle*Math.PI/180,SZ=28*PR,MG=12*PR;
-  var ox=W-SZ-MG,oy=H-SZ-MG-13*PR;
-  ctx.save();
-  ctx.beginPath();ctx.arc(ox,oy,SZ,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,.93)';ctx.fill();ctx.strokeStyle='#94a3b8';ctx.lineWidth=0.8*PR;ctx.stroke();
-  ctx.save();ctx.translate(ox,oy);ctx.rotate(ang);
-  ctx.beginPath();ctx.moveTo(0,-SZ*.72);ctx.lineTo(SZ*.18,SZ*.07);ctx.lineTo(0,SZ*.11);ctx.lineTo(-SZ*.18,SZ*.07);ctx.closePath();ctx.fillStyle='#1e293b';ctx.fill();
-  ctx.beginPath();ctx.moveTo(0,SZ*.72);ctx.lineTo(SZ*.18,-SZ*.07);ctx.lineTo(0,-SZ*.11);ctx.lineTo(-SZ*.18,-SZ*.07);ctx.closePath();ctx.fillStyle='#e2e8f0';ctx.fill();
-  ctx.restore();
-  ctx.font='bold '+(9*PR)+'px Arial';ctx.fillStyle='#1e293b';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('\u0421',ox+Math.sin(ang)*SZ*.8,oy-Math.cos(ang)*SZ*.8);
-  ctx.font=(7.5*PR)+'px Arial';ctx.fillStyle='#475569';ctx.textBaseline='top';
-  ctx.fillText('Az\u00a0'+northAngle.toFixed(1)+'\u00b0',ox,oy+SZ+2*PR);
-  ctx.restore();
+
+  var r=new FileReader();
+  r.onload=function(ev){tryParse(ev.target.result);};
+  r.onerror=function(){_grShowError('Ошибка чтения файла');};
+  // Try UTF-8 (works for most DXF)
+  r.readAsText(file,'UTF-8');
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// УСЛОВНЫЕ ОБОЗНАЧЕНИЯ (Symbols)
-// ══════════════════════════════════════════════════════════════════════════════
-var _ST={
-  wall:  {label:'Стена',      icon:'🧱',color:'#7c3aed',clicks:'multi',
-          props:[
-            {id:'w',label:'Ширина (м)',def:'0.25',step:'0.05'},
-            {id:'h',label:'Высота (м)',def:'3.0',step:'0.1'},
-            {id:'align',label:'Привязка',def:'center',type:'sel',
-             opts:['center','outer','inner'],
-             optLabels:['По центру','По наружной','По внутренней']},
-            {id:'mark',label:'Знак начала',def:'none',type:'sel',
-             opts:['none','tick','circle','arrow'],
-             optLabels:['Нет','Засечка ⊥','Кружок ○','Стрелка →']}
-          ],hint:'Точки оси стены → ✓ (двойной клик — завершить)'},
-  column:{label:'Столб/Колонна',icon:'⬛',color:'#374151',clicks:'one',
-          props:[
-            {id:'shape',label:'Геометрия',def:'circle',type:'sel',
-             opts:['circle','square'],optLabels:['Круглая','Квадратная']},
-            {id:'d',label:'Ø / Сторона (м)',def:'0.3',step:'0.05'},
-            {id:'h',label:'Высота (м)',def:'3.0',step:'0.1'}
-          ],hint:'Клик: центр'},
-  pile:  {label:'Свая',       icon:'⬇',color:'#7f1d1d',clicks:'one',
-          props:[
-            {id:'d',label:'Диаметр (м)',def:'0.3',step:'0.05'},
-            {id:'h',label:'Глубина (м)',def:'3.0',step:'0.1'},
-            {id:'top',label:'Отметка верха',def:'-0.00',step:'0.01'}
-          ],hint:'Клик: центр сваи'},
-  well:  {label:'Колодец',    icon:'⭕',color:'#0891b2',clicks:'one',
-          props:[
-            {id:'d',label:'Диаметр (м)',def:'1.0',step:'0.1'},
-            {id:'t',label:'Тип',def:'Кан',type:'sel',opts:['Кан','Вод','Газ','Тепл','Эл']}
-          ],hint:'Клик: центр'},
-  sewage:{label:'Канализация', icon:'🔲',color:'#374151',clicks:'multi',
-          props:[{id:'d',label:'Ø мм',def:'200',step:'50'}],hint:'Трасса → ✓'},
-  water: {label:'Водопровод',  icon:'🔵',color:'#2563eb',clicks:'multi',
-          props:[{id:'d',label:'Ø мм',def:'100',step:'25'}],hint:'Трасса → ✓'},
-  gas:   {label:'Газопровод',  icon:'🟡',color:'#b45309',clicks:'multi',
-          props:[{id:'p',label:'Давл.',def:'Низкое',type:'sel',
-                 opts:['Низкое','Среднее','Высокое']}],hint:'Трасса → ✓'},
-  heat:  {label:'Теплосеть',   icon:'🔴',color:'#dc2626',clicks:'multi',
-          props:[{id:'d',label:'Ø мм',def:'150',step:'25'}],hint:'Трасса → ✓'},
-  cable: {label:'Кабель',      icon:'⚡',color:'#78350f',clicks:'multi',
-          props:[{id:'v',label:'кВ',def:'0.4',type:'sel',
-                 opts:['0.4','6','10','35']}],hint:'Трасса → ✓'},
-  fence: {label:'Забор',       icon:'🚧',color:'#78716c',clicks:'multi',
-          props:[],hint:'Точки → ✓'},
-};
-function _symInit(){
-  var g=document.getElementById('sym-grid');if(!g)return;g.innerHTML='';
-  Object.entries(_ST).forEach(function(e){var id=e[0],t=e[1];
-    var b=document.createElement('button');b.id='sb-'+id;
-    b.innerHTML=t.icon+'<br><span style="font-size:9px;font-weight:700;">'+t.label+'</span>';
-    b.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px 3px;border-radius:8px;border:1.5px solid #e2e8f0;font-size:18px;cursor:pointer;background:white;min-height:50px;transition:all .12s;';
-    b.onclick=function(){_symSel(id);};g.appendChild(b);
-  });
-  _symLegend();
-  // Draggable panel
-  var p=document.getElementById('sym-panel'),h=document.getElementById('sym-drag');
-  var ox=0,oy=0,mx=0,my=0,dr=false;
-  h.addEventListener('mousedown',function(e){if(e.target.closest('button'))return;dr=true;ox=p.offsetLeft;oy=p.offsetTop;mx=e.clientX;my=e.clientY;e.preventDefault();});
-  document.addEventListener('mousemove',function(e){if(!dr)return;p.style.left=(ox+e.clientX-mx)+'px';p.style.top=Math.max(0,oy+e.clientY-my)+'px';p.style.bottom='auto';});
-  document.addEventListener('mouseup',function(){dr=false;});
-  // Canvas click handlers for symbol placement (high priority)
-  ['cad-canvas','manual-canvas'].forEach(function(cid){
-    var el=document.getElementById(cid);if(!el)return;
-    el.addEventListener('click',function(ev){
-      if(!symTool)return;
-      var t=_ST[symTool];var rect=el.getBoundingClientRect();
-      var sx=ev.clientX-rect.left,sy=ev.clientY-rect.top;
-      // Snap to nearest point
-      var cad=(cid==='cad-canvas')?screenToCad(sx,sy):screenToMan(sx,sy);
-      if(cid==='cad-canvas'&&cadSnapPoints&&cadSnapPoints.length){
-        var th2=15/scale,bd2=Infinity,best2=null;
-        cadSnapPoints.forEach(function(p){var d=Math.hypot(p.x-cad.x,p.y-cad.y);if(d<th2&&d<bd2){bd2=d;best2=p;}});
-        if(best2)cad=best2;
-      }
-      symPoints.push({x:cad.x,y:cad.y});
-      if(t.clicks==='one'||(t.clicks==='two'&&symPoints.length===2)){_symFinish();}
-      else{document.getElementById('sym-hint').textContent=t.hint+' ('+symPoints.length+' точ.)';}
-      ev.stopPropagation();requestDraw();if(cid==='manual-canvas')requestManualDraw();
-    },true);
-  });
-}
-function _symSel(id){
-  symTool=id;symPoints=[];symProp={};var t=_ST[id];
-  Object.keys(_ST).forEach(function(k){var b=document.getElementById('sb-'+k);if(b){b.style.background=k===id?'#eff6ff':'white';b.style.borderColor=k===id?'#3b82f6':'#e2e8f0';}});
-  var fld=document.getElementById('sym-props');fld.innerHTML='';
-  t.props.forEach(function(prop){
-    symProp[prop.id]=prop.def;
-    var row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:8px;';
-    var lbl=document.createElement('span');lbl.textContent=prop.label;lbl.style.cssText='flex:1;font-size:10px;color:#64748b;';row.appendChild(lbl);
-    var inp;
-    if(prop.type==='sel'){
-      inp=document.createElement('select');inp.style.cssText='width:88px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 4px;font-size:11px;font-weight:600;';
-      prop.opts.forEach(function(o,oi){var op=document.createElement('option');op.value=o;op.textContent=(prop.optLabels&&prop.optLabels[oi])?prop.optLabels[oi]:o;if(o===prop.def)op.selected=true;inp.appendChild(op);});
-    }else{
-      inp=document.createElement('input');inp.type='number';inp.value=prop.def;inp.step=prop.step||'1';inp.min='0';
-      inp.style.cssText='width:68px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600;text-align:center;';
-    }
-    inp.onchange=function(){symProp[prop.id]=this.value;};row.appendChild(inp);fld.appendChild(row);
-  });
-  document.getElementById('sym-props-wrap').style.display=t.props.length?'block':'none';
-  document.getElementById('sym-hint').textContent=t.hint;
-  document.getElementById('sym-finish').style.display=(t.clicks==='multi')?'block':'none';
-  document.getElementById('sym-cancel').style.display='block';
-}
-function _symFinish(){
-  if(!symTool||!symPoints.length)return;
-  var col=document.getElementById('sym-color').value||'#1e293b';
-  cadSymbols.push({type:symTool,pts:symPoints.slice(),props:Object.assign({},symProp),color:col,label:_ST[symTool].label});
-  symPoints=[];document.getElementById('sym-hint').textContent='\u2713 '+_ST[symTool].label+' добавлен';
-  _symLegend();requestDraw();requestManualDraw();
-}
-function _symCancel(){
-  symTool=null;symPoints=[];
-  Object.keys(_ST).forEach(function(k){var b=document.getElementById('sb-'+k);if(b){b.style.background='white';b.style.borderColor='#e2e8f0';}});
-  document.getElementById('sym-props-wrap').style.display='none';
-  document.getElementById('sym-cancel').style.display='none';
-  document.getElementById('sym-finish').style.display='none';
-  document.getElementById('sym-hint').textContent='Выберите тип объекта';
-}
-function _symLegend(){
-  var lg=document.getElementById('sym-legend');if(!lg)return;
-  if(!cadSymbols.length){lg.innerHTML='<span style="color:#94a3b8;font-style:italic;">Нет объектов</span>';return;}
-  var g={};cadSymbols.forEach(function(s){g[s.type]=(g[s.type]||0)+1;});
-  lg.innerHTML=Object.entries(g).map(function(e){var t=_ST[e[0]];return t.icon+' <b>'+t.label+'</b> &times;'+e[1];}).join('&nbsp;&nbsp;');
-}
-function _drawSymbols(ctx,scl,oX,oY,pr){
-  cadSymbols.forEach(function(sym){
-    try{
-      var pts=sym.pts,col=sym.color||'#1e293b';ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;
-      switch(sym.type){
-        case 'wall':{
-          if(pts.length<2)break;
-          var _ww=parseFloat(sym.props.w||0.25);
-          var _wh=sym.props.h||'';
-          var _align=sym.props.align||'center'; // center/outer/inner
-          var _mark=sym.props.mark||'none';     // none/tick/circle/arrow
-          var _minW=Math.max(_ww,2.5/scl);
-
-          // ── Helper: compute offset polyline in world coords ──────────────
-          // offset>0 = shift right of travel direction, offset<0 = left
-          function _offsetPts(pArr,off){
-            var res=[];
-            for(var _i=0;_i<pArr.length;_i++){
-              // Average normal at each vertex
-              var nx=0,ny=0,cnt=0;
-              if(_i<pArr.length-1){
-                var dx=pArr[_i+1].x-pArr[_i].x,dy=pArr[_i+1].y-pArr[_i].y;
-                var ln=Math.hypot(dx,dy)||1;
-                nx+=(-dy/ln);ny+=(dx/ln);cnt++;
-              }
-              if(_i>0){
-                var dx2=pArr[_i].x-pArr[_i-1].x,dy2=pArr[_i].y-pArr[_i-1].y;
-                var ln2=Math.hypot(dx2,dy2)||1;
-                nx+=(-dy2/ln2);ny+=(dx2/ln2);cnt++;
-              }
-              if(cnt){nx/=cnt;ny/=cnt;}
-              var nln=Math.hypot(nx,ny)||1;
-              res.push({x:pArr[_i].x+off*(nx/nln),y:pArr[_i].y+off*(ny/nln)});
-            }
-            return res;
-          }
-
-          // ── Compute axis pts based on alignment ───────────────────────────
-          // 'center': axis = drawn pts (lineWidth = _ww centered)
-          // 'outer' : drawn line is OUTER face → axis shifted inward by _ww/2
-          // 'inner' : drawn line is INNER face → axis shifted outward by _ww/2
-          var _axisPts=pts;
-          if(_align==='outer')  _axisPts=_offsetPts(pts,-_ww/2);
-          if(_align==='inner')  _axisPts=_offsetPts(pts, _ww/2);
-
-          // ── Draw outer body line (thick) ──────────────────────────────────
-          ctx.lineWidth=_minW;ctx.lineCap='round';ctx.lineJoin='round';
-          ctx.beginPath();
-          _axisPts.forEach(function(p,_i){
-            _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
-          });
-          ctx.stroke();
-
-          // ── Draw center axis (thin dashed) ────────────────────────────────
-          ctx.strokeStyle='rgba(255,255,255,0.35)';
-          ctx.lineWidth=Math.max(0.02,0.7/scl);
-          ctx.setLineDash([Math.max(0.08,2/scl),Math.max(0.08,2/scl)]);
-          ctx.beginPath();
-          _axisPts.forEach(function(p,_i){
-            _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
-          });
-          ctx.stroke();ctx.setLineDash([]);
-
-          // ── Draw alignment reference lines (outer/inner edges) ────────────
-          if(_align!=='center'){
-            var _edgePts=_offsetPts(_axisPts, _align==='outer'?-_ww/2:_ww/2);
-            ctx.strokeStyle='rgba(0,0,0,0.25)';
-            ctx.lineWidth=Math.max(0.01,0.4/scl);
-            ctx.setLineDash([Math.max(0.05,1.5/scl),Math.max(0.05,1.5/scl)]);
-            ctx.beginPath();
-            _edgePts.forEach(function(p,_i){
-              _i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
-            });
-            ctx.stroke();ctx.setLineDash([]);
-          }
-
-          // ── Draw start mark symbol ────────────────────────────────────────
-          if(_mark!=='none'&&pts.length>=2){
-            var _p0=_axisPts[0],_p1=_axisPts[1];
-            var _dx=_p1.x-_p0.x,_dy=_p1.y-_p0.y;
-            var _dl=Math.hypot(_dx,_dy)||1;
-            var _tx=_dx/_dl,_ty=_dy/_dl; // tangent
-            var _nx=-_ty,_ny=_tx;         // normal
-            var _sx=_p0.x-oX,_sy=_p0.y-oY;
-            var _hs=_ww/2; // half-width
-            ctx.strokeStyle=col;ctx.fillStyle=col;
-            ctx.lineWidth=Math.max(0.04,1.5/scl);
-            if(_mark==='tick'){
-              // Perpendicular tick ⊥
-              ctx.beginPath();
-              ctx.moveTo(_sx+_nx*_hs*1.5,_sy+_ny*_hs*1.5);
-              ctx.lineTo(_sx-_nx*_hs*1.5,_sy-_ny*_hs*1.5);
-              ctx.stroke();
-            } else if(_mark==='circle'){
-              // Circle ○
-              ctx.beginPath();
-              ctx.arc(_sx,_sy,_hs*0.8,0,Math.PI*2);
-              ctx.stroke();
-            } else if(_mark==='arrow'){
-              // Arrow → pointing in wall direction
-              var _ar=_hs*1.2;
-              ctx.beginPath();
-              ctx.moveTo(_sx,_sy);
-              ctx.lineTo(_sx+_tx*_ar,_sy+_ty*_ar);
-              ctx.stroke();
-              ctx.beginPath();
-              ctx.moveTo(_sx+_tx*_ar,_sy+_ty*_ar);
-              ctx.lineTo(_sx+_tx*_ar*0.6+_nx*_ar*0.4,_sy+_ty*_ar*0.6+_ny*_ar*0.4);
-              ctx.lineTo(_sx+_tx*_ar*0.6-_nx*_ar*0.4,_sy+_ty*_ar*0.6-_ny*_ar*0.4);
-              ctx.closePath();ctx.fill();
-            }
-          }
-
-          // ── Alignment label next to start ─────────────────────────────────
-          if(_align!=='center'&&pts.length>=1){
-            var _p0s=_axisPts[0];
-            ctx.save();ctx.translate(_p0s.x-oX,_p0s.y-oY);ctx.scale(1/scl,-1/scl);
-            ctx.font=(Math.min(9,Math.max(_ww*scl*0.8,6)))+'px sans-serif';
-            ctx.fillStyle=col;ctx.textBaseline='top';ctx.textAlign='left';
-            ctx.fillText(_align==='outer'?'нар.':'вн.',2,2);
-            ctx.restore();
-          }
-
-          // ── Height label at midpoint ──────────────────────────────────────
-          if(_wh&&_axisPts.length>=2){
-            var _wm=_axisPts[Math.floor(_axisPts.length/2)];
-            ctx.save();ctx.translate(_wm.x-oX,_wm.y-oY);ctx.scale(1/scl,-1/scl);
-            ctx.font='bold '+Math.min(9,Math.max(_ww*scl*1.2,7))+'px sans-serif';
-            ctx.fillStyle=col;ctx.textBaseline='bottom';ctx.textAlign='center';
-            ctx.fillText('h='+_wh+'м',0,-2);ctx.restore();
-          }
-          break;}
-        case 'column':{
-          var _cr=parseFloat(sym.props.d||0.3)/2,_ch=sym.props.h||'3.0';
-          var _cshape=sym.props.shape||'circle';
-          var _cpx=pts[0].x-oX,_cpy=pts[0].y-oY;
-          ctx.lineWidth=1.5/scl;
-          if(_cshape==='square'){
-            ctx.beginPath();ctx.rect(_cpx-_cr,_cpy-_cr,_cr*2,_cr*2);ctx.stroke();
-            ctx.fillStyle=col+'44';ctx.fill();
-          } else {
-            ctx.beginPath();ctx.arc(_cpx,_cpy,_cr,0,Math.PI*2);ctx.stroke();
-            ctx.fillStyle=col+'44';ctx.fill();
-          }
-          ctx.fillStyle=col;
-          ctx.lineWidth=0.5/scl;
-          ctx.beginPath();ctx.moveTo(_cpx-_cr*0.3,_cpy);ctx.lineTo(_cpx+_cr*0.3,_cpy);
-          ctx.moveTo(_cpx,_cpy-_cr*0.3);ctx.lineTo(_cpx,_cpy+_cr*0.3);ctx.stroke();
-          ctx.save();ctx.translate(_cpx+_cr+0.05,_cpy);ctx.scale(1/scl,-1/scl);
-          ctx.font='bold '+Math.max(_cr*scl*0.9,7)+'px sans-serif';
-          ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle=col;
-          ctx.fillText('h='+_ch+'м',2,0);ctx.restore();
-          break;}
-        case 'well':
-          var dw=parseFloat(sym.props.d||1.0)/2;
-          ctx.lineWidth=2/scl;ctx.beginPath();ctx.arc(pts[0].x-oX,pts[0].y-oY,dw,0,Math.PI*2);ctx.stroke();
-          ctx.beginPath();ctx.moveTo(pts[0].x-oX-dw,pts[0].y-oY);ctx.lineTo(pts[0].x-oX+dw,pts[0].y-oY);ctx.moveTo(pts[0].x-oX,pts[0].y-oY-dw);ctx.lineTo(pts[0].x-oX,pts[0].y-oY+dw);ctx.stroke();
-          ctx.save();ctx.scale(1,-1);ctx.font='bold '+(dw*0.9)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(sym.props.t||'К',pts[0].x-oX,-(pts[0].y-oY));ctx.restore();
-          break;
-        case 'sewage':_pipe(ctx,pts,oX,oY,scl,col,[0.3/scl,0.15/scl],'К');break;
-        case 'water': _pipe(ctx,pts,oX,oY,scl,col,[],'В');break;
-        case 'gas':   _pipe(ctx,pts,oX,oY,scl,col,[0.5/scl,0.2/scl],'Г');break;
-        case 'heat':  _pipe(ctx,pts,oX,oY,scl,col,[],'Т');break;
-        case 'cable': _pipe(ctx,pts,oX,oY,scl,col,[0.2/scl,0.1/scl,0.05/scl,0.1/scl],'Э');break;
-        case 'pile':{
-          if(!pts.length)break;
-          var _pd=parseFloat(sym.props.d||0.3),_pr=_pd/2;
-          var _ph=parseFloat(sym.props.h||3.0);
-          var _ptop=sym.props.top!==undefined?sym.props.top:'-0.00';
-          var _px=pts[0].x-oX,_py=pts[0].y-oY;
-          ctx.lineWidth=0.05;ctx.beginPath();ctx.arc(_px,_py,_pr,0,Math.PI*2);ctx.stroke();
-          ctx.fillStyle=sym.color||'#7f1d1d';ctx.beginPath();ctx.arc(_px,_py,_pr*0.35,0,Math.PI*2);ctx.fill();
-          ctx.lineWidth=0.03;ctx.beginPath();ctx.moveTo(_px,_py+_pr*0.4);ctx.lineTo(_px,_py+_pr*1.5);ctx.stroke();
-          ctx.beginPath();ctx.moveTo(_px-_pr*0.2,_py+_pr*1.2);ctx.lineTo(_px,_py+_pr*1.5);ctx.lineTo(_px+_pr*0.2,_py+_pr*1.2);ctx.stroke();
-          ctx.save();ctx.translate(_px+_pr*1.3,_py);ctx.scale(1/scl,-1/scl);
-          ctx.font='bold '+Math.min(9,Math.max(_pr*scl*0.9,7))+'px sans-serif';ctx.textBaseline='middle';ctx.fillStyle=sym.color||'#7f1d1d';
-          ctx.fillText('h='+_ph+'м ('+_ptop+')',2,0);ctx.restore();break;}
-        case 'fence':
-          if(pts.length<2)break;ctx.lineWidth=1.5/scl;
-          ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);});ctx.stroke();
-          for(var i=0;i<pts.length-1;i++){var dx2=pts[i+1].x-pts[i].x,dy2=pts[i+1].y-pts[i].y,seg=Math.hypot(dx2,dy2);for(var t2=1.5;t2<seg;t2+=2){var fx=pts[i].x+dx2/seg*t2-oX,fy=pts[i].y+dy2/seg*t2-oY;var nx=-dy2/seg*0.4,ny=dx2/seg*0.4;ctx.beginPath();ctx.moveTo(fx,fy);ctx.lineTo(fx+nx,fy+ny);ctx.stroke();}}
-          break;
-      }
-      ctx.restore();
-    }catch(_){}
-  });
-}
-function _pipe(ctx,pts,oX,oY,scl,col,dash,ltr){
-  if(pts.length<2)return;
-  ctx.strokeStyle=col;ctx.lineWidth=1.5/scl;ctx.setLineDash(dash||[]);
-  ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);});ctx.stroke();ctx.setLineDash([]);
-  ctx.fillStyle=col;for(var i=0;i<pts.length-1;i++){var dx=pts[i+1].x-pts[i].x,dy=pts[i+1].y-pts[i].y,seg=Math.hypot(dx,dy);for(var t=seg/2;t<seg;t+=5){var fx=pts[i].x+dx/seg*t-oX,fy=pts[i].y+dy/seg*t-oY;ctx.save();ctx.scale(1,-1);ctx.font='bold '+(3.5/scl)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(ltr,fx,-fy);ctx.restore();}}
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// GEOREF MINI CANVAS — второй DXF preview + point picking
-// ══════════════════════════════════════════════════════════════════════════════
-var _georefParsedDxf=null;
-var _georefMiniSnaps=[];
-// Coordinate storage — JS variables survive modal reopen
-var _grP1L=null; // {x,y} local P1 (survey DXF)
-var _grP2L=null; // {x,y} local P2 (survey DXF)
-var _grP1G=null; // {x,y} geodetic P1 (main DXF)
-var _grP2G=null; // {x,y} geodetic P2 (main DXF)
-
-   // snap points from second DXF
-var _georefMiniElems=[];   // simplified elements for rendering
-var _georefMiniScale=1, _georefMiniOX=0, _georefMiniOY=0;
-var _georefPickTarget=0;   // 0=none, 1=picking P1, 2=picking P2
-var _georefMiniP1=null, _georefMiniP2=null;
-
-function _georefExtractMiniSnaps(dxf){
+function _georefBuildElems(dxf){
   _georefMiniSnaps=[];
   _georefMiniElems=[];
   var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-  function addPt(x,y){
+
+  function bb(x,y){
     if(!isFinite(x)||!isFinite(y))return;
+    if(x<minX)minX=x;if(x>maxX)maxX=x;
+    if(y<minY)minY=y;if(y>maxY)maxY=y;
     _georefMiniSnaps.push({x:x,y:y});
-    if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
   }
+
+  // Universal entity → points extractor
+  function extractPts(en,tx,ty,sx,sy){
+    tx=tx||0;ty=ty||0;sx=sx||1;sy=sy||1;
+    var pts=[];
+    var t=en.type;
+    // LINE — dxf-parser uses start/end
+    if(t==='LINE'){
+      if(en.start&&en.end){
+        pts.push({x:en.start.x*sx+tx,y:en.start.y*sy+ty});
+        pts.push({x:en.end.x*sx+tx,y:en.end.y*sy+ty});
+      }
+      if(en.vertices&&en.vertices.length){
+        en.vertices.forEach(function(v){pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
+      }
+    }
+    // POLYLINES
+    else if(t==='LWPOLYLINE'||t==='POLYLINE'||t==='SPLINE'){
+      var verts=en.vertices||[];
+      verts.forEach(function(v){
+        var px=(v.x!==undefined?v.x:(v[0]||0))*sx+tx;
+        var py=(v.y!==undefined?v.y:(v[1]||0))*sy+ty;
+        pts.push({x:px,y:py});
+      });
+    }
+    // CIRCLE / ARC
+    else if((t==='CIRCLE'||t==='ARC')&&en.center){
+      pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
+      // Add 8 perimeter points for bbox
+      var R=en.radius||0;
+      for(var a=0;a<Math.PI*2;a+=Math.PI/4)
+        pts.push({x:(en.center.x+Math.cos(a)*R)*sx+tx,y:(en.center.y+Math.sin(a)*R)*sy+ty});
+    }
+    // POINT
+    else if(t==='POINT'){
+      var pp=en.position||en.point;
+      if(pp)pts.push({x:pp.x*sx+tx,y:pp.y*sy+ty});
+    }
+    // TEXT / MTEXT
+    else if(t==='TEXT'||t==='MTEXT'){
+      var tp=en.startPoint||en.position||en.insertionPoint;
+      if(tp)pts.push({x:tp.x*sx+tx,y:tp.y*sy+ty});
+    }
+    // ELLIPSE
+    else if(t==='ELLIPSE'&&en.center){
+      pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
+    }
+    return pts;
+  }
+
   function traverse(entities,tx,ty,sx,sy){
-    if(!entities)return;
+    if(!entities||!entities.length)return;
     entities.forEach(function(en){
-      if(!en)return;
+      if(!en||!en.type)return;
       try{
-        if(en.type==='INSERT'&&dxf.blocks&&en.name&&dxf.blocks[en.name]){
-          var _blk=dxf.blocks[en.name];
-          var bx=(en.position?(en.position.x||0):0)*sx+tx;
-          var by=(en.position?(en.position.y||0):0)*sy+ty;
-          var bsx=sx*(en.scaleX||en.scale&&en.scale.x||1);
-          var bsy=sy*(en.scaleY||en.scale&&en.scale.y||1);
-          if(_blk.entities)traverse(_blk.entities,bx,by,bsx,bsy);
+        if(en.type==='INSERT'){
+          var blk=dxf.blocks&&en.name?dxf.blocks[en.name]:null;
+          if(blk&&blk.entities){
+            var bx=(en.position?en.position.x:0)*(sx||1)+(tx||0);
+            var by=(en.position?en.position.y:0)*(sy||1)+(ty||0);
+            var bsx=(sx||1)*(en.scaleX||en.scale&&en.scale.x||1);
+            var bsy=(sy||1)*(en.scaleY||en.scale&&en.scale.y||1);
+            traverse(blk.entities,bx,by,bsx,bsy);
+          }
           return;
         }
-        var pts=[];
-        if(en.type==='LINE'){
-          // dxf-parser v1.x uses start/end; some versions use vertices
-          if(en.start&&en.end){
-            pts.push({x:en.start.x*sx+tx,y:en.start.y*sy+ty});
-            pts.push({x:en.end.x*sx+tx,y:en.end.y*sy+ty});
-          } else if(en.vertices&&en.vertices.length>=2){
-            en.vertices.forEach(function(v){pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
-          }
-        } else if((en.type==='LWPOLYLINE'||en.type==='POLYLINE'||en.type==='SPLINE')){
-          var _verts=en.vertices||[];
-          _verts.forEach(function(v){pts.push({x:(v.x||0)*sx+tx,y:(v.y||0)*sy+ty});});
-        } else if(en.type==='TEXT'||en.type==='MTEXT'){
-          if(en.startPoint)pts.push({x:en.startPoint.x*sx+tx,y:en.startPoint.y*sy+ty});
-          else if(en.position)pts.push({x:en.position.x*sx+tx,y:en.position.y*sy+ty});
-        } else if((en.type==='CIRCLE'||en.type==='ARC')&&en.center){
-          pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
-        } else if(en.type==='ELLIPSE'&&en.center){
-          pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
-        } else if(en.type==='POINT'){
-          var _pp=en.position||en.point;
-          if(_pp)pts.push({x:_pp.x*sx+tx,y:_pp.y*sy+ty});
+        var pts=extractPts(en,tx||0,ty||0,sx||1,sy||1);
+        if(pts.length===0)return;
+        pts.forEach(function(p){bb(p.x,p.y);});
+        if(pts.length>=2){
+          _georefMiniElems.push({type:'line',pts:pts,
+            isCircle:(en.type==='CIRCLE'||en.type==='ARC'),
+            cx:en.center&&en.center.x*(sx||1)+(tx||0),
+            cy:en.center&&en.center.y*(sy||1)+(ty||0),
+            r:en.radius});
+        } else if(pts.length===1){
+          _georefMiniElems.push({type:'point',pt:pts[0]});
         }
-        pts.forEach(function(p){addPt(p.x,p.y);});
-        if(pts.length>=2)_georefMiniElems.push({type:'line',pts:pts});
-        else if(pts.length===1)_georefMiniElems.push({type:'point',pt:pts[0]});
-        if((en.type==='CIRCLE'||en.type==='ARC')&&en.center&&en.radius)
-          _georefMiniElems.push({type:'circle',cx:en.center.x*sx+tx,cy:en.center.y*sy+ty,r:en.radius*Math.abs(sx)});
-      }catch(_){}
+      }catch(e){}
     });
   }
+
   traverse(dxf.entities,0,0,1,1);
-  // Compute transform for mini canvas
+
+  // Compute scale for mini canvas
   var cv=document.getElementById('georef-mini-canvas');
-  if(!cv||!isFinite(minX))return;
-  var W=cv.width,H=cv.height,pad=20;
-  var rangeX=maxX-minX||1,rangeY=maxY-minY||1;
-  _georefMiniScale=Math.min((W-2*pad)/rangeX,(H-2*pad)/rangeY);
-  _georefMiniOX=minX-(W/2-rangeX*_georefMiniScale/2)/_georefMiniScale;
-  _georefMiniOY=minY-(H/2-rangeY*_georefMiniScale/2)/_georefMiniScale;
+  if(!cv)return;
+  var W=cv.width||460,H=cv.height||320,pad=24;
+  if(!isFinite(minX)||minX===maxX||minY===maxY){
+    // Fallback: can't compute scale
+    _georefMiniScale=1;_georefMiniOX=0;_georefMiniOY=0;
+    return;
+  }
+  var rangeX=maxX-minX,rangeY=maxY-minY;
+  var scX=(W-pad*2)/rangeX,scY=(H-pad*2)/rangeY;
+  _georefMiniScale=Math.min(scX,scY);
+  _georefMiniOX=minX-pad/_georefMiniScale;
+  _georefMiniOY=minY-pad/_georefMiniScale;
 }
 
 function _georefRenderMini(){
-  var cv=document.getElementById('georef-mini-canvas');if(!cv)return;
-  var ctx=cv.getContext('2d'),W=cv.width,H=cv.height;
+  var cv=document.getElementById('georef-mini-canvas');
+  if(!cv)return;
+  var ctx=cv.getContext('2d');
+  var W=cv.width||460,H=cv.height||320;
   var sc=_georefMiniScale,oX=_georefMiniOX,oY=_georefMiniOY;
-  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+
+  // Background
+  ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
+
+  if(!sc||!isFinite(sc)||sc<=0||!_georefMiniElems||!_georefMiniElems.length){
+    ctx.fillStyle='#64748b';ctx.font='13px sans-serif';ctx.textAlign='center';
+    ctx.fillText('Нет данных для отображения',W/2,H/2-8);
+    ctx.fillStyle='#94a3b8';ctx.font='11px sans-serif';
+    ctx.fillText('Элементов: '+(_georefMiniElems?_georefMiniElems.length:0)+
+                 ' | Точек: '+(_georefMiniSnaps?_georefMiniSnaps.length:0),W/2,H/2+12);
+    ctx.textAlign='left';
+    return;
+  }
+
+  // World→screen helpers
+  function wx(x){return (x-oX)*sc;}
+  function wy(y){return H-(y-oY)*sc;}
+
   // Draw elements
-  ctx.save();ctx.translate(0,H);ctx.scale(sc,-sc);ctx.translate(-oX,-oY);
-  ctx.strokeStyle='#334155';ctx.lineWidth=0.8/sc;ctx.lineCap='round';
+  ctx.strokeStyle='#1e293b';
+  ctx.lineWidth=0.8;
+  ctx.lineCap='round';
+
   _georefMiniElems.forEach(function(el){
-    if(el.type==='line'&&el.pts.length>=2){
-      ctx.beginPath();el.pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();
-    } else if(el.type==='circle'){
-      ctx.beginPath();ctx.arc(el.cx,el.cy,el.r,0,Math.PI*2);ctx.stroke();
-    } else if(el.type==='point'){
-      ctx.beginPath();ctx.arc(el.pt.x,el.pt.y,1.5/sc,0,Math.PI*2);ctx.fillStyle='#334155';ctx.fill();
-    }
+    try{
+      if(el.type==='line'&&el.pts&&el.pts.length>=2){
+        if(el.isCircle&&el.r&&isFinite(el.cx)&&isFinite(el.cy)){
+          ctx.beginPath();
+          ctx.arc(wx(el.cx),wy(el.cy),Math.abs(el.r*sc),0,Math.PI*2);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          el.pts.forEach(function(p,i){
+            var sx2=wx(p.x),sy2=wy(p.y);
+            i===0?ctx.moveTo(sx2,sy2):ctx.lineTo(sx2,sy2);
+          });
+          ctx.stroke();
+        }
+      } else if(el.type==='point'&&el.pt){
+        ctx.fillStyle='#ef4444';
+        ctx.beginPath();
+        ctx.arc(wx(el.pt.x),wy(el.pt.y),2.5,0,Math.PI*2);
+        ctx.fill();
+      }
+    }catch(e){}
   });
-  // Draw snap points
-  ctx.fillStyle='rgba(100,150,220,0.4)';
-  _georefMiniSnaps.forEach(function(p){ctx.beginPath();ctx.arc(p.x,p.y,2/sc,0,Math.PI*2);ctx.fill();});
-  // Draw picked points
-  if(_georefMiniP1){
-    ctx.fillStyle='#f97316';ctx.beginPath();ctx.arc(_georefMiniP1.x,_georefMiniP1.y,5/sc,0,Math.PI*2);ctx.fill();
-    ctx.save();ctx.scale(1,-1);ctx.fillStyle='#f97316';ctx.font='bold '+(9/sc)+'px Arial';
-    ctx.textAlign='center';ctx.fillText('P1',_georefMiniP1.x,-_georefMiniP1.y-6/sc);ctx.restore();
+
+  // Draw selected points
+  function drawMark(p,label,col){
+    var sx2=wx(p.x),sy2=wy(p.y);
+    ctx.fillStyle=col;
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(sx2,sy2,7,0,Math.PI*2);
+    ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 9px sans-serif';ctx.textAlign='center';
+    ctx.fillText(label,sx2,sy2+3.5);ctx.textAlign='left';
+    ctx.lineWidth=0.8;ctx.strokeStyle='#1e293b';
   }
-  if(_georefMiniP2){
-    ctx.fillStyle='#8b5cf6';ctx.beginPath();ctx.arc(_georefMiniP2.x,_georefMiniP2.y,5/sc,0,Math.PI*2);ctx.fill();
-    ctx.save();ctx.scale(1,-1);ctx.fillStyle='#8b5cf6';ctx.font='bold '+(9/sc)+'px Arial';
-    ctx.textAlign='center';ctx.fillText('P2',_georefMiniP2.x,-_georefMiniP2.y-6/sc);ctx.restore();
-  }
-  ctx.restore();
+  if(_georefMiniP1)drawMark(_georefMiniP1,'P1','#16a34a');
+  if(_georefMiniP2)drawMark(_georefMiniP2,'P2','#dc2626');
+
+  // Stats overlay
+  ctx.fillStyle='rgba(255,255,255,0.8)';ctx.fillRect(4,4,140,18);
+  ctx.fillStyle='#475569';ctx.font='9px sans-serif';
+  ctx.fillText('Эл: '+_georefMiniElems.length+' | Узл: '+_georefMiniSnaps.length,8,15);
 }
 
 
