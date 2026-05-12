@@ -1399,6 +1399,9 @@ function _symInit(){
   ['cad-canvas','manual-canvas'].forEach(function(cid){
     var el=document.getElementById(cid);if(!el)return;
     el.addEventListener('click',function(ev){
+      // Declare sx,sy first — used by both sdp and symTool handlers
+      var rect=el.getBoundingClientRect();
+      var sx=ev.clientX-rect.left,sy=ev.clientY-rect.top;
       // ArchiCAD drawing panel gets priority
       if(typeof _sdpActive!=='undefined'&&_sdpActive){
         var _sc2=(cid==='cad-canvas')?screenToCad(sx,sy):screenToMan(sx,sy);
@@ -1406,8 +1409,7 @@ function _symInit(){
         return;
       }
       if(!symTool)return;
-      var t=_ST[symTool];var rect=el.getBoundingClientRect();
-      var sx=ev.clientX-rect.left,sy=ev.clientY-rect.top;
+      var t=_ST[symTool];
       // Snap to nearest point
       var cad=(cid==='cad-canvas')?screenToCad(sx,sy):screenToMan(sx,sy);
       if(cid==='cad-canvas'&&cadSnapPoints&&cadSnapPoints.length){
