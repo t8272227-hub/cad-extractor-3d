@@ -2108,7 +2108,7 @@ function clearContour(){
   requestDraw();
 }
 function updateContourPanel(){
-  var el=document.getElementById('ctr-pt-count');if(el)el.textContent=contourPts.length;
+  var el=document.getElementById('ctr-pts-count');if(el)el.textContent=contourPts.length;
   var ea=document.getElementById('ctr-area');
   if(ea)ea.textContent=contourClosed?_savedArea.toFixed(3)+' м²':'— (не замкнут)';
   var ep=document.getElementById('ctr-perim');
@@ -2119,7 +2119,7 @@ function updateContourPanel(){
   updateContourVol();
 }
 function updateContourVol(){
-  var h=parseFloat(document.getElementById('ctr-height').value)||0;
+  var h=parseFloat(document.getElementById('ctr-depth').value)||0;
   var vol=_savedArea*Math.abs(h);_savedVolume=vol;
   var pv=_savedPileVolume||0;
   var el=document.getElementById('ctr-vol');if(el)el.textContent=_savedArea>0?vol.toFixed(3)+' м³':'—';
@@ -2155,7 +2155,7 @@ function clearPdfFrame(){
 var _savedPileVolume=0,_savedWellsInside=[];
 
 function saveContourToReport(){
-  var h=parseFloat(document.getElementById('ctr-height').value)||0;
+  var h=parseFloat(document.getElementById('ctr-depth').value)||0;
   _savedVolume=_savedArea*Math.abs(h);
   showMessage('Записано в отчёт',
     'Площадь: '+_savedArea.toFixed(3)+' м²\n'+
@@ -2581,7 +2581,7 @@ function saveContourAsFill(){
     volume:_savedVolume,
     pileVol:_savedPileVolume||0,
     wellsInside:(_savedWellsInside||[]).slice(),
-    height:parseFloat(document.getElementById('ctr-height').value)||0
+    height:parseFloat(document.getElementById('ctr-depth').value)||0
   });
   showMessage('Закрашено','Область сохранена с материалом. Контур очищен.','success');
   clearContour();
