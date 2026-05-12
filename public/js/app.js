@@ -1072,26 +1072,391 @@ function loadSecondDxfFile(input){
   input._pendingFile=file;
   input.value='';
 }
+function georefLoadPreview(input){
+  var file=input.files[0]; if(!file)return;
+  document.getElementById('gr-file-name').textContent=file.name;
+  var fi=document.getElementById('georef-file-input'); if(fi)fi._pendingFile=file;
+  input.value='';
+  _grMiniMsg('⏳ Загрузка: '+file.name,'#78350f','#fefce8');
+  var PC=window.DxfParser||(typeof DxfParser!=='undefined'?DxfParser:null);
+  if(!PC){_grMiniMsg('❌ DxfParser не загружен — обновите страницу','#be123c','#fff1f2');return;}
 
-// ═══════════════════════════════════════════════════════════════════
-// GEOREF PREVIEW — uses same entity logic as processCADData
-// ═══════════════════════════════════════════════════════════════════
+  function runParse(text,enc){
+    var dxf;
+    try{ dxf=(new PC()).parseSync(text); }
+    catch(err){
+      if(enc==='utf8'){
+        var r2=new FileReader();
+        r2.onload=function(e2){runParse(e2.target.result,'cp1251');};
+        r2.readAsText(file,'windows-1251');
+      } else {
+        _grMiniMsg('❌ Ошибка разбора:\n'+err.message,'#be123c','#fff1f2');
+      }
+      return;
+    }
+    if(!dxf||!dxf.entities){
+      _grMiniMsg('❌ DXF не содержит секцию ENTITIES','#be123c','#fff1f2'); return;
+    }
+    _georefParsedDxf=dxf;
+    _georefExtractMiniSnaps(dxf);
+    _georefRenderMini();
+    _georefPopulateSnapList();
+    var hint=document.getElementById('georef-mini-hint');
+    if(hint)hint.style.display='none';
+    var cnt=(_georefMiniElems||[]).length;
+    var st=document.getElementById('gr-mini-status');
+    if(cnt===0 && enc==='utf8'){
+      // No geometry with UTF-8 - retry with windows-1251
+      var r3=new FileReader();
+      r3.onload=function(e3){runParse(e3.target.result,'cp1251');};
+      r3.readAsText(file,'windows-1251'); return;
+    }
+    if(st)st.textContent=(cnt>0?'✓ ':'⚠ ')+file.name+
+      ' ('+cnt+' эл, '+(_georefMiniSnaps||[]).length+' узл, '+enc+')';
+    ['gr-mini-x1','gr-mini-y1','gr-mini-x2','gr-mini-y2',
+     'gr-p1-lx','gr-p1-ly','gr-p2-lx','gr-p2-ly'].forEach(function(id){
+      var el=document.getElementById(id); if(el)el.value='';
+    });
+    _georefMiniP1=null; _georefMiniP2=null; _grP1L=null; _grP2L=null;
+  }
+
+  var r=new FileReader();
+  r.onload=function(ev){runParse(ev.target.result,'utf8');};
+  r.onerror=function(){_grMiniMsg('❌ Ошибка чтения файла','#be123c','#fff1f2');};
+  r.readAsText(file,'UTF-8');
+}
 
 function _grMiniMsg(text,color,bg){
-  var cv=document.getElementById('georef-mini-canvas');if(!cv)return;
-  var ctx=cv.getContext('2d'),W=cv.width||460,H=cv.height||320;
+  var cv=document.getElementById('georef-mini-canvas'); if(!cv)return;
+  var ctx=cv.getContext('2d'), W=cv.width||460, H=cv.height||320;
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle=bg||'#fff';ctx.fillRect(0,0,W,H);
-  // Border so user sees the canvas
-  ctx.strokeStyle=color||'#334155';ctx.lineWidth=2;ctx.strokeRect(1,1,W-2,H-2);
-  ctx.fillStyle=color||'#334155';ctx.font='14px sans-serif';ctx.textAlign='center';
+  ctx.fillStyle=bg||'#fff'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=color||'#cbd5e1'; ctx.lineWidth=1.5; ctx.strokeRect(1,1,W-2,H-2);
+  ctx.fillStyle=color||'#334155'; ctx.font='13px sans-serif'; ctx.textAlign='center';
   var lines=text.split('\n');
-  var startY=H/2-(lines.length-1)*11;
-  lines.forEach(function(l,i){ctx.fillText(l,W/2,startY+i*22);});
+  lines.forEach(function(l,i){ctx.fillText(l,W/2,H/2+(i-(lines.length-1)/2)*22);});
   ctx.textAlign='left';
 }
 
 
+
+function applyGeoref(){
+  // Read from JS vars (primary) — survives modal reopen
+  var _missing=[];
+  if(!_grP1L)_missing.push('P1 съёмки — выберите точку в разделе 1б');
+  if(!_grP2L)_missing.push('P2 съёмки — выберите точку в разделе 1б');
+  if(!_grP1G)_missing.push('P1 на основном чертеже — нажмите «На карте» в разделе 2');
+  if(!_grP2G)_missing.push('P2 на основном чертеже — нажмите «На карте» в разделе 2');
+  if(_missing.length>0){
+    showMessage('Не указаны точки','Не заполнены:\n• '+_missing.join('\n• '),'warning');return;
+  }
+  var p1lx=_grP1L.x,p1ly=_grP1L.y,p2lx=_grP2L.x,p2ly=_grP2L.y;
+  var p1gx=_grP1G.x,p1gy=_grP1G.y,p2gx=_grP2G.x,p2gy=_grP2G.y;
+
+  var p1s={x:p1lx,y:p1ly}, p2s={x:p2lx,y:p2ly};
+  var p1d={x:p1gx,y:p1gy}, p2d={x:p2gx,y:p2gy};
+  var t=computeHelmert(p1s,p2s,p1d,p2d);
+  if(!t){showMessage('Ошибка','Базовые точки совпадают — расстояние между точками должно быть ненулевым.','error');return;}
+  georefTransform=t;
+
+  // Show transform info
+  var _ib=document.getElementById('gr-info-box');if(_ib)_ib.classList.remove('hidden');
+  var _gs=document.getElementById('gr-scale');if(_gs)_gs.textContent=t.s.toFixed(6);
+  var _ga=document.getElementById('gr-angle');if(_ga)_ga.textContent=t.angleDeg.toFixed(4)+'°';
+  var _gac=document.getElementById('gr-accuracy');if(_gac)_gac.textContent=t.residual.toFixed(4)+' м';
+  var _gtx=document.getElementById('gr-tx');if(_gtx)_gtx.textContent=t.tx.toFixed(3);
+  var _gty=document.getElementById('gr-ty');if(_gty)_gty.textContent=t.ty.toFixed(3);
+
+  // Use DXF already parsed in 1б preview section
+  try{
+    var dxf=_georefParsedDxf;
+    if(!dxf||!dxf.entities||dxf.entities.length===0)throw new Error('Загрузите файл съёмки в разделе «Предпросмотр» (1б)');
+    var _mx_el=document.getElementById('gr-mirror-x');var _my_el=document.getElementById('gr-mirror-y');var mX=_mx_el?_mx_el.checked:false;var mY=_my_el?_my_el.checked:false;secondDxfElements=processSecondDxfData(dxf,t,mX,mY);
+      secondDxfVisible=true;
+      // Points stay in secondDxfElements (no auto-merge).
+      // User can import Z via Layers panel → "Импортировать Z-высоты"
+      rebuildCachedPath();
+      _updateDxf2LayerPanel();
+      document.getElementById('gr-clear-btn').classList.remove('hidden');
+      closeGeoreferenceModal();
+      requestDraw();
+      showMessage('Успешно',
+        'Наложение выполнено.\nОбъектов в съёмочном файле: '+secondDxfElements.length+
+        '\nМасштаб: '+t.s.toFixed(4)+' | Поворот: '+t.angleDeg.toFixed(2)+'°'+
+        (mX?' | Зерк.X':'')+
+        (mY?' | Зерк.Y':'')+
+        '\n\nСъёмочный чертёж — оранжевым.\nZ-высоты: импортируйте через Слои → Вложенный DXF',
+        'success');
+  }catch(err){
+    showMessage('Ошибка','Не удалось обработать DXF: '+err.message,'error');
+  }
+}
+
+function clearGeoref(){
+  secondDxfElements=[];secondDxfVisible=false;georefTransform=null;
+  document.getElementById('gr-clear-btn').classList.add('hidden');
+  document.getElementById('gr-info-box').classList.add('hidden');
+  document.getElementById('gr-file-name').textContent='файл не выбран';
+  requestDraw();
+  closeGeoreferenceModal();
+  showMessage('Очищено','Наложение второго чертежа удалено.','info');
+}
+
+function showHelpTab(id){
+  document.querySelectorAll('.help-panel').forEach(function(p){p.classList.add('hidden');});
+  document.querySelectorAll('.help-tab').forEach(function(t){
+    t.classList.remove('active','border-blue-600','text-blue-600');
+    t.classList.add('inactive','border-transparent','text-slate-500');
+  });
+  var panel=document.getElementById(id);
+  if(panel)panel.classList.remove('hidden');
+  var tab=document.getElementById('ht-'+id.replace('h-',''));
+  if(tab){tab.classList.remove('inactive','border-transparent','text-slate-500');tab.classList.add('active','border-blue-600','text-blue-600');}
+}
+
+function mirrorManualPoints(axis){
+  if(!manualPoints||manualPoints.length===0){
+    showMessage('Нет точек','Добавьте точки для зеркального отображения.','warning');
+    return;
+  }
+  saveManState();
+  // Centroid
+  var cx=0,cy=0;
+  manualPoints.forEach(function(p){cx+=p.x;cy+=p.y;});
+  cx/=manualPoints.length;
+  cy/=manualPoints.length;
+  // Mirror around centroid
+  manualPoints.forEach(function(p){
+    if(axis==='x'){
+      p.y=2*cy-p.y;          // reflect around horizontal centre line
+    }else{
+      p.x=2*cx-p.x;          // reflect around vertical centre line
+    }
+  });
+  updateManualTable();
+  updateManualLinesTable();
+  requestManualDraw();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NORTH ARROW
+// ══════════════════════════════════════════════════════════════════════════════
+function _northInit(){_northDraw();}
+function _northApply(){
+  northAngle=parseFloat(document.getElementById('nw-deg').value)||0;
+  var r=document.getElementById('nw-range');if(r)r.value=northAngle;
+  _northDraw();requestDraw();
+}
+function _northDraw(){
+  var ang=northAngle,r=ang*Math.PI/180,sA=Math.sin(r),cA=Math.cos(r);
+  var tks=[0,90,180,270].map(function(a){
+    var ra=(a+ang)*Math.PI/180,s=Math.sin(ra),c=Math.cos(ra);
+    return '<line x1="'+(s*27).toFixed(1)+'" y1="'+(-c*27).toFixed(1)+'" x2="'+(s*31).toFixed(1)+'" y2="'+(-c*31).toFixed(1)+'" stroke="#cbd5e1" stroke-width="1"/>';
+  }).join('');
+  var svg='<svg width="64" height="64" viewBox="-32 -32 64 64" xmlns="http://www.w3.org/2000/svg">'
+    +'<circle r="30" fill="rgba(255,255,255,.95)" stroke="#94a3b8" stroke-width="1.2"/>'+tks
+    +'<g transform="rotate('+ang+')">'
+      +'<polygon points="0,-22 6,2 0,4 -6,2" fill="#1e293b"/>'
+      +'<polygon points="0,22 6,-2 0,-4 -6,-2" fill="#e2e8f0" stroke="#94a3b8" stroke-width="0.5"/>'
+    +'</g><circle r="2.5" fill="#475569"/>'
+    +'<text x="'+(sA*24).toFixed(1)+'" y="'+(-cA*24).toFixed(1)+'" text-anchor="middle" dominant-baseline="middle" font-size="10" font-weight="bold" fill="#1e293b" font-family="Arial">\u0421</text>'
+    +'</svg>';
+  var el=document.getElementById('nw-svg');if(el)el.innerHTML=svg;
+}
+function _northFindSnap(cx,cy){
+  var cad=screenToCad(cx,cy);
+  if(!cadSnapPoints||!cadSnapPoints.length)return{x:cad.x,y:cad.y,sx:cx,sy:cy};
+  var th=15/scale,best=null,bd=Infinity;
+  cadSnapPoints.forEach(function(p){var d=Math.hypot(p.x-cad.x,p.y-cad.y);if(d<th&&d<bd){bd=d;best=p;}});
+  if(best){var scr=cadToScreen(best.x,best.y);return{x:best.x,y:best.y,sx:scr.x,sy:scr.y};}
+  return{x:cad.x,y:cad.y,sx:cx,sy:cy};
+}
+function _northStartPick(){
+  northPickMode=true;northPickP1=null;northPickHover=null;
+  document.getElementById('nw-overlay').style.display='block';
+  document.getElementById('nw-hint').style.display='block';
+  document.getElementById('nw-hint').textContent='Клик 1/2: ЮЖНЫЙ конец линии (привязка к узлам \u25cb)';
+  document.getElementById('nw-pick-btn').style.display='none';
+}
+function _northCancelPick(){
+  northPickMode=false;northPickP1=null;northPickHover=null;
+  document.getElementById('nw-overlay').style.display='none';
+  document.getElementById('nw-snap').style.display='none';
+  document.getElementById('nw-p1').style.display='none';
+  document.getElementById('nw-hint').style.display='none';
+  document.getElementById('nw-pick-btn').style.display='block';
+  requestDraw();
+}
+function _northPickMove(e){
+  var snap=_northFindSnap(e.clientX,e.clientY);
+  northPickHover={x:snap.x,y:snap.y};requestDraw();
+  var dot=document.getElementById('nw-snap');
+  dot.style.display='block';dot.style.left=snap.sx+'px';dot.style.top=snap.sy+'px';
+}
+function _northPickClick(e){
+  var snap=_northFindSnap(e.clientX,e.clientY);
+  if(!northPickP1){
+    northPickP1={x:snap.x,y:snap.y};
+    var d=document.getElementById('nw-p1');d.style.display='block';d.style.left=snap.sx+'px';d.style.top=snap.sy+'px';
+    document.getElementById('nw-hint').textContent='Клик 2/2: СЕВЕРНЫЙ конец (P1: '+snap.x.toFixed(2)+', '+snap.y.toFixed(2)+')';
+  } else {
+    var dx=snap.x-northPickP1.x,dy=snap.y-northPickP1.y;
+    if(Math.hypot(dx,dy)<0.001){_northCancelPick();return;}
+    var b=((Math.atan2(dx,dy)*180/Math.PI)%360+360)%360;
+    northAngle=Math.round(b*10)/10;
+    document.getElementById('nw-deg').value=northAngle;
+    _northApply();_northCancelPick();
+    var h=document.getElementById('nw-hint');
+    h.style.display='block';h.textContent='\u2713 Az='+northAngle.toFixed(1)+'\u00b0 — холст повёрнут';
+    setTimeout(function(){h.style.display='none';},3000);
+  }
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&northPickMode)_northCancelPick();});
+function _northDrawPDF(ctx,W,H,PR){
+  if(northAngle===0&&!showGrid)return;
+  var ang=northAngle*Math.PI/180,SZ=28*PR,MG=12*PR;
+  var ox=W-SZ-MG,oy=H-SZ-MG-13*PR;
+  ctx.save();
+  ctx.beginPath();ctx.arc(ox,oy,SZ,0,Math.PI*2);ctx.fillStyle='rgba(255,255,255,.93)';ctx.fill();ctx.strokeStyle='#94a3b8';ctx.lineWidth=0.8*PR;ctx.stroke();
+  ctx.save();ctx.translate(ox,oy);ctx.rotate(ang);
+  ctx.beginPath();ctx.moveTo(0,-SZ*.72);ctx.lineTo(SZ*.18,SZ*.07);ctx.lineTo(0,SZ*.11);ctx.lineTo(-SZ*.18,SZ*.07);ctx.closePath();ctx.fillStyle='#1e293b';ctx.fill();
+  ctx.beginPath();ctx.moveTo(0,SZ*.72);ctx.lineTo(SZ*.18,-SZ*.07);ctx.lineTo(0,-SZ*.11);ctx.lineTo(-SZ*.18,-SZ*.07);ctx.closePath();ctx.fillStyle='#e2e8f0';ctx.fill();
+  ctx.restore();
+  ctx.font='bold '+(9*PR)+'px Arial';ctx.fillStyle='#1e293b';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('\u0421',ox+Math.sin(ang)*SZ*.8,oy-Math.cos(ang)*SZ*.8);
+  ctx.font=(7.5*PR)+'px Arial';ctx.fillStyle='#475569';ctx.textBaseline='top';
+  ctx.fillText('Az\u00a0'+northAngle.toFixed(1)+'\u00b0',ox,oy+SZ+2*PR);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// УСЛОВНЫЕ ОБОЗНАЧЕНИЯ (Symbols)
+// ══════════════════════════════════════════════════════════════════════════════
+var _ST={
+  wall:  {label:'Стена',      icon:'🧱',color:'#7c3aed',clicks:'multi',
+          props:[
+            {id:'w',label:'Ширина (м)',def:'0.25',step:'0.05'},
+            {id:'h',label:'Высота (м)',def:'3.0',step:'0.1'},
+            {id:'align',label:'Привязка',def:'center',type:'sel',
+             opts:['center','outer','inner'],
+             optLabels:['По центру','По наружной','По внутренней']},
+            {id:'mark',label:'Знак начала',def:'none',type:'sel',
+             opts:['none','tick','circle','arrow'],
+             optLabels:['Нет','Засечка ⊥','Кружок ○','Стрелка →']}
+          ],hint:'Точки оси стены → ✓ (двойной клик — завершить)'},
+  column:{label:'Столб/Колонна',icon:'⬛',color:'#374151',clicks:'one',
+          props:[
+            {id:'shape',label:'Геометрия',def:'circle',type:'sel',
+             opts:['circle','square'],optLabels:['Круглая','Квадратная']},
+            {id:'d',label:'Ø / Сторона (м)',def:'0.3',step:'0.05'},
+            {id:'h',label:'Высота (м)',def:'3.0',step:'0.1'}
+          ],hint:'Клик: центр'},
+  pile:  {label:'Свая',       icon:'⬇',color:'#7f1d1d',clicks:'one',
+          props:[
+            {id:'d',label:'Диаметр (м)',def:'0.3',step:'0.05'},
+            {id:'h',label:'Глубина (м)',def:'3.0',step:'0.1'},
+            {id:'top',label:'Отметка верха',def:'-0.00',step:'0.01'}
+          ],hint:'Клик: центр сваи'},
+  well:  {label:'Колодец',    icon:'⭕',color:'#0891b2',clicks:'one',
+          props:[
+            {id:'d',label:'Диаметр (м)',def:'1.0',step:'0.1'},
+            {id:'t',label:'Тип',def:'Кан',type:'sel',opts:['Кан','Вод','Газ','Тепл','Эл']}
+          ],hint:'Клик: центр'},
+  sewage:{label:'Канализация', icon:'🔲',color:'#374151',clicks:'multi',
+          props:[{id:'d',label:'Ø мм',def:'200',step:'50'}],hint:'Трасса → ✓'},
+  water: {label:'Водопровод',  icon:'🔵',color:'#2563eb',clicks:'multi',
+          props:[{id:'d',label:'Ø мм',def:'100',step:'25'}],hint:'Трасса → ✓'},
+  gas:   {label:'Газопровод',  icon:'🟡',color:'#b45309',clicks:'multi',
+          props:[{id:'p',label:'Давл.',def:'Низкое',type:'sel',
+                 opts:['Низкое','Среднее','Высокое']}],hint:'Трасса → ✓'},
+  heat:  {label:'Теплосеть',   icon:'🔴',color:'#dc2626',clicks:'multi',
+          props:[{id:'d',label:'Ø мм',def:'150',step:'25'}],hint:'Трасса → ✓'},
+  cable: {label:'Кабель',      icon:'⚡',color:'#78350f',clicks:'multi',
+          props:[{id:'v',label:'кВ',def:'0.4',type:'sel',
+                 opts:['0.4','6','10','35']}],hint:'Трасса → ✓'},
+  fence: {label:'Забор',       icon:'🚧',color:'#78716c',clicks:'multi',
+          props:[],hint:'Точки → ✓'},
+};
+function _symInit(){
+  var g=document.getElementById('sym-grid');if(!g)return;g.innerHTML='';
+  Object.entries(_ST).forEach(function(e){var id=e[0],t=e[1];
+    var b=document.createElement('button');b.id='sb-'+id;
+    b.innerHTML=t.icon+'<br><span style="font-size:9px;font-weight:700;">'+t.label+'</span>';
+    b.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px 3px;border-radius:8px;border:1.5px solid #e2e8f0;font-size:18px;cursor:pointer;background:white;min-height:50px;transition:all .12s;';
+    b.onclick=function(){_symSel(id);};g.appendChild(b);
+  });
+  _symLegend();
+  // Draggable panel
+  var p=document.getElementById('sym-panel'),h=document.getElementById('sym-drag');
+  var ox=0,oy=0,mx=0,my=0,dr=false;
+  h.addEventListener('mousedown',function(e){if(e.target.closest('button'))return;dr=true;ox=p.offsetLeft;oy=p.offsetTop;mx=e.clientX;my=e.clientY;e.preventDefault();});
+  document.addEventListener('mousemove',function(e){if(!dr)return;p.style.left=(ox+e.clientX-mx)+'px';p.style.top=Math.max(0,oy+e.clientY-my)+'px';p.style.bottom='auto';});
+  document.addEventListener('mouseup',function(){dr=false;});
+  // Canvas click handlers for symbol placement (high priority)
+  ['cad-canvas','manual-canvas'].forEach(function(cid){
+    var el=document.getElementById(cid);if(!el)return;
+    el.addEventListener('click',function(ev){
+      if(!symTool)return;
+      var t=_ST[symTool];var rect=el.getBoundingClientRect();
+      var sx=ev.clientX-rect.left,sy=ev.clientY-rect.top;
+      // Snap to nearest point
+      var cad=(cid==='cad-canvas')?screenToCad(sx,sy):screenToMan(sx,sy);
+      if(cid==='cad-canvas'&&cadSnapPoints&&cadSnapPoints.length){
+        var th2=15/scale,bd2=Infinity,best2=null;
+        cadSnapPoints.forEach(function(p){var d=Math.hypot(p.x-cad.x,p.y-cad.y);if(d<th2&&d<bd2){bd2=d;best2=p;}});
+        if(best2)cad=best2;
+      }
+      symPoints.push({x:cad.x,y:cad.y});
+      if(t.clicks==='one'||(t.clicks==='two'&&symPoints.length===2)){_symFinish();}
+      else{document.getElementById('sym-hint').textContent=t.hint+' ('+symPoints.length+' точ.)';}
+      ev.stopPropagation();requestDraw();if(cid==='manual-canvas')requestManualDraw();
+    },true);
+  });
+}
+function _symSel(id){
+  symTool=id;symPoints=[];symProp={};var t=_ST[id];
+  Object.keys(_ST).forEach(function(k){var b=document.getElementById('sb-'+k);if(b){b.style.background=k===id?'#eff6ff':'white';b.style.borderColor=k===id?'#3b82f6':'#e2e8f0';}});
+  var fld=document.getElementById('sym-props');fld.innerHTML='';
+  t.props.forEach(function(prop){
+    symProp[prop.id]=prop.def;
+    var row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:8px;';
+    var lbl=document.createElement('span');lbl.textContent=prop.label;lbl.style.cssText='flex:1;font-size:10px;color:#64748b;';row.appendChild(lbl);
+    var inp;
+    if(prop.type==='sel'){
+      inp=document.createElement('select');inp.style.cssText='width:88px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 4px;font-size:11px;font-weight:600;';
+      prop.opts.forEach(function(o,oi){var op=document.createElement('option');op.value=o;op.textContent=(prop.optLabels&&prop.optLabels[oi])?prop.optLabels[oi]:o;if(o===prop.def)op.selected=true;inp.appendChild(op);});
+    }else{
+      inp=document.createElement('input');inp.type='number';inp.value=prop.def;inp.step=prop.step||'1';inp.min='0';
+      inp.style.cssText='width:68px;border:1px solid #cbd5e1;border-radius:6px;padding:2px 6px;font-size:11px;font-weight:600;text-align:center;';
+    }
+    inp.onchange=function(){symProp[prop.id]=this.value;};row.appendChild(inp);fld.appendChild(row);
+  });
+  document.getElementById('sym-props-wrap').style.display=t.props.length?'block':'none';
+  document.getElementById('sym-hint').textContent=t.hint;
+  document.getElementById('sym-finish').style.display=(t.clicks==='multi')?'block':'none';
+  document.getElementById('sym-cancel').style.display='block';
+}
+function _symFinish(){
+  if(!symTool||!symPoints.length)return;
+  var col=document.getElementById('sym-color').value||'#1e293b';
+  cadSymbols.push({type:symTool,pts:symPoints.slice(),props:Object.assign({},symProp),color:col,label:_ST[symTool].label});
+  symPoints=[];document.getElementById('sym-hint').textContent='\u2713 '+_ST[symTool].label+' добавлен';
+  _symLegend();requestDraw();requestManualDraw();
+}
+function _symCancel(){
+  symTool=null;symPoints=[];
+  Object.keys(_ST).forEach(function(k){var b=document.getElementById('sb-'+k);if(b){b.style.background='white';b.style.borderColor='#e2e8f0';}});
+  document.getElementById('sym-props-wrap').style.display='none';
+  document.getElementById('sym-cancel').style.display='none';
+  document.getElementById('sym-finish').style.display='none';
+  document.getElementById('sym-hint').textContent='Выберите тип объекта';
+}
+function _symLegend(){
+  var lg=document.getElementById('sym-legend');if(!lg)return;
+  if(!cadSymbols.length){lg.innerHTML='<span style="color:#94a3b8;font-style:italic;">Нет объектов</span>';return;}
+  var g={};cadSymbols.forEach(function(s){g[s.type]=(g[s.type]||0)+1;});
+  lg.innerHTML=Object.entries(g).map(function(e){var t=_ST[e[0]];return t.icon+' <b>'+t.label+'</b> &times;'+e[1];}).join('&nbsp;&nbsp;');
+}
 function _drawSymbols(ctx,scl,oX,oY,pr){
   cadSymbols.forEach(function(sym){
     try{
@@ -1279,156 +1644,29 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
     }catch(_){}
   });
 }
-
-
-function applyGeoref(){
-  // Read from JS vars (primary) — survives modal reopen
-  var _missing=[];
-  if(!_grP1L)_missing.push('P1 съёмки — выберите точку в разделе 1б');
-  if(!_grP2L)_missing.push('P2 съёмки — выберите точку в разделе 1б');
-  if(!_grP1G)_missing.push('P1 на основном чертеже — нажмите «На карте» в разделе 2');
-  if(!_grP2G)_missing.push('P2 на основном чертеже — нажмите «На карте» в разделе 2');
-  if(_missing.length>0){
-    showMessage('Не указаны точки','Не заполнены:\n• '+_missing.join('\n• '),'warning');return;
-  }
-  var p1lx=_grP1L.x,p1ly=_grP1L.y,p2lx=_grP2L.x,p2ly=_grP2L.y;
-  var p1gx=_grP1G.x,p1gy=_grP1G.y,p2gx=_grP2G.x,p2gy=_grP2G.y;
-
-  var p1s={x:p1lx,y:p1ly}, p2s={x:p2lx,y:p2ly};
-  var p1d={x:p1gx,y:p1gy}, p2d={x:p2gx,y:p2gy};
-  var t=computeHelmert(p1s,p2s,p1d,p2d);
-  if(!t){showMessage('Ошибка','Базовые точки совпадают — расстояние между точками должно быть ненулевым.','error');return;}
-  georefTransform=t;
-
-  // Show transform info
-  var _ib=document.getElementById('gr-info-box');if(_ib)_ib.classList.remove('hidden');
-  var _gs=document.getElementById('gr-scale');if(_gs)_gs.textContent=t.s.toFixed(6);
-  var _ga=document.getElementById('gr-angle');if(_ga)_ga.textContent=t.angleDeg.toFixed(4)+'°';
-  var _gac=document.getElementById('gr-accuracy');if(_gac)_gac.textContent=t.residual.toFixed(4)+' м';
-  var _gtx=document.getElementById('gr-tx');if(_gtx)_gtx.textContent=t.tx.toFixed(3);
-  var _gty=document.getElementById('gr-ty');if(_gty)_gty.textContent=t.ty.toFixed(3);
-
-  // Use DXF already parsed in 1б preview section
-  try{
-    var dxf=_georefParsedDxf;
-    if(!dxf||!dxf.entities||dxf.entities.length===0)throw new Error('Загрузите файл съёмки в разделе «Предпросмотр» (1б)');
-    var _mx_el=document.getElementById('gr-mirror-x');var _my_el=document.getElementById('gr-mirror-y');var mX=_mx_el?_mx_el.checked:false;var mY=_my_el?_my_el.checked:false;secondDxfElements=processSecondDxfData(dxf,t,mX,mY);
-      secondDxfVisible=true;
-      // Points stay in secondDxfElements (no auto-merge).
-      // User can import Z via Layers panel → "Импортировать Z-высоты"
-      rebuildCachedPath();
-      _updateDxf2LayerPanel();
-      document.getElementById('gr-clear-btn').classList.remove('hidden');
-      closeGeoreferenceModal();
-      requestDraw();
-      showMessage('Успешно',
-        'Наложение выполнено.\nОбъектов в съёмочном файле: '+secondDxfElements.length+
-        '\nМасштаб: '+t.s.toFixed(4)+' | Поворот: '+t.angleDeg.toFixed(2)+'°'+
-        (mX?' | Зерк.X':'')+
-        (mY?' | Зерк.Y':'')+
-        '\n\nСъёмочный чертёж — оранжевым.\nZ-высоты: импортируйте через Слои → Вложенный DXF',
-        'success');
-  }catch(err){
-    showMessage('Ошибка','Не удалось обработать DXF: '+err.message,'error');
-  }
+function _pipe(ctx,pts,oX,oY,scl,col,dash,ltr){
+  if(pts.length<2)return;
+  ctx.strokeStyle=col;ctx.lineWidth=1.5/scl;ctx.setLineDash(dash||[]);
+  ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);});ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=col;for(var i=0;i<pts.length-1;i++){var dx=pts[i+1].x-pts[i].x,dy=pts[i+1].y-pts[i].y,seg=Math.hypot(dx,dy);for(var t=seg/2;t<seg;t+=5){var fx=pts[i].x+dx/seg*t-oX,fy=pts[i].y+dy/seg*t-oY;ctx.save();ctx.scale(1,-1);ctx.font='bold '+(3.5/scl)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(ltr,fx,-fy);ctx.restore();}}
 }
 
-function _northInit(){_northDraw();}
+// ══════════════════════════════════════════════════════════════════════════════
+// GEOREF MINI CANVAS — второй DXF preview + point picking
+// ══════════════════════════════════════════════════════════════════════════════
+var _georefParsedDxf=null;
+var _georefMiniSnaps=[];
+// Coordinate storage — JS variables survive modal reopen
+var _grP1L=null; // {x,y} local P1 (survey DXF)
+var _grP2L=null; // {x,y} local P2 (survey DXF)
+var _grP1G=null; // {x,y} geodetic P1 (main DXF)
+var _grP2G=null; // {x,y} geodetic P2 (main DXF)
 
-function _symInit(){
-  var g=document.getElementById('sym-grid');if(!g)return;g.innerHTML='';
-  Object.entries(_ST).forEach(function(e){var id=e[0],t=e[1];
-    var b=document.createElement('button');b.id='sb-'+id;
-    b.innerHTML=t.icon+'<br><span style="font-size:9px;font-weight:700;">'+t.label+'</span>';
-    b.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px 3px;border-radius:8px;border:1.5px solid #e2e8f0;font-size:18px;cursor:pointer;background:white;min-height:50px;transition:all .12s;';
-    b.onclick=function(){_symSel(id);};g.appendChild(b);
-  });
-  _symLegend();
-  // Draggable panel
-  var p=document.getElementById('sym-panel'),h=document.getElementById('sym-drag');
-  var ox=0,oy=0,mx=0,my=0,dr=false;
-  h.addEventListener('mousedown',function(e){if(e.target.closest('button'))return;dr=true;ox=p.offsetLeft;oy=p.offsetTop;mx=e.clientX;my=e.clientY;e.preventDefault();});
-  document.addEventListener('mousemove',function(e){if(!dr)return;p.style.left=(ox+e.clientX-mx)+'px';p.style.top=Math.max(0,oy+e.clientY-my)+'px';p.style.bottom='auto';});
-  document.addEventListener('mouseup',function(){dr=false;});
-  // Canvas click handlers for symbol placement (high priority)
-  ['cad-canvas','manual-canvas'].forEach(function(cid){
-    var el=document.getElementById(cid);if(!el)return;
-    el.addEventListener('click',function(ev){
-      if(!symTool)return;
-      var t=_ST[symTool];var rect=el.getBoundingClientRect();
-      var sx=ev.clientX-rect.left,sy=ev.clientY-rect.top;
-      // Snap to nearest point
-      var cad=(cid==='cad-canvas')?screenToCad(sx,sy):screenToMan(sx,sy);
-      if(cid==='cad-canvas'&&cadSnapPoints&&cadSnapPoints.length){
-        var th2=15/scale,bd2=Infinity,best2=null;
-        cadSnapPoints.forEach(function(p){var d=Math.hypot(p.x-cad.x,p.y-cad.y);if(d<th2&&d<bd2){bd2=d;best2=p;}});
-        if(best2)cad=best2;
-      }
-      symPoints.push({x:cad.x,y:cad.y});
-      if(t.clicks==='one'||(t.clicks==='two'&&symPoints.length===2)){_symFinish();}
-      else{document.getElementById('sym-hint').textContent=t.hint+' ('+symPoints.length+' точ.)';}
-      ev.stopPropagation();requestDraw();if(cid==='manual-canvas')requestManualDraw();
-    },true);
-  });
-}
-
-function georefLoadPreview(input){
-  var file=input.files[0];if(!file)return;
-  document.getElementById('gr-file-name').textContent=file.name;
-  var fi=document.getElementById('georef-file-input');if(fi)fi._pendingFile=file;
-  input.value='';
-  // Immediately paint canvas so user sees it's working
-  _grMiniMsg('⏳ Загрузка: '+file.name,'#78350f','#fefce8');
-  var PC=window.DxfParser||(typeof DxfParser!=='undefined'?DxfParser:null);
-  if(!PC){_grMiniMsg('❌ DxfParser не загружен — обновите страницу','#be123c','#fff1f2');return;}
-  function doParse(text,encoding){
-    var dxf;
-    try{dxf=(new PC()).parseSync(text);}
-    catch(err){
-      if(encoding==='utf8'){
-        _grMiniMsg('UTF-8 не подошёл, пробую CP1251...','#92400e','#fef3c7');
-        var r2=new FileReader();
-        r2.onload=function(e2){doParse(e2.target.result,'cp1251');};
-        r2.readAsText(file,'windows-1251');
-      } else {
-        _grMiniMsg('❌ Ошибка разбора DXF:\n'+err.message,'#be123c','#fff1f2');
-      }
-      return;
-    }
-    if(!dxf||!dxf.entities){
-      _grMiniMsg('❌ DXF не содержит секцию ENTITIES','#be123c','#fff1f2');return;
-    }
-    _georefParsedDxf=dxf;
-    // Run extraction
-    _georefExtractMiniSnaps(dxf);
-    // Render regardless of element count
-    _georefRenderMini();
-    _georefPopulateSnapList();
-    var hint=document.getElementById('georef-mini-hint');
-    if(hint)hint.style.display='none';
-    var st=document.getElementById('gr-mini-status');
-    var cnt=(_georefMiniElems||[]).length;
-    var snaps=(_georefMiniSnaps||[]).length;
-    if(cnt===0&&encoding==='utf8'){
-      // No elements with UTF-8 — retry with CP1251
-      _grMiniMsg('UTF-8: эл=0, пробую CP1251...','#92400e','#fef3c7');
-      var r3=new FileReader();
-      r3.onload=function(e3){doParse(e3.target.result,'cp1251');};
-      r3.readAsText(file,'windows-1251');
-      return;
-    }
-    if(st)st.textContent=(cnt>0?'✓ ':'⚠ ')+file.name+' ('+cnt+' эл, '+snaps+' узл, '+encoding+')';
-    ['gr-mini-x1','gr-mini-y1','gr-mini-x2','gr-mini-y2',
-     'gr-p1-lx','gr-p1-ly','gr-p2-lx','gr-p2-ly'].forEach(function(id){
-       var el=document.getElementById(id);if(el)el.value='';
-    });
-    _georefMiniP1=null;_georefMiniP2=null;_grP1L=null;_grP2L=null;
-  }
-  var r=new FileReader();
-  r.onload=function(ev){doParse(ev.target.result,'utf8');};
-  r.onerror=function(){_grMiniMsg('❌ Ошибка чтения файла','#be123c','#fff1f2');};
-  r.readAsText(file,'UTF-8');
-}
+   // snap points from second DXF
+var _georefMiniElems=[];   // simplified elements for rendering
+var _georefMiniScale=1, _georefMiniOX=0, _georefMiniOY=0;
+var _georefPickTarget=0;   // 0=none, 1=picking P1, 2=picking P2
+var _georefMiniP1=null, _georefMiniP2=null;
 
 function _georefExtractMiniSnaps(dxf){
   _georefMiniSnaps=[];
@@ -1436,93 +1674,62 @@ function _georefExtractMiniSnaps(dxf){
   _georefMiniScale=1;
   _georefMiniOX=0;
   _georefMiniOY=0;
-
   var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
 
   function addPt(x,y){
     if(!isFinite(x)||!isFinite(y)||Math.abs(x)>1e15||Math.abs(y)>1e15)return;
     _georefMiniSnaps.push({x:x,y:y});
-    if(x<minX)minX=x;if(x>maxX)maxX=x;
-    if(y<minY)minY=y;if(y>maxY)maxY=y;
+    if(x<minX)minX=x; if(x>maxX)maxX=x;
+    if(y<minY)minY=y; if(y>maxY)maxY=y;
   }
 
-  function extractEntityPts(en,tx,ty,sx,sy){
-    if(!en||!en.type)return[];
-    tx=tx||0;ty=ty||0;sx=sx===undefined?1:sx||1;sy=sy===undefined?1:sy||1;
-    var pts=[];
+  function getPts(en,tx,ty,sx,sy){
+    var pts=[]; tx=tx||0; ty=ty||0; sx=sx||1; sy=sy||1;
     try{
       var t=en.type;
       if(t==='LINE'){
-        // dxf-parser 1.x: start/end properties
         if(en.start&&isFinite(en.start.x)&&en.end&&isFinite(en.end.x)){
           pts.push({x:en.start.x*sx+tx,y:en.start.y*sy+ty});
           pts.push({x:en.end.x*sx+tx,  y:en.end.y*sy+ty});
         }
-        // fallback: vertices array
-        if(en.vertices&&en.vertices.length>=2){
-          en.vertices.forEach(function(v){
-            if(isFinite(v.x))pts.push({x:v.x*sx+tx,y:v.y*sy+ty});
-          });
-        }
-      }
-      else if(t==='LWPOLYLINE'||t==='POLYLINE'||t==='SPLINE'){
+        if(en.vertices&&en.vertices.length>=2)
+          en.vertices.forEach(function(v){if(isFinite(v.x))pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
+      } else if(t==='LWPOLYLINE'||t==='POLYLINE'||t==='SPLINE'){
         (en.vertices||[]).forEach(function(v){
-          var px=(v.x||0)*sx+tx, py=(v.y||0)*sy+ty;
-          if(isFinite(px)&&isFinite(py))pts.push({x:px,y:py});
+          if(isFinite(v.x))pts.push({x:(v.x||0)*sx+tx,y:(v.y||0)*sy+ty});
         });
-      }
-      else if(t==='CIRCLE'||t==='ARC'){
+      } else if(t==='CIRCLE'||t==='ARC'){
         if(en.center&&isFinite(en.center.x)){
-          var R=en.radius||0;
-          var steps=(t==='ARC')?12:16;
-          var aStart=en.startAngle!==undefined?en.startAngle*Math.PI/180:0;
-          var aEnd=en.endAngle!==undefined?en.endAngle*Math.PI/180:Math.PI*2;
-          if(aEnd<=aStart)aEnd+=Math.PI*2;
+          var R=en.radius||0, steps=16;
+          var a0=en.startAngle!==undefined?en.startAngle*Math.PI/180:0;
+          var a1=en.endAngle!==undefined?en.endAngle*Math.PI/180:Math.PI*2;
+          if(t==='CIRCLE'){a0=0;a1=Math.PI*2;}
+          if(a1<a0)a1+=Math.PI*2;
           for(var ai=0;ai<=steps;ai++){
-            var a=aStart+(aEnd-aStart)*ai/steps;
-            pts.push({x:(en.center.x+Math.cos(a)*R)*sx+tx,
-                      y:(en.center.y+Math.sin(a)*R)*sy+ty});
+            var a=a0+(a1-a0)*ai/steps;
+            pts.push({x:(en.center.x+Math.cos(a)*R)*sx+tx,y:(en.center.y+Math.sin(a)*R)*sy+ty});
           }
         }
-      }
-      else if(t==='ELLIPSE'&&en.center&&isFinite(en.center.x)){
-        for(var ai=0;ai<8;ai++){
-          var a=ai*Math.PI/4;
-          pts.push({x:(en.center.x+Math.cos(a)*(en.majorAxisEndPoint&&en.majorAxisEndPoint.x||1))*sx+tx,
-                    y:(en.center.y+Math.sin(a)*(en.majorAxisEndPoint&&en.majorAxisEndPoint.y||1))*sy+ty});
-        }
-      }
-      else if(t==='POINT'){
+      } else if(t==='POINT'){
         var pp=en.position||en.point;
         if(pp&&isFinite(pp.x))pts.push({x:pp.x*sx+tx,y:pp.y*sy+ty});
-      }
-      else if(t==='TEXT'||t==='MTEXT'){
+      } else if(t==='TEXT'||t==='MTEXT'){
         var tp=en.startPoint||en.position||en.insertionPoint;
         if(tp&&isFinite(tp.x))pts.push({x:tp.x*sx+tx,y:tp.y*sy+ty});
-      }
-      else if(t==='DIMENSION'){
+      } else if(t==='DIMENSION'){
         var dp=en.definitionPoint||en.middleOfText;
         if(dp&&isFinite(dp.x))pts.push({x:dp.x*sx+tx,y:dp.y*sy+ty});
-      }
-      else if(t==='LEADER'||t==='MLEADER'){
-        (en.vertices||[]).forEach(function(v){
-          if(isFinite(v.x))pts.push({x:v.x*sx+tx,y:v.y*sy+ty});
-        });
-        if(en.vertices&&en.vertices.length===0&&en.arrowHeadPoint&&isFinite(en.arrowHeadPoint.x)){
-          pts.push({x:en.arrowHeadPoint.x*sx+tx,y:en.arrowHeadPoint.y*sy+ty});
-        }
-      }
-      else if(t==='HATCH'&&en.boundaryPaths){
+      } else if(t==='LEADER'||t==='MLEADER'){
+        (en.vertices||[]).forEach(function(v){if(isFinite(v.x))pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
+      } else if(t==='HATCH'&&en.boundaryPaths){
         en.boundaryPaths.forEach(function(bp){
           (bp.edges||[]).forEach(function(edge){
-            if(edge.start&&isFinite(edge.start.x)){pts.push({x:edge.start.x*sx+tx,y:edge.start.y*sy+ty});}
-            if(edge.end&&isFinite(edge.end.x)){pts.push({x:edge.end.x*sx+tx,y:edge.end.y*sy+ty});}
-            if(edge.startPoint&&isFinite(edge.startPoint.x)){pts.push({x:edge.startPoint.x*sx+tx,y:edge.startPoint.y*sy+ty});}
+            if(edge.start&&isFinite(edge.start.x))pts.push({x:edge.start.x*sx+tx,y:edge.start.y*sy+ty});
+            if(edge.end&&isFinite(edge.end.x))pts.push({x:edge.end.x*sx+tx,y:edge.end.y*sy+ty});
           });
           (bp.vertices||[]).forEach(function(v){if(isFinite(v.x))pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
         });
-      }
-      else if(t==='SOLID'||t==='TRACE'){
+      } else if(t==='SOLID'||t==='TRACE'){
         ['corner1','corner2','corner3','corner4'].forEach(function(k){
           if(en[k]&&isFinite(en[k].x))pts.push({x:en[k].x*sx+tx,y:en[k].y*sy+ty});
         });
@@ -1531,164 +1738,141 @@ function _georefExtractMiniSnaps(dxf){
     return pts;
   }
 
-  var _visitedBlocks={};
+  var _visited={};
   function traverse(entities,tx,ty,sx,sy,depth){
     if(!entities||!entities.length||depth>12)return;
     entities.forEach(function(en){
       if(!en||!en.type)return;
       if(en.type==='INSERT'){
         try{
-          var blkName=en.name||en.block;
-          if(!blkName)return;
-          var blk=dxf.blocks&&dxf.blocks[blkName];
+          var bn=en.name||en.block; if(!bn)return;
+          var blk=dxf.blocks&&dxf.blocks[bn];
           if(!blk||!blk.entities)return;
-          var visitKey=blkName+','+depth;
-          if(_visitedBlocks[visitKey])return;
-          _visitedBlocks[visitKey]=true;
+          var key=bn+':'+depth; if(_visited[key])return; _visited[key]=true;
           var bx=(en.position?(en.position.x||0):0)*(sx||1)+(tx||0);
           var by=(en.position?(en.position.y||0):0)*(sy||1)+(ty||0);
-          var rot=(en.rotation||0)*Math.PI/180;
           var bsx=(sx||1)*(en.xScale||en.scaleX||en.scale&&en.scale.x||1);
           var bsy=(sy||1)*(en.yScale||en.scaleY||en.scale&&en.scale.y||1);
           traverse(blk.entities,bx,by,bsx,bsy,depth+1);
         }catch(e){}
         return;
       }
-      var pts=extractEntityPts(en,tx||0,ty||0,sx||1,sy||1);
+      var pts=getPts(en,tx||0,ty||0,sx||1,sy||1);
       if(!pts.length)return;
       pts.forEach(function(p){addPt(p.x,p.y);});
       var isCirc=en.type==='CIRCLE'||en.type==='ARC';
-      if(pts.length>=2&&!isCirc){
-        _georefMiniElems.push({type:'line',pts:pts});
-      } else if(pts.length===1){
-        _georefMiniElems.push({type:'point',pt:pts[0]});
-      }
-      if(isCirc&&en.center&&isFinite(en.center.x)&&en.radius){
-        _georefMiniElems.push({
-          type:'circle',
-          cx:en.center.x*(sx||1)+(tx||0),
-          cy:en.center.y*(sy||1)+(ty||0),
-          r:en.radius*Math.abs(sx||1)
-        });
-      }
+      if(pts.length>=2&&!isCirc) _georefMiniElems.push({type:'line',pts:pts});
+      else if(pts.length===1)    _georefMiniElems.push({type:'point',pt:pts[0]});
+      if(isCirc&&en.center&&isFinite(en.center.x)&&en.radius)
+        _georefMiniElems.push({type:'circle',
+          cx:en.center.x*(sx||1)+(tx||0),cy:en.center.y*(sy||1)+(ty||0),
+          r:en.radius*Math.abs(sx||1)});
     });
   }
 
-  // Traverse main entities
   traverse(dxf.entities,0,0,1,1,0);
 
-  // Also try block *Model_Space if entities is empty
+  // Fallback: check *Model_Space block if entities empty
   if(_georefMiniSnaps.length===0&&dxf.blocks){
-    var modelBlk=dxf.blocks['*Model_Space']||dxf.blocks['*MODEL_SPACE']||dxf.blocks['$Model_Space'];
-    if(modelBlk&&modelBlk.entities){
-      traverse(modelBlk.entities,0,0,1,1,0);
-    }
+    var ms=dxf.blocks['*Model_Space']||dxf.blocks['*MODEL_SPACE'];
+    if(ms&&ms.entities) traverse(ms.entities,0,0,1,1,0);
   }
 
-  var cv=document.getElementById('georef-mini-canvas');
-  if(!cv)return;
-  var W=cv.width||460,H=cv.height||320;
+  var cv=document.getElementById('georef-mini-canvas'); if(!cv)return;
+  var W=cv.width||460, H=cv.height||320;
 
   if(!isFinite(minX)||_georefMiniSnaps.length===0){
-    // Show diagnostic: what entity types were found
     var types={};
     (dxf.entities||[]).forEach(function(e){if(e&&e.type)types[e.type]=(types[e.type]||0)+1;});
-    var typeStr=Object.keys(types).map(function(k){return k+'×'+types[k];}).join(' ')||'нет';
-    _grMiniMsg('⚠ Геометрия не найдена\nТипы: '+typeStr+'\nЭл. в файле: '+(dxf.entities||[]).length,
-               '#b45309','#fffbeb');
+    _grMiniMsg('⚠ Геометрия не найдена\n'+
+      'Типы: '+(Object.keys(types).map(function(k){return k+'×'+types[k];}).join(' ')||'нет')+
+      '\nЭлементов: '+(dxf.entities||[]).length,'#b45309','#fffbeb');
     return;
   }
 
-  var pad=28;
-  var rX=maxX-minX, rY=maxY-minY;
-  if(rX<1e-6)rX=1; if(rY<1e-6)rY=1;
-  var scX=(W-pad*2)/rX, scY=(H-pad*2)/rY;
-  var sc=Math.min(scX,scY);
+  var pad=30;
+  var rX=maxX-minX||1, rY=maxY-minY||1;
+  var sc=Math.min((W-pad*2)/rX,(H-pad*2)/rY);
   if(!isFinite(sc)||sc<=0)sc=1;
   _georefMiniScale=sc;
-  // Center the drawing
-  var drawW=rX*sc, drawH=rY*sc;
-  _georefMiniOX=minX-(W-drawW)/2/sc;
-  _georefMiniOY=minY-(H-drawH)/2/sc;
+  var dW=rX*sc, dH=rY*sc;
+  _georefMiniOX=minX-(W-dW)/2/sc;
+  _georefMiniOY=minY-(H-dH)/2/sc;
 }
 
+
+
 function _georefRenderMini(){
-  var cv=document.getElementById('georef-mini-canvas');if(!cv)return;
+  var cv=document.getElementById('georef-mini-canvas'); if(!cv)return;
   var ctx=cv.getContext('2d');
   var W=cv.width||460, H=cv.height||320;
-  var sc=_georefMiniScale||1;
-  var oX=_georefMiniOX||0, oY=_georefMiniOY||0;
+  var sc=_georefMiniScale||1, oX=_georefMiniOX||0, oY=_georefMiniOY||0;
 
-  // Always start with visible background
   ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='#f8fafc';ctx.fillRect(0,0,W,H);
-  // Border
-  ctx.strokeStyle='#cbd5e1';ctx.lineWidth=1;ctx.strokeRect(0,0,W,H);
+  ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1; ctx.strokeRect(0,0,W,H);
 
   var elems=_georefMiniElems||[];
   if(!elems.length){
-    ctx.fillStyle='#94a3b8';ctx.font='12px sans-serif';ctx.textAlign='center';
+    ctx.fillStyle='#94a3b8'; ctx.font='12px sans-serif'; ctx.textAlign='center';
     ctx.fillText('Нет геометрии для отображения',W/2,H/2);
-    ctx.textAlign='left';
-    return;
+    ctx.textAlign='left'; return;
   }
 
   function wx(x){return(x-oX)*sc;}
   function wy(y){return H-(y-oY)*sc;}
 
-  // Draw all elements
   ctx.save();
-  ctx.strokeStyle='#1e3a5f';ctx.lineWidth=0.9;ctx.lineCap='round';ctx.lineJoin='round';
-
+  ctx.strokeStyle='#1e3a5f'; ctx.lineWidth=0.9; ctx.lineCap='round'; ctx.lineJoin='round';
   var drawn=0;
   elems.forEach(function(el){
     try{
       if(el.type==='line'&&el.pts&&el.pts.length>=2){
         ctx.beginPath();
-        el.pts.forEach(function(p,i){
-          var px=wx(p.x), py=wy(p.y);
+        var moved=false;
+        el.pts.forEach(function(p){
+          var px=wx(p.x),py=wy(p.y);
           if(!isFinite(px)||!isFinite(py))return;
-          i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+          if(!moved){ctx.moveTo(px,py);moved=true;}else ctx.lineTo(px,py);
         });
-        ctx.stroke();drawn++;
-      }
-      else if(el.type==='circle'&&isFinite(el.cx)&&isFinite(el.r)){
-        var screenR=Math.abs(el.r*sc);
-        if(screenR>=0.3&&screenR<Math.max(W,H)*3){
-          ctx.beginPath();ctx.arc(wx(el.cx),wy(el.cy),screenR,0,Math.PI*2);ctx.stroke();drawn++;
+        if(moved){ctx.stroke();drawn++;}
+      } else if(el.type==='circle'&&isFinite(el.cx)&&isFinite(el.r)){
+        var sR=Math.abs(el.r*sc);
+        if(sR>=0.3&&sR<Math.max(W,H)*3){
+          ctx.beginPath(); ctx.arc(wx(el.cx),wy(el.cy),sR,0,Math.PI*2);
+          ctx.stroke(); drawn++;
         }
-      }
-      else if(el.type==='point'&&el.pt&&isFinite(el.pt.x)){
+      } else if(el.type==='point'&&el.pt&&isFinite(el.pt.x)){
         ctx.fillStyle='#ef4444';
-        ctx.beginPath();ctx.arc(wx(el.pt.x),wy(el.pt.y),2.5,0,Math.PI*2);ctx.fill();drawn++;
+        ctx.beginPath(); ctx.arc(wx(el.pt.x),wy(el.pt.y),2.5,0,Math.PI*2);
+        ctx.fill(); drawn++;
         ctx.fillStyle='#1e3a5f';
       }
     }catch(e){}
   });
   ctx.restore();
 
-  // Control points P1 / P2
+  // Control point markers
   function drawCtrl(p,label,col){
     if(!p||!isFinite(p.x))return;
     var px=wx(p.x),py=wy(p.y);
     ctx.save();
-    ctx.fillStyle=col;ctx.strokeStyle='#fff';ctx.lineWidth=2.5;
-    ctx.beginPath();ctx.arc(px,py,9,0,Math.PI*2);ctx.fill();ctx.stroke();
-    ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=col; ctx.strokeStyle='#fff'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(px,py,9,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font='bold 11px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(label,px,py);
     ctx.restore();
   }
-  if(typeof _georefMiniP1!=='undefined')drawCtrl(_georefMiniP1,'1','#16a34a');
-  if(typeof _georefMiniP2!=='undefined')drawCtrl(_georefMiniP2,'2','#dc2626');
+  if(typeof _georefMiniP1!=='undefined'&&_georefMiniP1)drawCtrl(_georefMiniP1,'1','#16a34a');
+  if(typeof _georefMiniP2!=='undefined'&&_georefMiniP2)drawCtrl(_georefMiniP2,'2','#dc2626');
 
-  // Stats panel
+  // Info strip
   var snap=(_georefMiniSnaps||[]).length;
-  ctx.fillStyle='rgba(255,255,255,0.9)';ctx.fillRect(2,2,190,18);
-  ctx.fillStyle='#334155';ctx.font='9px monospace';
-  ctx.fillText('Эл:'+elems.length+' нарис:'+drawn+' узл:'+snap+' sc:'+sc.toExponential(2),6,13);
+  ctx.fillStyle='rgba(255,255,255,0.88)'; ctx.fillRect(2,2,185,17);
+  ctx.fillStyle='#334155'; ctx.font='9px monospace';
+  ctx.fillText('Эл:'+elems.length+' нар:'+drawn+' узл:'+snap+' sc:'+sc.toExponential(2),5,13);
 }
-
-
 
 
 // ─── Mini canvas zoom / pan ──────────────────────────────────────────────────
