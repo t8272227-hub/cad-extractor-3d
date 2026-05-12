@@ -366,7 +366,10 @@ draw();
 }
 function cadToScreen(x,y){return{x:panX+(x-cadOriginX)*scale,y:panY-(y-cadOriginY)*scale};}
 function screenToCad(x,y){if(northAngle!==0){var _cv=document.getElementById('cad-canvas'),_cx=_cv.width/2,_cy=_cv.height/2;var _a=northAngle*Math.PI/180,_dx=x-_cx,_dy=y-_cy;x=_cx+_dx*Math.cos(_a)-_dy*Math.sin(_a);y=_cy+_dx*Math.sin(_a)+_dy*Math.cos(_a);}return{x:cadOriginX+(x-panX)/scale,y:cadOriginY+(panY-y)/scale};}
-function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=isExportingPDF?4:1;if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';return;}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid&&cadMaxX>cadMinX){var _rw=cadMaxX-cadMinX;var _mag=Math.pow(10,Math.floor(Math.log10(_rw/8)));var _gs=[1,2,5].reduce(function(p,v){return Math.abs(_rw/8-v*_mag)<Math.abs(_rw/8-p*_mag)?v:p;})*_mag;cx.save();cx.strokeStyle="rgba(100,140,220,0.18)";cx.lineWidth=0.4/scale;for(var _xi=Math.floor(cadMinX/_gs)*_gs;_xi<=cadMaxX+_gs;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,cadMinY-_gs);cx.lineTo(_xi,cadMaxY+_gs);cx.stroke();}for(var _yi=Math.floor(cadMinY/_gs)*_gs;_yi<=cadMaxY+_gs;_yi+=_gs){cx.beginPath();cx.moveTo(cadMinX-_gs,_yi);cx.lineTo(cadMaxX+_gs,_yi);cx.stroke();}cx.restore();}if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}_drawSymbols(cx,scale,cadOriginX,cadOriginY,pr);cx.restore();cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.fillStyle='#334155';cx.beginPath();cadPoints.forEach(p=>{const sp=cadToScreen(p.x,p.y);cx.moveTo(sp.x+1.2*pr,sp.y);cx.arc(sp.x,sp.y,1.2*pr,0,Math.PI*2);});cx.fill();if(earthworksData&&earthworksData.polygon){cx.beginPath();earthworksData.polygon.forEach((p,i)=>{const sp=cadToScreen(p.x,p.y);if(i===0)cx.moveTo(sp.x,sp.y);else cx.lineTo(sp.x,sp.y);});cx.closePath();cx.fillStyle='rgba(249, 115, 22, 0.15)';cx.fill();cx.strokeStyle='#f97316';cx.lineWidth=0.8*pr;cx.setLineDash([4*pr,4*pr]);cx.stroke();cx.setLineDash([]);}if(dxfShowContours&&dxfCachedContours.length>0){cx.lineWidth=1.2*pr;cx.globalAlpha=typeof dxfContourOpacity!=='undefined'?dxfContourOpacity:0.55;cx.strokeStyle=dxfContourColor||'#78716c';cx.beginPath();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length<2)return;const s0=cadToScreen(pt[0].x,pt[0].y);cx.moveTo(s0.x,s0.y);if(pt.length===2){const s1=cadToScreen(pt[1].x,pt[1].y);cx.lineTo(s1.x,s1.y);}else{for(let i=1;i<pt.length-1;i++){const sc=cadToScreen(pt[i].x,pt[i].y),sn=cadToScreen(pt[i+1].x,pt[i+1].y),mx=(sc.x+sn.x)/2,my=(sc.y+sn.y)/2;cx.quadraticCurveTo(sc.x,sc.y,mx,my);}const sl=cadToScreen(pt[pt.length-1].x,pt[pt.length-1].y);cx.lineTo(sl.x,sl.y);}});cx.stroke();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length>=2){const mid=Math.floor(pt.length/2),p1=pt[mid-1]||pt[0],p2=pt[mid]||pt[1],s1=cadToScreen(p1.x,p1.y),s2=cadToScreen(p2.x,p2.y);let a=Math.atan2(s2.y-s1.y,s2.x-s1.x);if(a>Math.PI/2||a<-Math.PI/2)a+=Math.PI;cx.save();cx.translate((s1.x+s2.x)/2,(s1.y+s2.y)/2);cx.rotate(a);cx.textAlign='center';cx.textBaseline='middle';const t=c.z.toFixed(2);cx.font=`bold ${8*pr}px sans-serif`;cx.lineWidth=1.5*pr;cx.strokeStyle='#ffffff';cx.strokeText(t,0,0);cx.fillStyle='#78350f';cx.fillText(t,0,0);cx.restore();}});}const padX=100/scale,padY=100/scale,mx=cadOriginX-panX/scale-padX,Mx=cadOriginX+(cv.width-panX)/scale+padX,my=cadOriginY+(panY-cv.height)/scale-padY,My=cadOriginY+panY/scale+padY;for(let i=0;i<cadTexts.length;i++){const t=cadTexts[i];if(t.x<mx||t.x>Mx||t.y<my||t.y>My)continue;if(points.some(p=>`P${p.id}`===t.text.trim()||p.id.toString()===t.text.trim()))continue;let sh=t.h*scale;
+function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=isExportingPDF?4:1;if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';return;}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid&&cadMaxX>cadMinX){var _rw=cadMaxX-cadMinX;var _mag=Math.pow(10,Math.floor(Math.log10(_rw/8)));var _gs=[1,2,5].reduce(function(p,v){return Math.abs(_rw/8-v*_mag)<Math.abs(_rw/8-p*_mag)?v:p;})*_mag;cx.save();cx.strokeStyle="rgba(100,140,220,0.18)";cx.lineWidth=0.4/scale;for(var _xi=Math.floor(cadMinX/_gs)*_gs;_xi<=cadMaxX+_gs;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,cadMinY-_gs);cx.lineTo(_xi,cadMaxY+_gs);cx.stroke();}for(var _yi=Math.floor(cadMinY/_gs)*_gs;_yi<=cadMaxY+_gs;_yi+=_gs){cx.beginPath();cx.moveTo(cadMinX-_gs,_yi);cx.lineTo(cadMaxX+_gs,_yi);cx.stroke();}cx.restore();}if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}_drawSymbols(cx,scale,cadOriginX,cadOriginY,pr);
+  // Live preview for symbol drawing panel
+  if(typeof _sdpActive!=='undefined'&&_sdpActive&&typeof _sdpDrawPreview==='function')
+    _sdpDrawPreview(cx,scale,cadOriginX,cadOriginY,pr);cx.restore();cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.fillStyle='#334155';cx.beginPath();cadPoints.forEach(p=>{const sp=cadToScreen(p.x,p.y);cx.moveTo(sp.x+1.2*pr,sp.y);cx.arc(sp.x,sp.y,1.2*pr,0,Math.PI*2);});cx.fill();if(earthworksData&&earthworksData.polygon){cx.beginPath();earthworksData.polygon.forEach((p,i)=>{const sp=cadToScreen(p.x,p.y);if(i===0)cx.moveTo(sp.x,sp.y);else cx.lineTo(sp.x,sp.y);});cx.closePath();cx.fillStyle='rgba(249, 115, 22, 0.15)';cx.fill();cx.strokeStyle='#f97316';cx.lineWidth=0.8*pr;cx.setLineDash([4*pr,4*pr]);cx.stroke();cx.setLineDash([]);}if(dxfShowContours&&dxfCachedContours.length>0){cx.lineWidth=1.2*pr;cx.globalAlpha=typeof dxfContourOpacity!=='undefined'?dxfContourOpacity:0.55;cx.strokeStyle=dxfContourColor||'#78716c';cx.beginPath();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length<2)return;const s0=cadToScreen(pt[0].x,pt[0].y);cx.moveTo(s0.x,s0.y);if(pt.length===2){const s1=cadToScreen(pt[1].x,pt[1].y);cx.lineTo(s1.x,s1.y);}else{for(let i=1;i<pt.length-1;i++){const sc=cadToScreen(pt[i].x,pt[i].y),sn=cadToScreen(pt[i+1].x,pt[i+1].y),mx=(sc.x+sn.x)/2,my=(sc.y+sn.y)/2;cx.quadraticCurveTo(sc.x,sc.y,mx,my);}const sl=cadToScreen(pt[pt.length-1].x,pt[pt.length-1].y);cx.lineTo(sl.x,sl.y);}});cx.stroke();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length>=2){const mid=Math.floor(pt.length/2),p1=pt[mid-1]||pt[0],p2=pt[mid]||pt[1],s1=cadToScreen(p1.x,p1.y),s2=cadToScreen(p2.x,p2.y);let a=Math.atan2(s2.y-s1.y,s2.x-s1.x);if(a>Math.PI/2||a<-Math.PI/2)a+=Math.PI;cx.save();cx.translate((s1.x+s2.x)/2,(s1.y+s2.y)/2);cx.rotate(a);cx.textAlign='center';cx.textBaseline='middle';const t=c.z.toFixed(2);cx.font=`bold ${8*pr}px sans-serif`;cx.lineWidth=1.5*pr;cx.strokeStyle='#ffffff';cx.strokeText(t,0,0);cx.fillStyle='#78350f';cx.fillText(t,0,0);cx.restore();}});}const padX=100/scale,padY=100/scale,mx=cadOriginX-panX/scale-padX,Mx=cadOriginX+(cv.width-panX)/scale+padX,my=cadOriginY+(panY-cv.height)/scale-padY,My=cadOriginY+panY/scale+padY;for(let i=0;i<cadTexts.length;i++){const t=cadTexts[i];if(t.x<mx||t.x>Mx||t.y<my||t.y>My)continue;if(points.some(p=>`P${p.id}`===t.text.trim()||p.id.toString()===t.text.trim()))continue;let sh=t.h*scale;
 // Clamp: tiny when zoomed out, capped at 9px max — unobtrusive
 let shClamp=Math.max(6,Math.min(sh,9));
 if(sh>0.5&&sh<5000){let sp=cadToScreen(t.x,t.y);cx.save();cx.font=`${shClamp}px sans-serif`;cx.fillStyle='rgba(100, 116, 139, 0.75)';cx.textBaseline='bottom';cx.translate(sp.x,sp.y);if(t.rot!==0)cx.rotate(-t.rot);cx.fillText(t.text,0,0);cx.restore();}}// Fixed small screen-size labels (pr=1 normally, 4 for PDF export)
@@ -486,6 +489,7 @@ dxfCanvasEv.addEventListener('mousedown',(e)=>{
 });
 dxfCanvasEv.addEventListener('mousemove',(e)=>{if(currentMode!=='dxf')return;if(isDragging){const dx=e.clientX-lastMouseX,dy=e.clientY-lastMouseY;if(!dragMoved&&(Math.abs(dx)>3||Math.abs(dy)>3))dragMoved=true;if(dragMoved){if(northAngle!==0){var _a=northAngle*Math.PI/180,_c=Math.cos(_a),_s=Math.sin(_a);panX+=dx*_c-dy*_s;panY+=dx*_s+dy*_c;}else{panX+=dx;panY+=dy;}lastMouseX=e.clientX;lastMouseY=e.clientY;currentSnapPoint=null;requestDraw();return;}}const r=dxfCanvasEv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;if(pdfFrameDrawing&&pdfFrameStart){var _pfend=screenToCad(mx,my);pdfFrame={x1:pdfFrameStart.x,y1:pdfFrameStart.y,x2:_pfend.x,y2:_pfend.y};requestDraw();}// Track mouse for contour live preview and pdfFrame drawing
 if(contourActive&&!contourClosed){contourMousePos=screenToCad(mx,my);requestDraw();}
+if(_sdpActive){_sdpMouse=screenToCad(mx,my);requestDraw();}
 if(pdfFrameDrawing&&pdfFrameStart){
   var _pfend=screenToCad(mx,my);
   pdfFrame={x1:pdfFrameStart.x,y1:pdfFrameStart.y,x2:_pfend.x,y2:_pfend.y};
@@ -1392,6 +1396,12 @@ function _symInit(){
   ['cad-canvas','manual-canvas'].forEach(function(cid){
     var el=document.getElementById(cid);if(!el)return;
     el.addEventListener('click',function(ev){
+      // ArchiCAD drawing panel gets priority
+      if(typeof _sdpActive!=='undefined'&&_sdpActive){
+        var _sc2=(cid==='cad-canvas')?screenToCad(sx,sy):screenToMan(sx,sy);
+        _sdpHandleClick(_sc2.x,_sc2.y);
+        return;
+      }
       if(!symTool)return;
       var t=_ST[symTool];var rect=el.getBoundingClientRect();
       var sx=ev.clientX-rect.left,sy=ev.clientY-rect.top;
@@ -2720,3 +2730,296 @@ var _origClearContour=clearContour;
 clearContour=function(){_origClearContour();_updateQuickBar();};
 var _origCloseContour=closeContour;
 closeContour=function(){_origCloseContour();_updateQuickBar();};
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYMBOL DRAWING PANEL — ArchiCAD/AutoCAD style
+// ═══════════════════════════════════════════════════════════════════════════
+var _sdpActive = false;   // panel is open
+var _sdpType   = null;    // current element type id
+var _sdpProp   = {};      // current properties
+var _sdpPts    = [];      // points being placed
+var _sdpMouse  = null;    // current mouse world position (for live preview)
+var _sdpColor  = '#1e293b';
+
+// Open the drawing panel
+function openSymDrawPanel(typeId){
+  if(contourActive)clearContour();
+  if(pdfFrameDrawing){pdfFrameDrawing=false;}
+
+  var panel=document.getElementById('sym-draw-panel');
+  if(!panel)return;
+  panel.style.display='flex';
+  _sdpActive=true;
+  _sdpPts=[];
+  _sdpMouse=null;
+
+  // Build type buttons
+  _sdpBuildTypeRow();
+
+  // Select type
+  if(typeId)_sdpSelectType(typeId);
+  else _sdpSelectType(Object.keys(_ST)[0]);
+
+  // cursor
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='crosshair';
+
+  requestDraw();
+}
+
+function sdpClose(){
+  var panel=document.getElementById('sym-draw-panel');
+  if(panel)panel.style.display='none';
+  _sdpActive=false;
+  _sdpType=null;
+  _sdpPts=[];
+  _sdpMouse=null;
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='';
+  requestDraw();
+}
+
+function _sdpBuildTypeRow(){
+  var row=document.getElementById('sdp-type-row');
+  if(!row)return;
+  row.innerHTML='';
+  Object.keys(_ST).forEach(function(id){
+    var t=_ST[id];
+    var btn=document.createElement('button');
+    btn.id='sdp-tb-'+id;
+    btn.title=t.label;
+    btn.textContent=t.icon;
+    btn.style.cssText='background:#334155;border:1px solid #475569;border-radius:6px;'+
+      'color:#f1f5f9;padding:5px 7px;cursor:pointer;font-size:16px;transition:.1s;';
+    btn.onclick=function(){_sdpSelectType(id);};
+    row.appendChild(btn);
+  });
+}
+
+function _sdpSelectType(id){
+  var t=_ST[id];if(!t)return;
+  _sdpType=id;
+  _sdpPts=[];
+  _sdpMouse=null;
+
+  // Header
+  var el=document.getElementById('sdp-icon');if(el)el.textContent=t.icon;
+  var el2=document.getElementById('sdp-title');if(el2)el2.textContent=t.label;
+
+  // Highlight active button
+  Object.keys(_ST).forEach(function(k){
+    var b=document.getElementById('sdp-tb-'+k);
+    if(b){
+      b.style.background=k===id?t.color:'#334155';
+      b.style.borderColor=k===id?t.color:'#475569';
+    }
+  });
+
+  // Build props
+  _sdpProp={};
+  var propsDiv=document.getElementById('sdp-props');
+  if(!propsDiv)return;
+  propsDiv.innerHTML='';
+
+  t.props.forEach(function(prop){
+    _sdpProp[prop.id]=prop.def;
+    var row=document.createElement('div');
+    row.style.cssText='margin-bottom:10px;';
+
+    var lbl=document.createElement('label');
+    lbl.textContent=prop.label;
+    lbl.style.cssText='display:block;font-size:10px;color:#94a3b8;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;';
+    row.appendChild(lbl);
+
+    if(prop.type==='sel'){
+      var sel=document.createElement('select');
+      sel.style.cssText='width:100%;background:#334155;border:1px solid #475569;border-radius:6px;'+
+        'color:#f1f5f9;padding:6px 8px;font-size:12px;cursor:pointer;';
+      (prop.optLabels||prop.opts).forEach(function(ol,oi){
+        var o=document.createElement('option');
+        o.value=prop.opts[oi];o.textContent=ol;
+        if(prop.opts[oi]===prop.def)o.selected=true;
+        sel.appendChild(o);
+      });
+      sel.onchange=function(){_sdpProp[prop.id]=this.value;requestDraw();};
+      row.appendChild(sel);
+    } else {
+      var inp=document.createElement('input');
+      inp.type='number';inp.value=prop.def;inp.step=prop.step||'1';
+      inp.style.cssText='width:100%;background:#334155;border:1px solid #475569;border-radius:6px;'+
+        'color:#f1f5f9;padding:6px 8px;font-size:12px;box-sizing:border-box;';
+      inp.onchange=function(){_sdpProp[prop.id]=this.value;requestDraw();};
+      inp.oninput=function(){_sdpProp[prop.id]=this.value;requestDraw();};
+      row.appendChild(inp);
+    }
+    propsDiv.appendChild(row);
+  });
+
+  // Info block
+  var info=document.createElement('div');
+  info.style.cssText='margin-top:14px;padding:10px;background:#0f172a;border-radius:8px;font-size:10px;color:#64748b;line-height:1.6;';
+  var clk=t.clicks;
+  var instrText=clk==='one'
+    ? '🖱 Клик — разместить элемент'
+    : clk==='two'
+    ? '🖱 Клик 1 — начало\n🖱 Клик 2 — конец'
+    : '🖱 Клики — вершины\n⏎ Enter или 2×клик — завершить\n⌨ U — отменить точку\n⎋ ESC — отмена';
+  info.textContent=instrText;
+  propsDiv.appendChild(info);
+
+  _sdpUpdateStatus();
+  requestDraw();
+}
+
+function _sdpUpdateStatus(){
+  var st=document.getElementById('sdp-status');
+  if(!st||!_sdpType)return;
+  var t=_ST[_sdpType];
+  var n=_sdpPts.length;
+  var msgs={
+    one: n===0?'Кликните на чертеже чтобы разместить':'Размещено — кликните ещё или закройте',
+    two: n===0?'Кликните: начальная точка':n===1?'Кликните: конечная точка':'✓ Элемент добавлен',
+    multi: n===0?'Кликните: первая точка':
+           n===1?'Кликните: следующая точка (минимум 2)':
+           n+'  точек — Enter или 2×клик для завершения'
+  };
+  st.textContent=msgs[t.clicks]||'';
+}
+
+function sdpUndo(){
+  if(_sdpPts.length>0){_sdpPts.pop();_sdpUpdateStatus();requestDraw();}
+}
+
+function sdpFinish(){
+  if(!_sdpType||_sdpPts.length===0)return;
+  var t=_ST[_sdpType];
+  var col=document.getElementById('sdp-color').value||_sdpColor;
+  var minPts={one:1,two:2,multi:2};
+  if(_sdpPts.length<(minPts[t.clicks]||1)){
+    var s=document.getElementById('sdp-status');
+    if(s)s.textContent='⚠ Нужно минимум '+(minPts[t.clicks]||1)+' точки';
+    return;
+  }
+  cadSymbols.push({
+    type:_sdpType,
+    pts:_sdpPts.slice(),
+    props:Object.assign({},_sdpProp),
+    color:col,
+    label:t.label
+  });
+  _sdpPts=[];
+  _sdpUpdateStatus();
+  var s=document.getElementById('sdp-status');
+  if(s)s.textContent='✓ '+t.label+' добавлен. Продолжайте или закройте.';
+  if(typeof _symLegend==='function')_symLegend();
+  requestDraw();requestManualDraw();
+}
+
+// Canvas click handler for symbol drawing panel
+function _sdpHandleClick(worldX,worldY){
+  if(!_sdpActive||!_sdpType)return false;
+  var t=_ST[_sdpType];
+
+  // Snap to existing points
+  var snap=_sdpFindSnap(worldX,worldY);
+  if(snap){worldX=snap.x;worldY=snap.y;}
+
+  // Double-click detection for multi elements
+  var now=Date.now();
+  if(t.clicks==='multi'&&_sdpPts.length>=2&&_sdpLastClick&&now-_sdpLastClick<400){
+    // Double-click → finish
+    sdpFinish();
+    _sdpLastClick=0;
+    return true;
+  }
+  _sdpLastClick=now;
+
+  _sdpPts.push({x:worldX,y:worldY});
+  _sdpUpdateStatus();
+
+  if(t.clicks==='one'){
+    // Place immediately
+    sdpFinish();
+  } else if(t.clicks==='two'&&_sdpPts.length>=2){
+    sdpFinish();
+  }
+
+  requestDraw();
+  return true;
+}
+var _sdpLastClick=0;
+
+function _sdpFindSnap(wx,wy){
+  var th=12/scale,best=null,bd=Infinity;
+  if(cadSnapPoints)cadSnapPoints.forEach(function(p){
+    var d=Math.hypot(p.x-wx,p.y-wy);
+    if(d<th&&d<bd){bd=d;best=p;}
+  });
+  return best;
+}
+
+// Draw live preview of current symbol being placed
+function _sdpDrawPreview(ctx,scl,oX,oY,pr){
+  if(!_sdpActive||!_sdpType||_sdpPts.length===0)return;
+  var t=_ST[_sdpType];
+  var col=document.getElementById('sdp-color');
+  var c=col?col.value:'#2563eb';
+  var pts=_sdpPts.slice();
+
+  // Add mouse position as rubber-band endpoint
+  if(_sdpMouse&&t.clicks!=='one'){
+    pts.push({x:_sdpMouse.x,y:_sdpMouse.y});
+  }
+
+  if(pts.length<2)return;
+
+  // Draw rubber-band preview line
+  ctx.save();
+  ctx.setLineDash([4/scl,4/scl]);
+  ctx.strokeStyle=c;ctx.lineWidth=1.5/scl;ctx.globalAlpha=0.7;
+  ctx.beginPath();
+  pts.forEach(function(p,i){
+    i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Draw placed points
+  ctx.globalAlpha=1;
+  _sdpPts.forEach(function(p,i){
+    ctx.fillStyle=i===0?'#16a34a':c;
+    ctx.beginPath();ctx.arc(p.x-oX,p.y-oY,4/scl,0,Math.PI*2);ctx.fill();
+    // Point number
+    ctx.save();ctx.translate(p.x-oX,p.y-oY);ctx.scale(1/scl,-1/scl);
+    ctx.fillStyle='#fff';ctx.font='bold 8px sans-serif';ctx.textAlign='center';
+    ctx.fillText(i+1,0,3);ctx.restore();
+  });
+
+  // Snap indicator on mouse
+  if(_sdpMouse){
+    var snap=_sdpFindSnap(_sdpMouse.x,_sdpMouse.y);
+    if(snap){
+      ctx.strokeStyle='#f59e0b';ctx.lineWidth=1.5/scl;
+      ctx.beginPath();ctx.arc(snap.x-oX,snap.y-oY,8/scl,0,Math.PI*2);ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+// Keyboard shortcuts for sym panel
+document.addEventListener('keydown',function(e){
+  if(!_sdpActive)return;
+  if(e.key==='Enter'){sdpFinish();}
+  else if(e.key==='u'||e.key==='U'){sdpUndo();}
+  else if(e.key==='Escape'){sdpClose();}
+  else if(e.key==='Tab'){
+    // Cycle through types
+    var keys=Object.keys(_ST);
+    var idx=keys.indexOf(_sdpType);
+    _sdpSelectType(keys[(idx+1)%keys.length]);
+    e.preventDefault();
+  }
+});
