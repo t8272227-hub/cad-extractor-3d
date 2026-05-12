@@ -606,6 +606,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 <button onclick="startPdfFrame()" data-tip="Выделить область для PDF" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-blue-100 text-blue-600 transition w-full" title="Рамка PDF">
   <i class="fa-solid fa-crop text-base md:text-lg"></i>
 </button>
+<button onclick="clearPdfFrame()" id="btn-clear-pdf-frame" title="Сбросить рамку PDF" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition text-sm md:text-base hidden"><i class="fa-solid fa-rectangle-xmark"></i></button>
 <div class="h-px w-full bg-slate-200 my-0.5 md:my-1"></div>
 <button onclick="openAreaVol()" data-tip="Площадь и объём контура" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-purple-100 text-purple-600 transition w-full" title="Площадь и объём">
   <i class="fa-solid fa-draw-polygon text-base md:text-lg"></i>
@@ -966,59 +967,75 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 
 
 <!-- Contour drawing panel -->
-<div id="contour-panel" class="fixed left-16 md:left-20 top-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl border border-purple-200 z-40 w-64 hidden" style="max-height:80vh;overflow-y:auto;">
+<div id="contour-panel" class="fixed left-16 md:left-20 top-1/2 -translate-y-1/2 bg-white rounded-xl shadow-xl border border-purple-200 z-40 w-72 hidden" style="max-height:85vh;overflow-y:auto;">
+  <!-- Header -->
   <div class="bg-purple-600 text-white px-3 py-2 rounded-t-xl flex items-center justify-between">
-    <span class="text-xs font-bold">📐 Контур · Площадь · Объём</span>
+    <span class="text-xs font-bold">✏ Контур · Площадь · Объём</span>
     <button onclick="clearContour()" class="text-purple-200 hover:text-white text-xs">✕</button>
   </div>
   <div class="p-3 flex flex-col gap-2 text-xs">
+    <!-- Instructions -->
     <div class="bg-purple-50 rounded-lg p-2 text-[10px] text-purple-700">
-      <b>Клик</b> — поставить точку (или на узел) <br>
-      <b>Клик рядом с V1</b> — замкнуть контур<br>
-      Также: кнопка «Замкнуть» ниже
+      <b>Клик</b> — поставить точку<br>
+      <b>Клик у V1</b> — замкнуть · <b>ESC</b> — отмена
     </div>
+    <!-- Buttons row -->
     <div class="flex gap-1.5">
-      <button onclick="undoContourPt()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-1 rounded text-[10px] font-medium">↩ Откат</button>
-      <button onclick="closeContour()" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-1 rounded text-[10px] font-medium">⬡ Замкнуть</button>
+      <button onclick="undoContourPt()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg py-1.5 font-medium">↩ Отмена</button>
+      <button onclick="closeContour()" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg py-1.5 font-medium">⬡ Замкнуть</button>
     </div>
-    <div class="bg-slate-50 rounded p-2 flex flex-col gap-1 text-[10px]">
-      <div class="flex justify-between"><span class="text-slate-500">Вершин:</span><span id="ctr-pt-count" class="font-bold">0</span></div>
-      <div class="flex justify-between"><span class="text-slate-500">Площадь:</span><span id="ctr-area" class="font-bold text-emerald-600">—</span></div>
-      <div class="flex justify-between"><span class="text-slate-500">Периметр:</span><span id="ctr-perim" class="font-bold">—</span></div>
-      <div class="flex justify-between items-start"><span class="text-slate-500 flex-shrink-0">Колодцы (вычтено):</span><span id="ctr-wells" class="font-bold text-orange-600 text-right ml-1">нет</span></div>
+    <!-- Stats -->
+    <div class="bg-slate-50 rounded-lg p-2 space-y-0.5">
+      <div class="flex justify-between"><span class="text-slate-500">Вершин:</span><span id="ctr-pts-count" class="font-mono font-bold">0</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Площадь:</span><span id="ctr-area" class="font-mono text-purple-700">— (не замкнут)</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Периметр:</span><span id="ctr-perim" class="font-mono">—</span></div>
+      <div class="flex justify-between"><span class="text-slate-500">Колодцы (вычет):</span><span id="ctr-wells" class="font-mono text-red-500">нет</span></div>
     </div>
-    <div>
-      <label class="text-[10px] font-semibold text-slate-600">Глубина / высота (м)</label>
-      <input type="number" id="ctr-height" step="0.01" value="0" placeholder="0.00"
-        class="w-full border border-slate-300 rounded px-2 py-1 text-xs font-mono mt-0.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
+    <!-- Volume -->
+    <div class="bg-slate-50 rounded-lg p-2">
+      <div class="font-semibold text-slate-700 mb-1.5">Глубина / высота (м)</div>
+      <input type="number" id="ctr-depth" value="0" step="0.1" min="0"
+        class="w-full border border-slate-300 rounded px-2 py-1 text-xs"
         oninput="updateContourVol()">
+      <div class="mt-1.5 space-y-0.5">
+        <div class="flex justify-between"><span class="text-slate-500">Объём грунта:</span><span id="ctr-vol" class="font-mono text-blue-700">—</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Объём бетона (сваи):</span><span id="ctr-pile-vol" class="font-mono text-orange-600">—</span></div>
+        <div class="flex justify-between font-bold"><span class="text-slate-700">Итого объём:</span><span id="ctr-total-vol" class="font-mono text-purple-700">—</span></div>
+      </div>
     </div>
-    <div class="bg-indigo-50 rounded p-2 text-[10px] flex flex-col gap-0.5">
-      <div class="flex justify-between"><span class="text-indigo-600">Объём грунта:</span><span id="ctr-vol" class="font-bold text-indigo-700">—</span></div>
-      <div class="flex justify-between"><span class="text-indigo-600">Объём бетона (сваи):</span><span id="ctr-pile-vol" class="font-bold text-red-700">—</span></div>
-      <div class="flex justify-between border-t border-indigo-200 pt-1 mt-0.5"><span class="text-indigo-700 font-semibold">Итого объём:</span><span id="ctr-total-vol" class="font-bold text-indigo-800">—</span></div>
+    <!-- ═══ MATERIAL + FILL — new ════════════════════════════════════════ -->
+    <div class="border-t border-slate-200 pt-2">
+      <div class="font-semibold text-slate-700 mb-1.5">ЗАКРАШИВАНИЕ</div>
+      <select id="ctr-material" class="w-full border border-slate-300 rounded px-2 py-1 text-xs mb-1.5">
+        <option value="concrete">🏗 Бетон</option>
+        <option value="sand">🏖 Песок</option>
+        <option value="gravel">🪨 Щебень</option>
+        <option value="clay">🟤 Глина</option>
+        <option value="soil">🌱 Грунт</option>
+        <option value="asphalt">⬛ Асфальт</option>
+        <option value="brick">🧱 Кирпич</option>
+        <option value="metal">⚙ Металл</option>
+      </select>
+      <div class="flex items-center gap-2 mb-1.5">
+        <span class="text-slate-500">Цвет:</span>
+        <input type="color" id="ctr-fill-color" value="#334155"
+          class="w-8 h-6 border-none rounded cursor-pointer">
+      </div>
+      <button onclick="saveContourAsFill()"
+        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-1.5 font-medium">
+        🎨 Закрасить и сохранить
+      </button>
     </div>
-    <div class="border-t border-purple-100 pt-2">
-  <div class="text-[9px] font-bold text-slate-500 uppercase mb-1">Закрашивание</div>
-  <div class="flex gap-1.5 mb-1.5">
-    <select id="ctr-material" class="flex-1 border border-purple-200 rounded px-1.5 py-1 text-[10px] focus:outline-none">
-      <option value="concrete">🔩 Бетон</option>
-      <option value="sand">🟡 Песок</option>
-      <option value="gravel">🪨 Щебень</option>
-      <option value="clay">🟫 Глина</option>
-      <option value="soil">🌿 Грунт</option>
-      <option value="asphalt">⚫ Асфальт</option>
-      <option value="brick">🟥 Кирпич</option>
-      <option value="metal">🔘 Металл</option>
-    </select>
-    <input type="color" id="ctr-fill-color" value="#334155" title="Цвет контура" class="w-8 h-7 rounded border border-slate-200 cursor-pointer p-0">
+    <!-- PDF + clear -->
+    <button onclick="saveContourToReport()"
+      class="w-full bg-green-600 hover:bg-green-500 text-white rounded-lg py-1.5 font-medium">
+      ✓ Записать в PDF-отчёт
+    </button>
+    <button onclick="clearContour()"
+      class="w-full text-red-400 hover:text-red-600 text-[10px] py-0.5">
+      🗑 Очистить контур
+    </button>
   </div>
-  <button onclick="saveContourAsFill()" class="w-full bg-purple-600 hover:bg-purple-500 text-white py-1.5 rounded text-[10px] font-bold mb-1">🎨 Закрасить и сохранить</button>
-</div>
-<button onclick="saveContourToReport()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-1.5 rounded text-[10px] font-bold">✓ Записать в PDF-отчёт</button>
-    <button onclick="clearContour()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 py-1 rounded text-[10px]">🗑 Очистить контур</button>
-  </div>
-</div>
 
 
 <!-- Snap mode panel -->
@@ -1106,7 +1123,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     🧱 Стена
   </button>
   <!-- Contour -->
-  <button onclick="startContour()" id="qb-contour"
+  <button onclick="startContour();document.getElementById('contour-panel').classList.remove('hidden')" id="qb-contour"
     title="Нарисовать контур (площадь/объём)"
     style="display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;
            background:#1e1b4b;border:1px solid #6d28d9;color:#a5b4fc;
