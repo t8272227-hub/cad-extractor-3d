@@ -2046,10 +2046,17 @@ function saveAreaVolToReport(){
 
 // ─── Contour drawing tool ─────────────────────────────────────────────────────
 function startContour(){
+  if(typeof _sdpActive!=='undefined'&&_sdpActive){sdpClose();}
+  if(pdfFrameDrawing){pdfFrameDrawing=false;}
+  setTool('point');
   contourPts=[];contourActive=true;contourClosed=false;contourMousePos=null;
-  _savedArea=0;_savedPerimeter=0;_savedVolume=0;
-  var p=document.getElementById('contour-panel');if(p)p.classList.remove('hidden');
-  updateContourPanel();requestDraw();
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='crosshair';
+  // Show compact contour panel
+  var p=document.getElementById('contour-panel');
+  if(p)p.classList.remove('hidden');
+  updateContourPanel();
+  requestDraw();
 }
 function undoContourPt(){if(contourPts.length>0){contourPts.pop();contourClosed=false;updateContourPanel();requestDraw();}}
 function closeContour(){
@@ -2087,8 +2094,11 @@ function closeContour(){
 }
 function clearContour(){
   contourPts=[];contourActive=false;contourClosed=false;contourMousePos=null;
-  _savedArea=0;_savedPerimeter=0;_savedVolume=0;_savedPileVolume=0;_savedWellsInside=[];
-  var p=document.getElementById('contour-panel');if(p)p.classList.add('hidden');
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='';
+  var p=document.getElementById('contour-panel');
+  if(p)p.classList.add('hidden');
+  updateContourPanel();
   requestDraw();
 }
 function updateContourPanel(){
@@ -2710,28 +2720,14 @@ function toggleLeaders(){
   requestDraw();
 }
 
-function _quickWall(){
-  openSymDrawPanel('wall');
-}
-function _openSymPanelFromBar(){
-  openSymDrawPanel();
-}
+
+
 // Update quick bar when contour state changes
-function _updateQuickBar(){
-  var qClose=document.getElementById('qb-close-ctr');
-  var qCancel=document.getElementById('qb-cancel-ctr');
-  var qContour=document.getElementById('qb-contour');
-  if(qClose) qClose.style.display=contourActive?'flex':'none';
-  if(qCancel) qCancel.style.display=contourActive?'flex':'none';
-  if(qContour) qContour.style.display=contourActive?'none':'flex';
-}
+
 // Patch startContour and clearContour to update bar
-var _origStartContour=startContour;
-startContour=function(){_origStartContour();_updateQuickBar();};
-var _origClearContour=clearContour;
-clearContour=function(){_origClearContour();_updateQuickBar();};
-var _origCloseContour=closeContour;
-closeContour=function(){_origCloseContour();_updateQuickBar();};
+
+
+
 
 
 
