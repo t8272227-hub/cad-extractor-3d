@@ -2290,29 +2290,42 @@ function _georefExtractMiniSnaps(dxf){
     entities.forEach(function(en){
       if(!en)return;
       try{
-        if(en.type==='INSERT'&&dxf.blocks&&dxf.blocks[en.name]){
-          var bx=(en.position?en.position.x:0)*sx+tx;
-          var by=(en.position?en.position.y:0)*sy+ty;
-          traverse(dxf.blocks[en.name].entities,bx,by,
-            sx*(en.scale?en.scale.x:1),sy*(en.scale?en.scale.y:1));
+        if(en.type==='INSERT'&&dxf.blocks&&en.name&&dxf.blocks[en.name]){
+          var _blk=dxf.blocks[en.name];
+          var bx=(en.position?(en.position.x||0):0)*sx+tx;
+          var by=(en.position?(en.position.y||0):0)*sy+ty;
+          var bsx=sx*(en.scaleX||en.scale&&en.scale.x||1);
+          var bsy=sy*(en.scaleY||en.scale&&en.scale.y||1);
+          if(_blk.entities)traverse(_blk.entities,bx,by,bsx,bsy);
           return;
         }
         var pts=[];
-        if((en.type==='LINE')&&en.vertices&&en.vertices.length>=2){
-          en.vertices.forEach(function(v){pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
-        } else if((en.type==='LWPOLYLINE'||en.type==='POLYLINE'||en.type==='SPLINE')&&en.vertices){
-          en.vertices.forEach(function(v){pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
-        } else if(en.type==='CIRCLE'&&en.center){
+        if(en.type==='LINE'){
+          // dxf-parser v1.x uses start/end; some versions use vertices
+          if(en.start&&en.end){
+            pts.push({x:en.start.x*sx+tx,y:en.start.y*sy+ty});
+            pts.push({x:en.end.x*sx+tx,y:en.end.y*sy+ty});
+          } else if(en.vertices&&en.vertices.length>=2){
+            en.vertices.forEach(function(v){pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
+          }
+        } else if((en.type==='LWPOLYLINE'||en.type==='POLYLINE'||en.type==='SPLINE')){
+          var _verts=en.vertices||[];
+          _verts.forEach(function(v){pts.push({x:(v.x||0)*sx+tx,y:(v.y||0)*sy+ty});});
+        } else if(en.type==='TEXT'||en.type==='MTEXT'){
+          if(en.startPoint)pts.push({x:en.startPoint.x*sx+tx,y:en.startPoint.y*sy+ty});
+          else if(en.position)pts.push({x:en.position.x*sx+tx,y:en.position.y*sy+ty});
+        } else if((en.type==='CIRCLE'||en.type==='ARC')&&en.center){
           pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
-        } else if(en.type==='ARC'&&en.center){
+        } else if(en.type==='ELLIPSE'&&en.center){
           pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
-        } else if(en.type==='POINT'&&en.position){
-          pts.push({x:en.position.x*sx+tx,y:en.position.y*sy+ty});
+        } else if(en.type==='POINT'){
+          var _pp=en.position||en.point;
+          if(_pp)pts.push({x:_pp.x*sx+tx,y:_pp.y*sy+ty});
         }
         pts.forEach(function(p){addPt(p.x,p.y);});
         if(pts.length>=2)_georefMiniElems.push({type:'line',pts:pts});
         else if(pts.length===1)_georefMiniElems.push({type:'point',pt:pts[0]});
-        if(en.type==='CIRCLE'&&en.center)
+        if((en.type==='CIRCLE'||en.type==='ARC')&&en.center&&en.radius)
           _georefMiniElems.push({type:'circle',cx:en.center.x*sx+tx,cy:en.center.y*sy+ty,r:en.radius*Math.abs(sx)});
       }catch(_){}
     });
