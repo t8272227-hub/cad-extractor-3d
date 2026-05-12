@@ -2711,16 +2711,10 @@ function toggleLeaders(){
 }
 
 function _quickWall(){
-  // Open sym panel and select wall
-  var p=document.getElementById('sym-panel');
-  if(p){p.style.display='flex';}
-  _symInit();
-  setTimeout(function(){_symSel('wall');},60);
+  openSymDrawPanel('wall');
 }
 function _openSymPanelFromBar(){
-  var p=document.getElementById('sym-panel');
-  if(p){p.style.display=p.style.display==='flex'?'none':'flex';}
-  _symInit();
+  openSymDrawPanel();
 }
 // Update quick bar when contour state changes
 function _updateQuickBar(){
@@ -3031,3 +3025,90 @@ document.addEventListener('keydown',function(e){
     e.preventDefault();
   }
 });
+
+
+// ═══ AI Analysis Panel ════════════════════════════════════════════════════════
+var _aiHistory=[];
+
+function openAIPanel(){
+  var p=document.getElementById('ai-panel');
+  if(p)p.style.display='flex';
+  if(typeof _setupAIPanel==='function')_setupAIPanel();
+}
+function closeAIPanel(){
+  var p=document.getElementById('ai-panel');
+  if(p)p.style.display='none';
+}
+
+function _buildProjectContext(){
+  var c='ДАННЫЕ ПРОЕКТА:\n';
+  var pts=currentMode==='dxf'?points:manualPoints;
+  if(pts&&pts.length){
+    c+='Точек: '+pts.length+'\n';
+    pts.slice(0,20).forEach(function(p){
+      c+='P'+p.id+': X='+p.x.toFixed(3)+' Y='+p.y.toFixed(3)+(p.z!=null?' Z='+p.z.toFixed(3):'')+'\n';
+    });
+    if(pts.length>20)c+='...ещё '+(pts.length-20)+'\n';
+  }
+  if(dimensions&&dimensions.length)c+='Размеров: '+dimensions.length+'\n';
+  if(typeof _savedArea!=='undefined'&&_savedArea>0){
+    c+='Площадь: '+_savedArea.toFixed(3)+' м²\n';
+    if(typeof _savedVolume!=='undefined'&&_savedVolume>0)c+='Объём: '+_savedVolume.toFixed(3)+' м³\n';
+  }
+  if(cadSymbols&&cadSymbols.length)c+='Символов: '+cadSymbols.length+'\n';
+  if(dxfData&&dxfData.entities)c+='DXF объектов: '+dxfData.entities.length+'\n';
+  return c;
+}
+
+var _aiQuickPrompts={
+  summary:'Дай краткую сводку геодезического проекта: параметры, размеры, площади, объёмы.',
+  quality:'Проверь качество геодезических данных: аномалии, пропуски Z-отметок.',
+  volume:'Проанализируй объёмы земляных работ. Дай рекомендации по точности.',
+  pdf:'Подготовь текст для исполнительной схемы PDF: наименование работ, характеристики.',
+  anomaly:'Найди аномалии в данных. Укажи подозрительные координаты или Z-отметки.'
+};
+
+function aiQuick(type){
+  var p=_aiQuickPrompts[type];if(!p)return;
+  var inp=document.getElementById('ai-input');if(inp)inp.value=p;
+  sendAIMessage();
+}
+
+function _aiAddMsg(role,text){
+  var box=document.getElementById('ai-messages');if(!box)return;
+  var d=document.createElement('div');
+  d.style.cssText=role==='user'
+    ?'align-self:flex-end;background:#7c3aed;color:#fff;border-radius:12px 12px 2px 12px;padding:8px 12px;max-width:85%;white-space:pre-wrap;font-size:12px;'
+    :'align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:12px 12px 12px 2px;padding:8px 12px;max-width:85%;white-space:pre-wrap;font-size:12px;';
+  d.textContent=text;
+  var empty=box.querySelector('.ai-empty');if(empty)empty.remove();
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+
+async function sendAIMessage(){
+  var inp=document.getElementById('ai-input');
+  var text=(inp&&inp.value||'').trim();if(!text)return;
+  if(inp)inp.value='';
+  _aiAddMsg('user',text);
+  _aiHistory.push({role:'user',content:text});
+  var typing=document.getElementById('ai-typing');
+  var sendBtn=document.getElementById('ai-send-btn');
+  if(typing)typing.style.display='flex';
+  if(sendBtn)sendBtn.disabled=true;
+  var sys={role:'system',content:'Ты геодезический ИИ-помощник. Отвечай по-русски кратко и точно.\n\n'+_buildProjectContext()};
+  var msgs=[sys].concat(_aiHistory.slice(-8));
+  var model=(document.getElementById('ai-model')&&document.getElementById('ai-model').value)||'openai/gpt-4o-mini';
+  try{
+    var resp=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:model,messages:msgs,max_tokens:1200})});
+    if(resp.status===401){window.location.href='/login';return;}
+    var data=await resp.json();
+    if(data.error){_aiAddMsg('assistant','⚠ Ошибка: '+data.error);}
+    else{
+      var reply=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+      if(reply){_aiHistory.push({role:'assistant',content:reply});_aiAddMsg('assistant',reply);}
+      else _aiAddMsg('assistant','⚠ Пустой ответ');
+    }
+  }catch(e){_aiAddMsg('assistant','⚠ Ошибка сети: '+e.message);}
+  finally{if(typing)typing.style.display='none';if(sendBtn)sendBtn.disabled=false;}
+}
