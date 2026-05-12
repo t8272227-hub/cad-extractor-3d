@@ -1134,53 +1134,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 </div>
 
 
-<!-- Quick-access bar for Wall + Contour -->
-<div id="quick-tools-bar" style="position:fixed;left:50%;transform:translateX(-50%);bottom:10px;z-index:150;
-     display:flex;align-items:center;gap:6px;background:rgba(15,23,42,0.92);
-     border:1px solid rgba(255,255,255,0.12);border-radius:12px;padding:5px 10px;
-     box-shadow:0 4px 16px rgba(0,0,0,0.4);backdrop-filter:blur(6px);">
-  <span style="font-size:9px;color:#94a3b8;font-weight:600;margin-right:2px;">БЫСТРЫЙ ДОСТУП</span>
-  <!-- Wall -->
-  <button onclick="openSymDrawPanel('wall')" id="qb-wall"
-    title="Нарисовать стену"
-    style="display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;
-           background:#4c1d95;border:1px solid #7c3aed;color:#c4b5fd;
-           font-size:10px;font-weight:600;cursor:pointer;transition:all .12s;">
-    🧱 Стена
-  </button>
-  <!-- Contour -->
-  <button onclick="startContour();document.getElementById('contour-panel').classList.remove('hidden')" id="qb-contour"
-    title="Нарисовать контур (площадь/объём)"
-    style="display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;
-           background:#1e1b4b;border:1px solid #6d28d9;color:#a5b4fc;
-           font-size:10px;font-weight:600;cursor:pointer;transition:all .12s;">
-    ⬡ Контур
-  </button>
-  <!-- Symbols panel -->
-  <button onclick="openSymDrawPanel()"
-    title="Все условные обозначения"
-    style="display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;
-           background:#14532d;border:1px solid #16a34a;color:#86efac;
-           font-size:10px;font-weight:600;cursor:pointer;transition:all .12s;">
-    📐 Обозначения
-  </button>
-  <!-- Close contour if active -->
-  <button onclick="closeContour()" id="qb-close-ctr"
-    title="Замкнуть контур"
-    style="display:none;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;
-           background:#312e81;border:1px solid #818cf8;color:#e0e7ff;
-           font-size:10px;font-weight:600;cursor:pointer;">
-    ⬡ Замкнуть
-  </button>
-  <!-- Cancel contour -->
-  <button onclick="clearContour()" id="qb-cancel-ctr"
-    title="Отменить контур"
-    style="display:none;align-items:center;gap:4px;padding:4px 8px;border-radius:7px;
-           background:#450a0a;border:1px solid #dc2626;color:#fca5a5;
-           font-size:10px;font-weight:600;cursor:pointer;">
-    ✕ Отмена
-  </button>
-</div>
+
 
 
 <!-- ═══ SYMBOL DRAWING PANEL (ArchiCAD-style) ═════════════════════════════ -->
