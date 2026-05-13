@@ -743,215 +743,355 @@ function executeExportPDF(){
   } else doExportPDF(pdfMeta);
 }
 function doExportPDF(pdfMeta){var btn=document.getElementById('pdf-modal-generate-btn');if(btn){btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Генерация...';btn.disabled=true;}closePdfSettings();setTimeout(function(){try{if(currentPdfMode==='dxf'){isExportingPDF=true;_buildAndSavePDF(pdfMeta,'cad-canvas',points,dimensions,[]);}else{manIsExportingPDF=true;_buildAndSavePDF(pdfMeta,'manual-canvas',manualPoints,[],manualLines);}}catch(err){showMessage('Ошибка','PDF: '+err.message,'error');isExportingPDF=false;manIsExportingPDF=false;if(isDxf){draw();}else{drawManualCanvas();}var b=document.getElementById('pdf-modal-generate-btn');if(b){b.innerHTML='<i class="fa-solid fa-download"></i> Сгенерировать';b.disabled=false;}}},120);}
-function _buildAndSavePDF(meta,canvasId,pts,dims,lines){
-var isDxf=canvasId==='cad-canvas';
+function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
+  var cv=document.getElementById(canvasId);
+  if(!cv){showMessage('Ошибка','Чертёж не найден','error');return;}
 
-// STEP 1: BBox — use pdfFrame if drawn, else marked data
-var mnX,mnY,mxX,mxY;
-if(pdfFrame&&Number.isFinite(pdfFrame.x1)){
-  mnX=Math.min(pdfFrame.x1,pdfFrame.x2);mnY=Math.min(pdfFrame.y1,pdfFrame.y2);
-  mxX=Math.max(pdfFrame.x1,pdfFrame.x2);mxY=Math.max(pdfFrame.y1,pdfFrame.y2);
-} else {
-  mnX=Infinity;mnY=Infinity;mxX=-Infinity;mxY=-Infinity;
-  function _bb(x,y){if(!Number.isFinite(x)||!Number.isFinite(y))return;mnX=Math.min(mnX,x);mnY=Math.min(mnY,y);mxX=Math.max(mxX,x);mxY=Math.max(mxY,y);}
-  pts.forEach(function(p){_bb(p.x,p.y);});
-  dims.forEach(function(d){if(d.p1){_bb(d.p1.x,d.p1.y);}if(d.p2){_bb(d.p2.x,d.p2.y);}});
-  lines.forEach(function(l){if(l.p1){_bb(l.p1.x,l.p1.y);}if(l.p2){_bb(l.p2.x,l.p2.y);}});
-  if(!isFinite(mnX)){mnX=cadMinX||0;mnY=cadMinY||0;mxX=cadMaxX||100;mxY=cadMaxY||100;}
-}
-var dataW=mxX-mnX||10,dataH=mxY-mnY||10;
-var pad=Math.max(dataW,dataH)*0.08;
-mnX-=pad;mnY-=pad;mxX+=pad;mxY+=pad;dataW=mxX-mnX;dataH=mxY-mnY;
+  // ── A3 landscape dimensions (px at 96dpi) ─────────────────────────────
+  var A3W=1587,A3H=1123; // 420×297mm at 96dpi
+  var MARGIN=30,SB=280;  // SB = right-panel width (title block)
 
-// STEP 2: Render to high-res offscreen canvas
-// A4 landscape: 297x210mm. Drawing area = left ~200mm, stamp = right ~90mm
-// At 300dpi: drawing = 2362x2480px, stamp = 1063x2480px → total ~3425x2480
-// Use simpler: draw canvas 2800x2480, stamp built in HTML
-var PW=2800,PH=2480,PAD=80;
-var scX=(PW-PAD*2)/dataW,scY=(PH-PAD*2)/dataH;
-var pdfScale=Math.min(scX,scY);
-var pdfPanX=PAD+(PW-PAD*2-(dataW*pdfScale))/2-(mnX-cadOriginX)*pdfScale;
-var pdfPanY=PH-PAD-(PH-PAD*2-(dataH*pdfScale))/2+(mnY-cadOriginY)*pdfScale;
+  // ── Off-screen render canvas ───────────────────────────────────────────
+  var oc=document.createElement('canvas');
+  oc.width=A3W;oc.height=A3H;
+  var c=oc.getContext('2d');
 
-var svPX=panX,svPY=panY,svSc=scale,svNA=northAngle;
-panX=pdfPanX;panY=pdfPanY;scale=pdfScale;northAngle=0;
-var cv=document.getElementById(canvasId);
-var svW=cv.width,svH=cv.height;
-cv.width=PW;cv.height=PH;
-if(isDxf){isExportingPDF=true;draw();}else{manIsExportingPDF=true;drawManualCanvas();}
-_northDrawPDF(cv.getContext('2d'),PW,PH,1);
-var imgData=cv.toDataURL('image/png');
-cv.width=svW;cv.height=svH;
-panX=svPX;panY=svPY;scale=svSc;northAngle=svNA;
-if(isDxf){isExportingPDF=false;draw();}else{manIsExportingPDF=false;drawManualCanvas();}
+  // ── Background ─────────────────────────────────────────────────────────
+  c.fillStyle='#fff';c.fillRect(0,0,A3W,A3H);
 
-// STEP 3: Build tables HTML
-// Auto font size: fit all rows in ~150mm height
-var totalRows=pts.length+dims.length+lines.length+(_savedArea>0?3:0);
-// Use 2-column layout when many rows (>20)
-var _twoCol=pts.length>10;
-var _effRows=(_twoCol?Math.ceil(pts.length/2):pts.length)+dims.length+lines.length+(_savedArea>0?4:0);
-var fontPt=Math.min(5.0,Math.max(2.8,Math.floor(400/Math.max(_effRows*2.2,1))));
-var thFontPt=Math.min(6.0,fontPt+0.5);
-var cp='0.2mm 0.8mm';
+  // ── BORDER outer ───────────────────────────────────────────────────────
+  c.strokeStyle='#000';c.lineWidth=2;
+  c.strokeRect(MARGIN,MARGIN,A3W-MARGIN*2,A3H-MARGIN*2);
+  // Inner border (drawing field)
+  var DW=A3W-MARGIN*2-SB-4, DH=A3H-MARGIN*2;
+  var DX=MARGIN+2, DY=MARGIN+2;
+  c.lineWidth=0.5;
+  c.strokeRect(DX,DY,DW,DH);
 
-function _th(txt){return '<th style="font-size:'+thFontPt+'pt;padding:'+cp+';background:#1e293b;color:#fff;border:0.3pt solid #334155;text-align:left;white-space:nowrap;">'+txt+'</th>';}
-function _td(txt,bg){return '<td style="font-size:'+fontPt+'pt;padding:'+cp+';border:0.3pt solid #e2e8f0;font-family:monospace;white-space:nowrap;'+(bg?'background:#f8fafc;':'')+'">'+txt+'</td>';}
-function _h2(txt){return '<div style="font-size:'+(fontPt+1)+'pt;font-weight:bold;margin:1.5mm 0 0.5mm;border-bottom:0.3pt solid #94a3b8;padding-bottom:0.3mm;color:#1e293b;">'+txt+'</div>';}
-function _tbl(hdrs,rows){
-  var h='<table style="width:100%;border-collapse:collapse;"><thead><tr>'+hdrs.map(function(t){return _th(t);}).join('')+'</tr></thead><tbody>';
-  rows.forEach(function(r,i){h+='<tr>'+r.map(function(c){return _td(c,i%2===0);}).join('')+'</tr>';});
-  return h+'</tbody></table>';
-}
-var tables='';
-if(pts.length>0){
-  tables+=_h2('Координаты точек');
-  if(_twoCol&&pts.length>10){
-    var _half=Math.ceil(pts.length/2);
-    var _pA=pts.slice(0,_half),_pB=pts.slice(_half);
-    var _cell='font-size:'+fontPt+'pt;padding:'+cp+';border:0.3pt solid #e2e8f0;font-family:monospace;';
-    var _hcell='font-size:'+thFontPt+'pt;padding:'+cp+';background:#1e293b;color:#fff;border:0.3pt solid #334155;';
-    tables+='<table style="width:100%;border-collapse:collapse;">';
-    tables+='<thead><tr>';
-    tables+='<th style="'+_hcell+'">№</th><th style="'+_hcell+'">X</th><th style="'+_hcell+'">Y</th><th style="'+_hcell+'">Z</th>';
-    tables+='<th style="'+_hcell+'width:2mm;"> </th>';
-    tables+='<th style="'+_hcell+'">№</th><th style="'+_hcell+'">X</th><th style="'+_hcell+'">Y</th><th style="'+_hcell+'">Z</th>';
-    tables+='</tr></thead><tbody>';
-    for(var _ri=0;_ri<_pA.length;_ri++){
-      var _pa=_pA[_ri],_pb=_pB[_ri];
-      var _bg=_ri%2===0?'':'background:#f8fafc;';
-      tables+='<tr>';
-      tables+='<td style="'+_cell+_bg+'">P'+_pa.id+'</td>';
-      tables+='<td style="'+_cell+_bg+'">'+_pa.x.toFixed(3)+'</td>';
-      tables+='<td style="'+_cell+_bg+'">'+_pa.y.toFixed(3)+'</td>';
-      tables+='<td style="'+_cell+_bg+'">'+(_pa.z!==null&&_pa.z!==undefined?_pa.z.toFixed(3):'-')+'</td>';
-      tables+='<td style="'+_cell+'border:none;"> </td>';
-      if(_pb){
-        tables+='<td style="'+_cell+_bg+'">P'+_pb.id+'</td>';
-        tables+='<td style="'+_cell+_bg+'">'+_pb.x.toFixed(3)+'</td>';
-        tables+='<td style="'+_cell+_bg+'">'+_pb.y.toFixed(3)+'</td>';
-        tables+='<td style="'+_cell+_bg+'">'+(_pb.z!==null&&_pb.z!==undefined?_pb.z.toFixed(3):'-')+'</td>';
-      }else{
-        tables+='<td colspan="4"></td>';
-      }
-      tables+='</tr>';
+  // ── DRAWING: capture canvas content ───────────────────────────────────
+  var snapScale=pdfFrame?1:1;
+  var drawnOk=false;
+  try{
+    // Clip to drawing field
+    c.save();
+    c.beginPath();c.rect(DX+1,DY+1,DW-2,DH-2);c.clip();
+
+    // Get bounding box from points or pdfFrame
+    var mnX=Infinity,mxX=-Infinity,mnY=Infinity,mxY=-Infinity;
+    if(pdfFrame&&Number.isFinite(pdfFrame.x1)){
+      mnX=Math.min(pdfFrame.x1,pdfFrame.x2);mxX=Math.max(pdfFrame.x1,pdfFrame.x2);
+      mnY=Math.min(pdfFrame.y1,pdfFrame.y2);mxY=Math.max(pdfFrame.y1,pdfFrame.y2);
+    } else {
+      pts.forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});
+      if(dxfElements)dxfElements.forEach(function(el){if(el.pts)el.pts.forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});});
     }
-    tables+='</tbody></table>';
-  } else {
-    tables+=_tbl(['№','X, м','Y, м','Z, м'],pts.map(function(p){
-      return['P'+p.id,p.x.toFixed(3),p.y.toFixed(3),(p.z!==null&&p.z!==undefined?p.z.toFixed(3):'-')];
-    }));
+    if(!Number.isFinite(mnX)){mnX=0;mxX=100;mnY=0;mxY=100;}
+
+    var pad=Math.max((mxX-mnX),(mxY-mnY))*0.06||5;
+    mnX-=pad;mxX+=pad;mnY-=pad;mxY+=pad;
+    var ww=mxX-mnX,wh=mxY-mnY;
+    var pdfSc=Math.min((DW-20)/ww,(DH-20)/wh);
+    var offX=DX+10+(DW-20-ww*pdfSc)/2-mnX*pdfSc;
+    var offY=DY+10+(DH-20-wh*pdfSc)/2+mxY*pdfSc;
+
+    isExportingPDF=true;
+    var prevPanX=panX,prevPanY=panY,prevScale=scale;
+    panX=offX;panY=offY;scale=pdfSc;
+    draw();
+    // Snapshot
+    c.drawImage(cv,0,0,cv.width,cv.height,DX,DY,DW,DH);
+    panX=prevPanX;panY=prevPanY;scale=prevScale;
+    isExportingPDF=false;
+    if(canvasId==='cad-canvas')draw(); else drawManualCanvas();
+    drawnOk=true;
+    c.restore();
+  }catch(ex){
+    isExportingPDF=false;
+    c.restore();
+    c.fillStyle='#f8fafc';c.fillRect(DX+1,DY+1,DW-2,DH-2);
+    c.fillStyle='#94a3b8';c.font='16px Arial';c.textAlign='center';
+    c.fillText('Ошибка захвата чертежа: '+ex.message,DX+DW/2,DY+DH/2);
   }
-}
-if(dims.length>0){
-  tables+=_h2('Размеры');
-  tables+=_tbl(['Линия','Длина, м'],dims.map(function(d){return[d.label,d.distance.toFixed(3)];}));
-}
-if(lines.length>0){
-  tables+=_h2('Линии');
-  tables+=_tbl(['Отрезок','Длина, м'],lines.map(function(l){
-    return['P'+l.p1.id+'-P'+l.p2.id,Math.hypot(l.p2.x-l.p1.x,l.p2.y-l.p1.y).toFixed(3)];
-  }));
-}
-if(_savedArea>0||(_savedPileVolume>0)){
-  tables+=_h2('Площадь и объём');
-  var _atbl=[['Площадь',_savedArea.toFixed(3)+' м²'],['Периметр',_savedPerimeter.toFixed(3)+' м']];
-  if(_savedWellsInside&&_savedWellsInside.length)_atbl.push(['Вычтено (колодцы)',_savedWellsInside.length+' шт.']);
-  _atbl.push(['Объём грунта',_savedVolume.toFixed(3)+' м³']);
-  if(_savedPileVolume>0){_atbl.push(['Объём бетона (сваи)',_savedPileVolume.toFixed(3)+' м³']);
-    _atbl.push(['Итого',(_savedVolume+_savedPileVolume).toFixed(3)+' м³']);}
-  tables+=_tbl(['Параметр','Значение'],_atbl);
-}
-// Symbol table
-var _symTblPdf=_buildSymTableHtml();if(_symTblPdf)tables+=_symTblPdf;
-// Saved filled contours
-if(savedContours.length>0){
-  var _mats2={concrete:'Бетон',sand:'Песок',gravel:'Щебень',clay:'Глина',
-    soil:'Грунт',asphalt:'Асфальт',brick:'Кирпич',metal:'Металл'};
-  var _fpt2=fontPt;
-  tables+=_h2('Ведомость площадей с материалом');
-  tables+=_tbl(['Материал','Площадь, м²','Периметр, м','Глубина, м','Объём грунта, м³','Объём бетона (сваи), м³','Итого, м³'],
-    savedContours.map(function(sc){
-      var tot=(sc.volume||0)+(sc.pileVol||0);
-      return[_mats2[sc.material]||sc.material||'—',
-        sc.area?sc.area.toFixed(3):'—',
-        sc.perimeter?sc.perimeter.toFixed(3):'—',
-        sc.height?Math.abs(sc.height).toFixed(2):'—',
-        sc.volume?sc.volume.toFixed(3):'—',
-        sc.pileVol?sc.pileVol.toFixed(3):'—',
-        tot?tot.toFixed(3):'—'];
-    }));
-}
 
+  // ── RIGHT PANEL vertical line ─────────────────────────────────────────
+  var PX=A3W-MARGIN-SB; // panel left edge
+  c.strokeStyle='#000';c.lineWidth=1;
+  c.beginPath();c.moveTo(PX,MARGIN);c.lineTo(PX,A3H-MARGIN);c.stroke();
 
-// STEP 4: Title block (GOST-style)
-var logoHtml=pdfLogoDataUrl?('<img src="'+pdfLogoDataUrl+'" style="max-height:10mm;max-width:40mm;display:block;margin-bottom:1mm;">'):
-  '<div style="height:10mm;background:#f1f5f9;border-radius:2mm;margin-bottom:1mm;display:flex;align-items:center;justify-content:center;font-size:5pt;color:#94a3b8;">Логотип</div>';
-var dt=meta.date||new Date().toLocaleDateString('ru-RU');
-var titleBlock=(
-  '<table style="width:100%;border-collapse:collapse;font-size:6pt;margin-top:2mm;">'
-  // Header row: logo + org
-  +'<tr><td colspan="3" style="padding:1mm;border:0.5pt solid #334155;vertical-align:top;">'
-  +logoHtml
-  +'<div style="font-weight:bold;font-size:7pt;line-height:1.3;">'+(meta.org||'')+'</div>'
-  +'<div style="font-size:5.5pt;color:#475569;margin-top:0.5mm;">'+(meta.project||'')+'</div>'
-  +'</td></tr>'
-  // Drawing name
-  +'<tr><td colspan="3" style="padding:1mm 1.5mm;border:0.5pt solid #334155;font-weight:bold;font-size:6.5pt;background:#f8fafc;">'+(meta.drawing||'Исполнительная схема')+'</td></tr>'
-  // Roles
-  +(meta.developer?'<tr><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;font-size:5.5pt;white-space:nowrap;">Разработал</td><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;font-weight:bold;">'+meta.developer+'</td><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;">'+dt+'</td></tr>':'')
-  +(meta.geodesist?'<tr><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;font-size:5.5pt;white-space:nowrap;">Геодезист</td><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;font-weight:bold;">'+meta.geodesist+'</td><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;">'+dt+'</td></tr>':'')
-  +(meta.checker?'<tr><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;font-size:5.5pt;white-space:nowrap;">Проверил</td><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;font-weight:bold;">'+meta.checker+'</td><td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;">'+dt+'</td></tr>':'')
-  // Scale + sheet
-  +'<tr>'
-  +'<td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;font-size:5.5pt;">Масштаб</td>'
-  +'<td colspan="2" style="padding:0.5mm 1mm;border:0.5pt solid #334155;font-weight:bold;">'+(meta.scale||'—')+'</td>'
-  +'</tr>'
-  +'<tr>'
-  +'<td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;font-size:5.5pt;">Дата</td>'
-  +'<td colspan="2" style="padding:0.5mm 1mm;border:0.5pt solid #334155;">'+dt+'</td>'
-  +'</tr>'
-  +'<tr>'
-  +'<td style="padding:0.5mm 1mm;border:0.5pt solid #334155;color:#475569;font-size:5.5pt;">Лист</td>'
-  +'<td colspan="2" style="padding:0.5mm 1mm;border:0.5pt solid #334155;">1 / 1</td>'
-  +'</tr>'
-  +'</table>'
-);
+  // ── LEGEND (upper right panel) ────────────────────────────────────────
+  var lx=PX+8,ly=MARGIN+10,lw=SB-16;
+  c.font='bold 10px Arial';c.fillStyle='#000';c.textAlign='center';
+  c.fillText('Условные обозначения',PX+SB/2,ly+12);
+  c.lineWidth=0.5;c.beginPath();c.moveTo(lx,ly+18);c.lineTo(PX+SB-8,ly+18);c.stroke();
+  ly+=24;
 
-// STEP 5: Assemble preview
-var frameHtml=(
-  '<div class="pdf-preview-frame">'
-  +'<div class="po-draw"><img src="'+imgData+'"></div>'
-  +'<div class="po-stamp">'
-  +'<div class="po-table-wrap">'+tables+'</div>'
-  +'<div class="po-title-block">'+titleBlock+'</div>'
-  +'</div></div>'
-);
-var barHtml=(
-  '<div id="pdf-preview-bar">'
-  +'<span style="color:#94a3b8;font-size:11px;margin-right:auto;">Предварительный просмотр — A4 горизонтальная</span>'
-  +'<button onclick="_closePdfPreview()" style="background:#475569;color:#fff;border:none;padding:7px 16px;border-radius:6px;cursor:pointer;font-size:12px;">&#10005; Закрыть</button>'
-  +'<button onclick="_doPrintNow()" style="background:#16a34a;color:#fff;border:none;padding:7px 18px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">&#128424; Печать / PDF</button>'
-  +'</div>'
-);
-var ov=document.getElementById('print-overlay');
-ov.innerHTML=frameHtml+barHtml;
-ov.classList.add('pdf-preview-open');
-window._closePdfPreview=function(){
-  ov.classList.remove('pdf-preview-open');ov.innerHTML='';pdfLogoDataUrl=null;
+  var legendItems=[
+    {col:'#2563eb',dash:[8,4],lw:1.5,label:'Водопровод'},
+    {col:'#7c3aed',dash:[6,3],lw:1.5,label:'Канализация'},
+    {col:'#ea580c',dash:[4,4],lw:1.5,label:'Теплосеть'},
+    {col:'#16a34a',dash:[3,3,1,3],lw:1.5,label:'Газопровод'},
+    {col:'#000',dash:[],lw:1,label:'Электрокабель'},
+    {col:'#1e293b',dash:[],lw:2,label:'Стена (ось)'},
+    {col:'#64748b',dash:[],lw:6,label:'Капитальная стена'},
+    {col:'#000',sym:'circle',label:'Колодец'},
+    {col:'#000',sym:'cross',label:'Свая'},
+    {col:'#000',sym:'square',label:'Столб/Колонна'},
+  ];
+  // Also add from cadSymbols legend
+  var symTypes={};
+  if(cadSymbols)cadSymbols.forEach(function(s){symTypes[s.type]=s;});
+
+  legendItems.forEach(function(item){
+    if(ly>A3H-MARGIN-200)return;
+    var iy=ly+6;
+    // Line sample
+    if(item.sym==='circle'){
+      c.strokeStyle=item.col;c.lineWidth=1;
+      c.beginPath();c.arc(lx+18,iy,5,0,Math.PI*2);c.stroke();
+    } else if(item.sym==='cross'){
+      c.strokeStyle=item.col;c.lineWidth=1;
+      c.beginPath();c.moveTo(lx+13,iy);c.lineTo(lx+23,iy);c.moveTo(lx+18,iy-5);c.lineTo(lx+18,iy+5);c.stroke();
+    } else if(item.sym==='square'){
+      c.strokeStyle=item.col;c.lineWidth=1;
+      c.strokeRect(lx+13,iy-5,10,10);
+    } else {
+      c.strokeStyle=item.col;c.lineWidth=item.lw||1;
+      if(item.dash&&item.dash.length)c.setLineDash(item.dash);else c.setLineDash([]);
+      c.beginPath();c.moveTo(lx+5,iy);c.lineTo(lx+32,iy);c.stroke();
+      c.setLineDash([]);
+    }
+    c.fillStyle='#1e293b';c.font='9px Arial';c.textAlign='left';
+    c.fillText(item.label,lx+38,iy+3);
+    ly+=16;
+  });
+
+  // Scale bar
+  ly+=8;
+  if(ly<A3H-MARGIN-140){
+    var scText='Масштаб: 1:'+(pdfMeta.scale||'500');
+    c.font='9px Arial';c.fillStyle='#000';c.textAlign='left';
+    c.fillText(scText,lx,ly);ly+=12;
+    // Scale bar graphic
+    var barW=60,barSeg=3;
+    for(var bi=0;bi<barSeg;bi++){
+      c.fillStyle=bi%2===0?'#000':'#fff';
+      c.fillRect(lx+bi*(barW/barSeg),ly,barW/barSeg,6);
+      c.strokeStyle='#000';c.lineWidth=0.5;
+      c.strokeRect(lx+bi*(barW/barSeg),ly,barW/barSeg,6);
+    }
+    ly+=10;
+    c.font='8px Arial';c.fillStyle='#000';c.textAlign='left';
+    c.fillText('0',lx-2,ly+6);
+    c.textAlign='right';
+    var mNum=pdfMeta.scale?Math.round(barW/pdfSc*parseFloat(pdfMeta.scale)):100;
+    c.fillText(mNum+'м',lx+barW+2,ly+6);
+    ly+=14;
+  }
+
+  // Coord system
+  if(pdfMeta.coord){
+    c.font='8px Arial';c.fillStyle='#000';c.textAlign='left';
+    c.fillText('СК: '+pdfMeta.coord,lx,ly);ly+=12;
+  }
+  if(pdfMeta.height){
+    c.fillText('ВО: '+pdfMeta.height,lx,ly);ly+=12;
+  }
+
+  // ── TITLE BLOCK (stamp) ───────────────────────────────────────────────
+  var stampY=A3H-MARGIN-175;
+  // Horizontal divider
+  c.strokeStyle='#000';c.lineWidth=1;
+  c.beginPath();c.moveTo(PX,stampY);c.lineTo(A3W-MARGIN,stampY);c.stroke();
+
+  // Stamp grid
+  var sCols=[0,40,72,90,SB];
+  function stampLine(y){c.beginPath();c.moveTo(PX,y);c.lineTo(A3W-MARGIN,y);c.lineWidth=0.3;c.stroke();}
+  function stampVLine(x){c.beginPath();c.moveTo(PX+x,stampY);c.lineTo(PX+x,A3H-MARGIN);c.lineWidth=0.3;c.stroke();}
+  stampVLine(sCols[1]);stampVLine(sCols[2]);stampVLine(sCols[3]);
+
+  // Rows
+  var rows=[
+    {label:'Разработал',name:'',sign:'',date:''},
+    {label:'Проверил',name:'',sign:'',date:''},
+    {label:'Геодезист',name:'',sign:'',date:''},
+    {label:'Н. контр.',name:'',sign:'',date:''},
+  ];
+  var rh=18, ry=stampY;
+  // Header row
+  var hLabels=['Должность','Ф. И. О.','Подпись','Дата'];
+  c.font='bold 7px Arial';c.fillStyle='#000';
+  hLabels.forEach(function(hl,hi){
+    var cx2=PX+sCols[hi]+(sCols[hi+1]-sCols[hi])/2;
+    c.textAlign='center';c.fillText(hl,cx2,ry+rh/2+3);
+  });
+  stampLine(ry+rh);ry+=rh;
+
+  rows.forEach(function(row){
+    c.font='7px Arial';c.fillStyle='#1e293b';c.textAlign='left';
+    c.fillText(row.label,PX+sCols[0]+2,ry+rh/2+3);
+    stampLine(ry+rh);ry+=rh;
+  });
+
+  // Main info block
+  c.lineWidth=0.5;
+  c.beginPath();c.moveTo(PX,ry);c.lineTo(A3W-MARGIN,ry);c.stroke();
+  // Org name
+  c.font='bold 9px Arial';c.fillStyle='#000';c.textAlign='center';
+  var org=pdfMeta.org||'ООО "Геодезия+"';
+  c.fillText(org,PX+SB/2,ry+14);
+  c.lineWidth=0.3;c.beginPath();c.moveTo(PX,ry+20);c.lineTo(A3W-MARGIN,ry+20);c.stroke();ry+=20;
+
+  // Title
+  c.font='bold 10px Arial';c.fillStyle='#000';c.textAlign='center';
+  var title=pdfMeta.title||'Исполнительная схема';
+  var words=title.split(' '),line1='',line2='';
+  words.forEach(function(w){if(line1.length+w.length<25)line1+=w+' ';else line2+=w+' ';});
+  c.fillText(line1.trim(),PX+SB/2,ry+12);
+  if(line2.trim())c.fillText(line2.trim(),PX+SB/2,ry+24);
+  c.lineWidth=0.3;c.beginPath();c.moveTo(PX,ry+30);c.lineTo(A3W-MARGIN,ry+30);c.stroke();ry+=30;
+
+  // Bottom info row
+  var infoX=PX+4;
+  c.font='bold 8px Arial';c.fillStyle='#000';c.textAlign='left';
+  var dateStr=new Date().toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'numeric'});
+  c.fillText('Дата: '+dateStr,infoX,ry+10);
+  c.textAlign='right';c.fillText('Лист 1 из 1',PX+SB-4,ry+10);
+
+  // Top-left: project name small text
+  c.font='8px Arial';c.fillStyle='#374151';c.textAlign='left';
+  if(pdfMeta.note){
+    var noteLines=pdfMeta.note.split('\n');
+    noteLines.slice(0,3).forEach(function(nl,ni){
+      c.fillText(nl,DX+4,DY+12+ni*12);
+    });
+  }
+
+  // ── DATA TABLE (bottom of drawing area) ──────────────────────────────
+  var tableY=A3H-MARGIN-2;
+  // Points summary — small table at very bottom of drawing field
+  var ptCount=pts.length;
+  var areaText=_savedArea>0?_savedArea.toFixed(2)+' м²':'—';
+  var volText=_savedVolume>0?_savedVolume.toFixed(2)+' м³':'—';
+  c.font='7px Arial';c.fillStyle='#374151';c.textAlign='left';
+  c.fillText('Точек: '+ptCount+'  |  Площадь: '+areaText+'  |  Объём: '+volText,
+    DX+4,tableY-4);
+
+  // ── PDF TABLE: points + dimensions ───────────────────────────────────
+  var fontPt=5.5;
+  var rowData=[['№','X, м','Y, м','Z, м','Тип']];
+  pts.forEach(function(p){
+    rowData.push([
+      'P'+p.id,
+      p.x.toFixed(3),
+      p.y.toFixed(3),
+      (p.z!=null&&p.z!==undefined)?p.z.toFixed(3):'—',
+      p.type||'—'
+    ]);
+  });
+
+  // ── Build print overlay HTML ──────────────────────────────────────────
+  var imgData=oc.toDataURL('image/jpeg',0.95);
+  var thS='font-size:'+fontPt+'pt;padding:0.5mm 1mm;background:#1e293b;color:#fff;'+
+    'border:0.3pt solid #334155;';
+  var tdS='font-size:'+fontPt+'pt;padding:0.4mm 1mm;border:0.2pt solid #cbd5e1;font-family:monospace;';
+
+  var tblHtml='<table style="border-collapse:collapse;width:100%;font-size:'+fontPt+'pt;margin-top:4mm;">'+
+    '<thead><tr>'+
+    '<th style="'+thS+'width:8mm">№</th>'+
+    '<th style="'+thS+'width:28mm">X, м</th>'+
+    '<th style="'+thS+'width:28mm">Y, м</th>'+
+    '<th style="'+thS+'width:18mm">Z, м</th>'+
+    '<th style="'+thS+'width:18mm">Тип</th>'+
+    '</tr></thead><tbody>';
+  pts.forEach(function(p,i){
+    var bg=i%2===0?'background:#f8fafc;':'';
+    tblHtml+='<tr style="'+bg+'">'+
+      '<td style="'+tdS+'">P'+p.id+'</td>'+
+      '<td style="'+tdS+'">'+p.x.toFixed(3)+'</td>'+
+      '<td style="'+tdS+'">'+p.y.toFixed(3)+'</td>'+
+      '<td style="'+tdS+'">'+(p.z!=null?p.z.toFixed(3):'—')+'</td>'+
+      '<td style="'+tdS+'">'+(p.type||'—')+'</td>'+
+      '</tr>';
+  });
+  tblHtml+='</tbody></table>';
+
+  // Add dimensions table
+  if(dims&&dims.length){
+    tblHtml+='<table style="border-collapse:collapse;margin-top:4mm;font-size:'+fontPt+'pt;">'+
+      '<thead><tr>'+
+      '<th style="'+thS+'width:20mm">Отрезок</th>'+
+      '<th style="'+thS+'width:25mm">Длина, м</th>'+
+      '</tr></thead><tbody>';
+    dims.forEach(function(d,i){
+      var bg=i%2===0?'background:#f8fafc;':'';
+      var len=Math.hypot(d.p2.x-d.p1.x,d.p2.y-d.p1.y);
+      tblHtml+='<tr style="'+bg+'">'+
+        '<td style="'+tdS+'">P'+d.p1.id+'–P'+d.p2.id+'</td>'+
+        '<td style="'+tdS+'">'+len.toFixed(3)+'</td>'+
+        '</tr>';
+    });
+    tblHtml+='</tbody></table>';
+  }
+
+  // Area/volume
+  if(_savedArea>0){
+    tblHtml+='<table style="border-collapse:collapse;margin-top:4mm;font-size:'+fontPt+'pt;">'+
+      '<thead><tr><th style="'+thS+'width:40mm">Параметр</th>'+
+      '<th style="'+thS+'width:25mm">Значение</th></tr></thead><tbody>'+
+      '<tr><td style="'+tdS+'">Площадь</td><td style="'+tdS+'">'+_savedArea.toFixed(3)+' м²</td></tr>'+
+      '<tr style="background:#f8fafc"><td style="'+tdS+'">Периметр</td><td style="'+tdS+'">'+_savedPerimeter.toFixed(3)+' м</td></tr>'+
+      (_savedVolume>0?'<tr><td style="'+tdS+'">Объём грунта</td><td style="'+tdS+'">'+_savedVolume.toFixed(3)+' м³</td></tr>':'');
+    if(_savedPileVolume>0){
+      tblHtml+='<tr style="background:#f8fafc"><td style="'+tdS+'">Объём бетона (сваи)</td><td style="'+tdS+'">'+_savedPileVolume.toFixed(3)+' м³</td></tr>'+
+        '<tr><td style="'+tdS+'font-weight:bold">Итого</td><td style="'+tdS+'font-weight:bold">'+(_savedVolume+_savedPileVolume).toFixed(3)+' м³</td></tr>';
+    }
+    tblHtml+='</tbody></table>';
+  }
+
+  // ── Build print overlay ───────────────────────────────────────────────
+  var overlay=document.getElementById('print-overlay');
+  if(!overlay){overlay=document.createElement('div');overlay.id='print-overlay';document.body.appendChild(overlay);}
+  overlay.style.cssText='display:none;position:fixed;inset:0;background:#fff;z-index:9999;overflow-y:auto;';
+  overlay.className='pdf-printing';
+  overlay.innerHTML=
+    '<div style="max-width:297mm;margin:0 auto;padding:4mm;">' +
+    '<img src="'+imgData+'" style="width:100%;border:0.5pt solid #e2e8f0;display:block;" alt="Чертёж">' +
+    tblHtml +
+    '</div>';
+
+  // Close btn (no-print)
+  var closeBtn=document.createElement('button');
+  closeBtn.textContent='✕ Закрыть';
+  closeBtn.style.cssText='position:fixed;top:10px;right:10px;background:#ef4444;color:#fff;'+
+    'border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;z-index:10000;';
+  closeBtn.onclick=function(){
+    overlay.style.display='none';
+    overlay.className='';
+    isExportingPDF=false;manIsExportingPDF=false;
+  };
+  overlay.appendChild(closeBtn);
+
+  // Print btn
+  var printBtn=document.createElement('button');
+  printBtn.textContent='🖨 Распечатать / Сохранить PDF';
+  printBtn.style.cssText='position:fixed;top:10px;right:140px;background:#2563eb;color:#fff;'+
+    'border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;z-index:10000;';
+  printBtn.onclick=function(){window.print();};
+  overlay.appendChild(printBtn);
+
+  // DOCX btn
+  var docxBtn=document.createElement('button');
+  docxBtn.textContent='📄 Скачать DOCX';
+  docxBtn.style.cssText='position:fixed;top:10px;right:330px;background:#16a34a;color:#fff;'+
+    'border:none;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;z-index:10000;';
+  docxBtn.onclick=function(){_exportDocx(pts,dims,pdfMeta);};
+  overlay.appendChild(docxBtn);
+
+  overlay.style.display='block';
+
+  isExportingPDF=false;manIsExportingPDF=false;
   var b=document.getElementById('pdf-modal-generate-btn');
-  if(b){b.innerHTML='<i class="fa-solid fa-download"></i> Сгенерировать';b.disabled=false;}
-};
-window._doPrintNow=function(){
-  ov.classList.remove('pdf-preview-open');ov.classList.add('pdf-printing');
-  setTimeout(function(){window.print();setTimeout(function(){
-    ov.classList.remove('pdf-printing');ov.innerHTML='';pdfLogoDataUrl=null;
-    var b=document.getElementById('pdf-modal-generate-btn');
-    if(b){b.innerHTML='<i class="fa-solid fa-download"></i> Сгенерировать';b.disabled=false;}
-  },600);},120);
-};
-var b2=document.getElementById('pdf-modal-generate-btn');
-if(b2){b2.innerHTML='<i class="fa-solid fa-download"></i> Сгенерировать';b2.disabled=false;}
+  if(b){b.innerHTML='<i class="fa-solid fa-file-pdf"></i>';b.disabled=false;}
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1339,50 +1479,119 @@ function _northDrawPDF(ctx,W,H,PR){
 // УСЛОВНЫЕ ОБОЗНАЧЕНИЯ (Symbols)
 // ══════════════════════════════════════════════════════════════════════════════
 var _ST={
-  wall:  {label:'Стена',      icon:'🧱',color:'#7c3aed',clicks:'multi',
-          props:[
-            {id:'w',label:'Ширина (м)',def:'0.25',step:'0.05'},
-            {id:'h',label:'Высота (м)',def:'3.0',step:'0.1'},
-            {id:'align',label:'Привязка',def:'center',type:'sel',
-             opts:['center','outer','inner'],
-             optLabels:['По центру','По наружной','По внутренней']},
-            {id:'mark',label:'Знак начала',def:'none',type:'sel',
-             opts:['none','tick','circle','arrow'],
-             optLabels:['Нет','Засечка ⊥','Кружок ○','Стрелка →']}
-          ],hint:'Точки оси стены → ✓ (двойной клик — завершить)'},
-  column:{label:'Столб/Колонна',icon:'⬛',color:'#374151',clicks:'one',
-          props:[
-            {id:'shape',label:'Геометрия',def:'circle',type:'sel',
-             opts:['circle','square'],optLabels:['Круглая','Квадратная']},
-            {id:'d',label:'Ø / Сторона (м)',def:'0.3',step:'0.05'},
-            {id:'h',label:'Высота (м)',def:'3.0',step:'0.1'}
-          ],hint:'Клик: центр'},
-  pile:  {label:'Свая',       icon:'⬇',color:'#7f1d1d',clicks:'one',
-          props:[
-            {id:'d',label:'Диаметр (м)',def:'0.3',step:'0.05'},
-            {id:'h',label:'Глубина (м)',def:'3.0',step:'0.1'},
-            {id:'top',label:'Отметка верха',def:'-0.00',step:'0.01'}
-          ],hint:'Клик: центр сваи'},
-  well:  {label:'Колодец',    icon:'⭕',color:'#0891b2',clicks:'one',
-          props:[
-            {id:'d',label:'Диаметр (м)',def:'1.0',step:'0.1'},
-            {id:'t',label:'Тип',def:'Кан',type:'sel',opts:['Кан','Вод','Газ','Тепл','Эл']}
-          ],hint:'Клик: центр'},
-  sewage:{label:'Канализация', icon:'🔲',color:'#374151',clicks:'multi',
-          props:[{id:'d',label:'Ø мм',def:'200',step:'50'}],hint:'Трасса → ✓'},
-  water: {label:'Водопровод',  icon:'🔵',color:'#2563eb',clicks:'multi',
-          props:[{id:'d',label:'Ø мм',def:'100',step:'25'}],hint:'Трасса → ✓'},
-  gas:   {label:'Газопровод',  icon:'🟡',color:'#b45309',clicks:'multi',
-          props:[{id:'p',label:'Давл.',def:'Низкое',type:'sel',
-                 opts:['Низкое','Среднее','Высокое']}],hint:'Трасса → ✓'},
-  heat:  {label:'Теплосеть',   icon:'🔴',color:'#dc2626',clicks:'multi',
-          props:[{id:'d',label:'Ø мм',def:'150',step:'25'}],hint:'Трасса → ✓'},
-  cable: {label:'Кабель',      icon:'⚡',color:'#78350f',clicks:'multi',
-          props:[{id:'v',label:'кВ',def:'0.4',type:'sel',
-                 opts:['0.4','6','10','35']}],hint:'Трасса → ✓'},
-  fence: {label:'Забор',       icon:'🚧',color:'#78716c',clicks:'multi',
-          props:[],hint:'Точки → ✓'},
-};
+  // ── ПОДЗЕМНЫЕ КОММУНИКАЦИИ (Underground utilities) ──────────────────
+  voda:{
+    label:'Водопровод',code:'В',color:'#0ea5e9',clicks:'multi',
+    props:[
+      {id:'dia',label:'Диаметр (мм)',def:'100',step:'10',type:'num'},
+      {id:'depth',label:'Глубина (м)',def:'1.5',step:'0.1',type:'num'},
+      {id:'mat',label:'Материал',def:'чуг',type:'sel',
+       opts:['чуг','ст','пл','асб'],optLabels:['Чугун','Сталь','Пластик','Асбест']}
+    ]
+  },
+  kanal:{
+    label:'Канализация',code:'К',color:'#a855f7',clicks:'multi',
+    props:[
+      {id:'dia',label:'Диаметр (мм)',def:'200',step:'50',type:'num'},
+      {id:'depth',label:'Глубина (м)',def:'2.0',step:'0.1',type:'num'},
+      {id:'tip',label:'Тип',def:'быт',type:'sel',
+       opts:['быт','ливн','пром'],optLabels:['Бытовая','Ливневая','Промышленная']}
+    ]
+  },
+  gaz:{
+    label:'Газопровод',code:'Г',color:'#f59e0b',clicks:'multi',
+    props:[
+      {id:'dia',label:'Диаметр (мм)',def:'100',step:'10',type:'num'},
+      {id:'press',label:'Давление',def:'нд',type:'sel',
+       opts:['нд','сд','вд'],optLabels:['Низкое','Среднее','Высокое']}
+    ]
+  },
+  teplo:{
+    label:'Теплосеть',code:'Т',color:'#ef4444',clicks:'multi',
+    props:[
+      {id:'dia',label:'Диаметр (мм)',def:'200',step:'50',type:'num'},
+      {id:'depth',label:'Глубина (м)',def:'1.5',step:'0.1',type:'num'}
+    ]
+  },
+  kabel:{
+    label:'Эл. кабель',code:'Кб',color:'#6366f1',clicks:'multi',
+    props:[
+      {id:'vol',label:'Напряжение (кВ)',def:'0.4',step:'0.1',type:'num'},
+      {id:'cnt',label:'Кол-во кабелей',def:'1',step:'1',type:'num'}
+    ]
+  },
+  svyaz:{
+    label:'Кабель связи',code:'С',color:'#10b981',clicks:'multi',
+    props:[
+      {id:'cnt',label:'Кол-во',def:'1',step:'1',type:'num'}
+    ]
+  },
+  // ── КОЛОДЦЫ СМОТРОВЫЕ (Manholes) ─────────────────────────────────────
+  kol_voda:{
+    label:'Колодец вод.',code:'В',color:'#0ea5e9',clicks:'one',
+    props:[{id:'num',label:'Номер колодца',def:'',type:'num'},{id:'el',label:'Отметка крышки',def:'',step:'0.01',type:'num'}]
+  },
+  kol_kanal:{
+    label:'Колодец кан.',code:'К',color:'#a855f7',clicks:'one',
+    props:[{id:'num',label:'Номер',def:'',type:'num'},{id:'el',label:'Отметка крышки',def:'',step:'0.01',type:'num'}]
+  },
+  kol_gaz:{
+    label:'Колодец газ.',code:'Г',color:'#f59e0b',clicks:'one',
+    props:[{id:'num',label:'Номер',def:'',type:'num'},{id:'el',label:'Отметка крышки',def:'',step:'0.01',type:'num'}]
+  },
+  kol_teplo:{
+    label:'Колодец тепло',code:'Т',color:'#ef4444',clicks:'one',
+    props:[{id:'num',label:'Номер',def:'',type:'num'},{id:'el',label:'Отметка крышки',def:'',step:'0.01',type:'num'}]
+  },
+  kol_el:{
+    label:'Колодец эл.',code:'Э',color:'#6366f1',clicks:'one',
+    props:[{id:'num',label:'Номер',def:'',type:'num'},{id:'el',label:'Отметка крышки',def:'',step:'0.01',type:'num'}]
+  },
+  // ── СТОЛБЫ И ОПОРЫ (Poles and supports) ─────────────────────────────
+  stolb_d:{
+    label:'Столб деревян.',code:'д',color:'#92400e',clicks:'one',
+    props:[{id:'h',label:'Высота (м)',def:'6',step:'1',type:'num'}]
+  },
+  stolb_m:{
+    label:'Столб металл.',code:'м',color:'#475569',clicks:'one',
+    props:[{id:'h',label:'Высота (м)',def:'9',step:'1',type:'num'}]
+  },
+  stolb_zh:{
+    label:'Столб ж/б',code:'ж/б',color:'#94a3b8',clicks:'one',
+    props:[{id:'h',label:'Высота (м)',def:'10',step:'1',type:'num'}]
+  },
+  // ── ОГРАДЫ И ЗАБОРЫ (Fences and walls) ──────────────────────────────
+  ograda_kap:{
+    label:'Забор кап.',code:'',color:'#1e293b',clicks:'multi',
+    props:[{id:'h',label:'Высота (м)',def:'2.0',step:'0.5',type:'num'},
+           {id:'mat',label:'Материал',def:'кирп',type:'sel',
+            opts:['кирп','бет','мет'],optLabels:['Кирпич','Бетон','Металл']}]
+  },
+  ograda_d:{
+    label:'Забор деревян.',code:'',color:'#92400e',clicks:'multi',
+    props:[{id:'h',label:'Высота (м)',def:'1.5',step:'0.5',type:'num'}]
+  },
+  podpor:{
+    label:'Подпорная стенка',code:'',color:'#1e293b',clicks:'multi',
+    props:[{id:'h',label:'Высота (м)',def:'1.0',step:'0.5',type:'num'},
+           {id:'side',label:'Откос с',def:'left',type:'sel',
+            opts:['left','right'],optLabels:['Левой стороны','Правой стороны']}]
+  },
+  // ── ЗДАНИЯ И СООРУЖЕНИЯ (Buildings) ─────────────────────────────────
+  zdanie:{
+    label:'Здание',code:'',color:'#1e293b',clicks:'area',
+    props:[{id:'fl',label:'Этажей',def:'1',step:'1',type:'num'},
+           {id:'mat',label:'Материал',def:'кир',type:'sel',
+            opts:['кир','дер','смеш'],optLabels:['Кирпич/бетон','Деревянное','Смешанное']},
+           {id:'type',label:'Назначение',def:'ж',type:'sel',
+            opts:['ж','н','пр'],optLabels:['Жилое','Нежилое','Производств.']}]
+  },
+  svaya:{
+    label:'Свая',code:'',color:'#1e293b',clicks:'one',
+    props:[{id:'dia',label:'Диаметр (м)',def:'0.3',step:'0.1',type:'num'},
+           {id:'h',label:'Отм. головы',def:'',step:'0.01',type:'num'}]
+  }
+};;
 function _symInit(){
   var g=document.getElementById('sym-grid');if(!g)return;g.innerHTML='';
   Object.entries(_ST).forEach(function(e){var id=e[0],t=e[1];
@@ -1404,10 +1613,10 @@ function _symInit(){
     el.addEventListener('click',function(ev){
       var rect=el.getBoundingClientRect();
       var sx=ev.clientX-rect.left,sy=ev.clientY-rect.top;
-      // New symbol panel
-      if(_snpActive){
-        var _snpw=(cid==='cad-canvas')?screenToCad(sx,sy):screenToMan(sx,sy);
-        _snpHandleClick(_snpw.x,_snpw.y);
+      // Topo signs panel
+      if(_tpActive){
+        var _tpw=(cid==='cad-canvas')?screenToCad(sx,sy):screenToMan(sx,sy);
+        _tpHandleClick(_tpw.x,_tpw.y);
         return;
       }
       if(!symTool)return;
@@ -1471,191 +1680,279 @@ function _symLegend(){
   lg.innerHTML=Object.entries(g).map(function(e){var t=_ST[e[0]];return t.icon+' <b>'+t.label+'</b> &times;'+e[1];}).join('&nbsp;&nbsp;');
 }
 function _drawSymbols(ctx,scl,oX,oY,pr){
+  if(!cadSymbols||!cadSymbols.length)return;
   cadSymbols.forEach(function(sym){
     try{
-      var pts=sym.pts,col=sym.color||'#1e293b';ctx.save();ctx.strokeStyle=col;ctx.fillStyle=col;
+      var pts=sym.pts, col=sym.color||'#1e293b';
+      if(!pts||pts.length===0)return;
+      ctx.save();
+      ctx.strokeStyle=col; ctx.fillStyle=col;
+
       switch(sym.type){
-        case 'wall':{
+        // ── ПОДЗЕМНЫЕ КОММУНИКАЦИИ ──────────────────────────────────────
+        // Underground pipes: dashed line + periodic letter label
+        case 'voda': case 'kanal': case 'gaz': case 'teplo': case 'kabel': case 'svyaz':{
           if(pts.length<2)break;
-          var _ww=parseFloat(sym.props.w||0.25);
-          var _wh=sym.props.h||'';
-          var _align=sym.props.align||'center'; // center/outer/inner
-          var _mark=sym.props.mark||'none';     // none/tick/circle/arrow
-          var _minW=Math.max(_ww,2.5/scl);
-
-          // ── Helper: compute offset polyline in world coords ──────────────
-          // offset>0 = shift right of travel direction, offset<0 = left
-          function _offsetPts(pArr,off){
-            var res=[];
-            for(var _i=0;_i<pArr.length;_i++){
-              // Average normal at each vertex
-              var nx=0,ny=0,cnt=0;
-              if(_i<pArr.length-1){
-                var dx=pArr[_i+1].x-pArr[_i].x,dy=pArr[_i+1].y-pArr[_i].y;
-                var ln=Math.hypot(dx,dy)||1;
-                nx+=(-dy/ln);ny+=(dx/ln);cnt++;
-              }
-              if(_i>0){
-                var dx2=pArr[_i].x-pArr[_i-1].x,dy2=pArr[_i].y-pArr[_i-1].y;
-                var ln2=Math.hypot(dx2,dy2)||1;
-                nx+=(-dy2/ln2);ny+=(dx2/ln2);cnt++;
-              }
-              if(cnt){nx/=cnt;ny/=cnt;}
-              var nln=Math.hypot(nx,ny)||1;
-              res.push({x:pArr[_i].x+off*(nx/nln),y:pArr[_i].y+off*(ny/nln)});
-            }
-            return res;
-          }
-
-          // ── Compute axis pts based on alignment ───────────────────────────
-          // 'center': axis = drawn pts (lineWidth = _ww centered)
-          // 'outer' : drawn line is OUTER face → axis shifted inward by _ww/2
-          // 'inner' : drawn line is INNER face → axis shifted outward by _ww/2
-          var _axisPts=pts;
-          if(_align==='outer')  _axisPts=_offsetPts(pts,-_ww/2);
-          if(_align==='inner')  _axisPts=_offsetPts(pts, _ww/2);
-
-          // ── Draw outer body line (thick) ──────────────────────────────────
-          ctx.lineWidth=_minW;ctx.lineCap='round';ctx.lineJoin='round';
+          var lw=Math.max(0.03,0.35/scl);
+          var dashLen=Math.max(0.08,4/scl), gapLen=Math.max(0.04,2/scl);
+          ctx.lineWidth=lw; ctx.lineCap='butt';
+          ctx.setLineDash([dashLen,gapLen]);
           ctx.beginPath();
-          _axisPts.forEach(function(p,_i){
-            _i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
-          });
-          ctx.stroke();
-
-          // ── Draw center axis (thin dashed) ────────────────────────────────
-          ctx.strokeStyle='rgba(255,255,255,0.35)';
-          ctx.lineWidth=Math.max(0.02,0.7/scl);
-          ctx.setLineDash([Math.max(0.08,2/scl),Math.max(0.08,2/scl)]);
-          ctx.beginPath();
-          _axisPts.forEach(function(p,_i){
-            _i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
-          });
-          ctx.stroke();ctx.setLineDash([]);
-
-          // ── Draw alignment reference lines (outer/inner edges) ────────────
-          if(_align!=='center'){
-            var _edgePts=_offsetPts(_axisPts, _align==='outer'?-_ww/2:_ww/2);
-            ctx.strokeStyle='rgba(0,0,0,0.25)';
-            ctx.lineWidth=Math.max(0.01,0.4/scl);
-            ctx.setLineDash([Math.max(0.05,1.5/scl),Math.max(0.05,1.5/scl)]);
-            ctx.beginPath();
-            _edgePts.forEach(function(p,_i){
-              _i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
-            });
-            ctx.stroke();ctx.setLineDash([]);
-          }
-
-          // ── Draw start mark symbol ────────────────────────────────────────
-          if(_mark!=='none'&&pts.length>=2){
-            var _p0=_axisPts[0],_p1=_axisPts[1];
-            var _dx=_p1.x-_p0.x,_dy=_p1.y-_p0.y;
-            var _dl=Math.hypot(_dx,_dy)||1;
-            var _tx=_dx/_dl,_ty=_dy/_dl; // tangent
-            var _nx=-_ty,_ny=_tx;         // normal
-            var _sx=_p0.x,_sy=_p0.y;
-            var _hs=_ww/2; // half-width
-            ctx.strokeStyle=col;ctx.fillStyle=col;
-            ctx.lineWidth=Math.max(0.04,1.5/scl);
-            if(_mark==='tick'){
-              // Perpendicular tick ⊥
-              ctx.beginPath();
-              ctx.moveTo(_sx+_nx*_hs*1.5,_sy+_ny*_hs*1.5);
-              ctx.lineTo(_sx-_nx*_hs*1.5,_sy-_ny*_hs*1.5);
-              ctx.stroke();
-            } else if(_mark==='circle'){
-              // Circle ○
-              ctx.beginPath();
-              ctx.arc(_sx,_sy,_hs*0.8,0,Math.PI*2);
-              ctx.stroke();
-            } else if(_mark==='arrow'){
-              // Arrow → pointing in wall direction
-              var _ar=_hs*1.2;
-              ctx.beginPath();
-              ctx.moveTo(_sx,_sy);
-              ctx.lineTo(_sx+_tx*_ar,_sy+_ty*_ar);
-              ctx.stroke();
-              ctx.beginPath();
-              ctx.moveTo(_sx+_tx*_ar,_sy+_ty*_ar);
-              ctx.lineTo(_sx+_tx*_ar*0.6+_nx*_ar*0.4,_sy+_ty*_ar*0.6+_ny*_ar*0.4);
-              ctx.lineTo(_sx+_tx*_ar*0.6-_nx*_ar*0.4,_sy+_ty*_ar*0.6-_ny*_ar*0.4);
-              ctx.closePath();ctx.fill();
-            }
-          }
-
-          // ── Alignment label next to start ─────────────────────────────────
-          if(_align!=='center'&&pts.length>=1){
-            var _p0s=_axisPts[0];
-            ctx.save();ctx.translate(_p0s.x,_p0s.y);ctx.scale(1/scl,-1/scl);
-            ctx.font=(Math.min(9,Math.max(_ww*scl*0.8,6)))+'px sans-serif';
-            ctx.fillStyle=col;ctx.textBaseline='top';ctx.textAlign='left';
-            ctx.fillText(_align==='outer'?'нар.':'вн.',2,2);
+          pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+          ctx.stroke(); ctx.setLineDash([]);
+          // Label along each segment
+          var code=sym.props&&sym.props.dia?
+            _ST[sym.type].code+(sym.props.dia?'Ø'+sym.props.dia:''):_ST[sym.type].code;
+          for(var si=0;si<pts.length-1;si++){
+            var mx=(pts[si].x+pts[si+1].x)/2, my=(pts[si].y+pts[si+1].y)/2;
+            var dx=pts[si+1].x-pts[si].x, dy=pts[si+1].y-pts[si].y;
+            var ang=Math.atan2(dy,dx);
+            ctx.save();
+            ctx.translate(mx,my);
+            ctx.rotate(ang);
+            ctx.scale(1/scl,-1/scl);
+            ctx.font='bold '+(Math.max(6,3*scl/scl))+'px Arial Narrow';
+            ctx.fillStyle=col; ctx.textAlign='center'; ctx.textBaseline='bottom';
+            ctx.fillText(_ST[sym.type].code,0,-3/scl*scl);
             ctx.restore();
           }
+          break;
+        }
 
-          // ── Height label at midpoint ──────────────────────────────────────
-          if(_wh&&_axisPts.length>=2){
-            var _wm=_axisPts[Math.floor(_axisPts.length/2)];
-            ctx.save();ctx.translate(_wm.x,_wm.y);ctx.scale(1/scl,-1/scl);
-            ctx.font='bold '+Math.min(9,Math.max(_ww*scl*1.2,7))+'px sans-serif';
-            ctx.fillStyle=col;ctx.textBaseline='bottom';ctx.textAlign='center';
-            ctx.fillText('h='+_wh+'м',0,-2);ctx.restore();
-          }
-          break;}
-        case 'column':{
-          var _cr=parseFloat(sym.props.d||0.3)/2,_ch=sym.props.h||'3.0';
-          var _cshape=sym.props.shape||'circle';
-          var _cpx=pts[0].x,_cpy=pts[0].y;
-          ctx.lineWidth=1.5/scl;
-          if(_cshape==='square'){
-            ctx.beginPath();ctx.rect(_cpx-_cr,_cpy-_cr,_cr*2,_cr*2);ctx.stroke();
-            ctx.fillStyle=col+'44';ctx.fill();
-          } else {
-            ctx.beginPath();ctx.arc(_cpx,_cpy,_cr,0,Math.PI*2);ctx.stroke();
-            ctx.fillStyle=col+'44';ctx.fill();
-          }
-          ctx.fillStyle=col;
-          ctx.lineWidth=0.5/scl;
-          ctx.beginPath();ctx.moveTo(_cpx-_cr*0.3,_cpy);ctx.lineTo(_cpx+_cr*0.3,_cpy);
-          ctx.moveTo(_cpx,_cpy-_cr*0.3);ctx.lineTo(_cpx,_cpy+_cr*0.3);ctx.stroke();
-          ctx.save();ctx.translate(_cpx+_cr+0.05,_cpy);ctx.scale(1/scl,-1/scl);
-          ctx.font='bold '+Math.max(_cr*scl*0.9,7)+'px sans-serif';
-          ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillStyle=col;
-          ctx.fillText('h='+_ch+'м',2,0);ctx.restore();
-          break;}
-        case 'well':
-          var dw=parseFloat(sym.props.d||1.0)/2;
-          ctx.lineWidth=2/scl;ctx.beginPath();ctx.arc(pts[0].x,pts[0].y,dw,0,Math.PI*2);ctx.stroke();
-          ctx.beginPath();ctx.moveTo(pts[0].x-dw,pts[0].y);ctx.lineTo(pts[0].x+dw,pts[0].y);ctx.moveTo(pts[0].x,pts[0].y-dw);ctx.lineTo(pts[0].x,pts[0].y+dw);ctx.stroke();
-          ctx.save();ctx.scale(1,-1);ctx.font='bold '+(dw*0.9)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(sym.props.t||'К',pts[0].x,-(pts[0].y));ctx.restore();
+        // ── КОЛОДЦЫ СМОТРОВЫЕ ───────────────────────────────────────────
+        case 'kol_voda':
+          _drawManhole(ctx,scl,pts[0],col,'H',sym.props);break;
+        case 'kol_kanal':
+          _drawManhole(ctx,scl,pts[0],col,'+',sym.props);break;
+        case 'kol_gaz':
+          _drawManhole(ctx,scl,pts[0],col,'/',sym.props);break;
+        case 'kol_teplo':
+          _drawManhole(ctx,scl,pts[0],col,'#',sym.props);break;
+        case 'kol_el':
+          _drawManhole(ctx,scl,pts[0],col,'E',sym.props);break;
+
+        // ── СТОЛБЫ И ОПОРЫ ──────────────────────────────────────────────
+        case 'stolb_d':{
+          // Wooden pole: small circle ○
+          var r=Math.max(0.04,1.5/scl);
+          ctx.lineWidth=Math.max(0.02,0.5/scl);
+          ctx.beginPath(); ctx.arc(pts[0].x,pts[0].y,r,0,Math.PI*2);
+          ctx.stroke();
+          // Label
+          ctx.save(); ctx.translate(pts[0].x,pts[0].y); ctx.scale(1/scl,-1/scl);
+          ctx.font='6px Arial'; ctx.textAlign='center'; ctx.textBaseline='top';
+          ctx.fillText('д',0,r*scl+1); ctx.restore();
           break;
-        case 'sewage':_pipe(ctx,pts,oX,oY,scl,col,[0.3/scl,0.15/scl],'К');break;
-        case 'water': _pipe(ctx,pts,oX,oY,scl,col,[],'В');break;
-        case 'gas':   _pipe(ctx,pts,oX,oY,scl,col,[0.5/scl,0.2/scl],'Г');break;
-        case 'heat':  _pipe(ctx,pts,oX,oY,scl,col,[],'Т');break;
-        case 'cable': _pipe(ctx,pts,oX,oY,scl,col,[0.2/scl,0.1/scl,0.05/scl,0.1/scl],'Э');break;
-        case 'pile':{
-          if(!pts.length)break;
-          var _pd=parseFloat(sym.props.d||0.3),_pr=_pd/2;
-          var _ph=parseFloat(sym.props.h||3.0);
-          var _ptop=sym.props.top!==undefined?sym.props.top:'-0.00';
-          var _px=pts[0].x,_py=pts[0].y;
-          ctx.lineWidth=0.05;ctx.beginPath();ctx.arc(_px,_py,_pr,0,Math.PI*2);ctx.stroke();
-          ctx.fillStyle=sym.color||'#7f1d1d';ctx.beginPath();ctx.arc(_px,_py,_pr*0.35,0,Math.PI*2);ctx.fill();
-          ctx.lineWidth=0.03;ctx.beginPath();ctx.moveTo(_px,_py+_pr*0.4);ctx.lineTo(_px,_py+_pr*1.5);ctx.stroke();
-          ctx.beginPath();ctx.moveTo(_px-_pr*0.2,_py+_pr*1.2);ctx.lineTo(_px,_py+_pr*1.5);ctx.lineTo(_px+_pr*0.2,_py+_pr*1.2);ctx.stroke();
-          ctx.save();ctx.translate(_px+_pr*1.3,_py);ctx.scale(1/scl,-1/scl);
-          ctx.font='bold '+Math.min(9,Math.max(_pr*scl*0.9,7))+'px sans-serif';ctx.textBaseline='middle';ctx.fillStyle=sym.color||'#7f1d1d';
-          ctx.fillText('h='+_ph+'м ('+_ptop+')',2,0);ctx.restore();break;}
-        case 'fence':
-          if(pts.length<2)break;ctx.lineWidth=1.5/scl;
-          ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();
-          for(var i=0;i<pts.length-1;i++){var dx2=pts[i+1].x-pts[i].x,dy2=pts[i+1].y-pts[i].y,seg=Math.hypot(dx2,dy2);for(var t2=1.5;t2<seg;t2+=2){var fx=pts[i].x+dx2/seg*t2,fy=pts[i].y+dy2/seg*t2;var nx=-dy2/seg*0.4,ny=dx2/seg*0.4;ctx.beginPath();ctx.moveTo(fx,fy);ctx.lineTo(fx+nx,fy+ny);ctx.stroke();}}
+        }
+        case 'stolb_m':{
+          // Metal pole: filled circle ●
+          var r2=Math.max(0.04,1.5/scl);
+          ctx.beginPath(); ctx.arc(pts[0].x,pts[0].y,r2,0,Math.PI*2);
+          ctx.fill();
+          ctx.save(); ctx.translate(pts[0].x,pts[0].y); ctx.scale(1/scl,-1/scl);
+          ctx.fillStyle=col; ctx.font='6px Arial'; ctx.textAlign='center';
+          ctx.textBaseline='top'; ctx.fillText('м',0,r2*scl+1); ctx.restore();
           break;
+        }
+        case 'stolb_zh':{
+          // ж/б pole: filled square ■
+          var sq=Math.max(0.05,2/scl);
+          ctx.fillRect(pts[0].x-sq/2,pts[0].y-sq/2,sq,sq);
+          ctx.save(); ctx.translate(pts[0].x,pts[0].y); ctx.scale(1/scl,-1/scl);
+          ctx.fillStyle=col; ctx.font='6px Arial'; ctx.textAlign='center';
+          ctx.textBaseline='top'; ctx.fillText('ж/б',0,sq*scl+1); ctx.restore();
+          break;
+        }
+
+        // ── ОГРАДЫ — КАПИТАЛЬНАЯ ────────────────────────────────────────
+        case 'ograda_kap':{
+          if(pts.length<2)break;
+          ctx.lineWidth=Math.max(0.04,1/scl); ctx.lineCap='square';
+          ctx.beginPath();
+          pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+          ctx.stroke();
+          // Perpendicular ticks every ~5 world units or 8px
+          var tickH=Math.max(0.06,2.5/scl), tickStep=Math.max(0.2,8/scl);
+          for(var fi=0;fi<pts.length-1;fi++){
+            var ax=pts[fi].x,ay=pts[fi].y,bx=pts[fi+1].x,by=pts[fi+1].y;
+            var segLen=Math.hypot(bx-ax,by-ay);
+            var tx=(bx-ax)/segLen,ty=(by-ay)/segLen;
+            var nx=-ty,ny=tx;
+            var nTicks=Math.max(2,Math.floor(segLen/tickStep));
+            for(var ti=0;ti<=nTicks;ti++){
+              var t=ti/nTicks;
+              var px2=ax+t*(bx-ax), py2=ay+t*(by-ay);
+              ctx.beginPath();
+              ctx.moveTo(px2,py2);
+              ctx.lineTo(px2+nx*tickH,py2+ny*tickH);
+              ctx.stroke();
+            }
+          }
+          break;
+        }
+
+        // ── ОГРАДА ДЕРЕВЯННАЯ ───────────────────────────────────────────
+        case 'ograda_d':{
+          if(pts.length<2)break;
+          ctx.lineWidth=Math.max(0.03,0.7/scl);
+          ctx.setLineDash([Math.max(0.1,3/scl),Math.max(0.05,1.5/scl)]);
+          ctx.beginPath();
+          pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+          ctx.stroke(); ctx.setLineDash([]);
+          var tickH2=Math.max(0.05,2/scl), tickStep2=Math.max(0.2,8/scl);
+          for(var fi2=0;fi2<pts.length-1;fi2++){
+            var ax2=pts[fi2].x,ay2=pts[fi2].y,bx2=pts[fi2+1].x,by2=pts[fi2+1].y;
+            var segLen2=Math.hypot(bx2-ax2,by2-ay2);
+            var tx2=(bx2-ax2)/segLen2,ty2=(by2-ay2)/segLen2;
+            var nx2=-ty2,ny2=tx2;
+            var nT2=Math.max(2,Math.floor(segLen2/tickStep2));
+            for(var ti2=0;ti2<=nT2;ti2++){
+              var t2=ti2/nT2;
+              var px3=ax2+t2*(bx2-ax2), py3=ay2+t2*(by2-ay2);
+              ctx.beginPath(); ctx.moveTo(px3,py3);
+              ctx.lineTo(px3+nx2*tickH2,py3+ny2*tickH2); ctx.stroke();
+            }
+          }
+          break;
+        }
+
+        // ── ПОДПОРНАЯ СТЕНКА ────────────────────────────────────────────
+        case 'podpor':{
+          if(pts.length<2)break;
+          ctx.lineWidth=Math.max(0.04,1.2/scl); ctx.lineCap='round';
+          ctx.beginPath();
+          pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+          ctx.stroke();
+          // One-sided oblique ticks (downhill side)
+          var side=sym.props&&sym.props.side==='right'?-1:1;
+          var tickH3=Math.max(0.06,3/scl), tickStep3=Math.max(0.15,5/scl);
+          for(var fi3=0;fi3<pts.length-1;fi3++){
+            var ax3=pts[fi3].x,ay3=pts[fi3].y,bx3=pts[fi3+1].x,by3=pts[fi3+1].y;
+            var segLen3=Math.hypot(bx3-ax3,by3-ay3);
+            var tx3=(bx3-ax3)/segLen3,ty3=(by3-ay3)/segLen3;
+            var nx3=-ty3*side,ny3=tx3*side;
+            var nT3=Math.max(2,Math.floor(segLen3/tickStep3));
+            ctx.lineWidth=Math.max(0.03,0.5/scl);
+            for(var ti3=0;ti3<=nT3;ti3++){
+              var t3=ti3/nT3;
+              var px4=ax3+t3*(bx3-ax3), py4=ay3+t3*(by3-ay3);
+              ctx.beginPath(); ctx.moveTo(px4,py4);
+              ctx.lineTo(px4+nx3*tickH3-tx3*tickH3*0.5,
+                         py4+ny3*tickH3-ty3*tickH3*0.5);
+              ctx.stroke();
+            }
+          }
+          break;
+        }
+
+        // ── ЗДАНИЕ ──────────────────────────────────────────────────────
+        case 'zdanie':{
+          if(pts.length<3)break;
+          // Fill based on material
+          var mat=sym.props&&sym.props.mat||'кир';
+          var fillClr=mat==='кир'?'rgba(220,180,160,0.5)':
+                      mat==='дер'?'rgba(200,230,180,0.5)':
+                      'rgba(200,200,200,0.5)';
+          ctx.fillStyle=fillClr;
+          ctx.beginPath();
+          pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+          ctx.closePath(); ctx.fill();
+          // Outline
+          ctx.strokeStyle=col; ctx.lineWidth=Math.max(0.04,1/scl);
+          ctx.beginPath();
+          pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+          ctx.closePath(); ctx.stroke();
+          // Label: floors and material
+          var cx2=pts.reduce(function(s,p){return s+p.x;},0)/pts.length;
+          var cy2=pts.reduce(function(s,p){return s+p.y;},0)/pts.length;
+          var lbl=(sym.props&&sym.props.fl>1?sym.props.fl+' ':'')+
+                  (sym.props&&sym.props.mat?sym.props.mat.toUpperCase():'К')+
+                  (sym.props&&sym.props.type==='н'?'Н':sym.props&&sym.props.type==='пр'?'Пр':'');
+          ctx.save(); ctx.translate(cx2,cy2); ctx.scale(1/scl,-1/scl);
+          ctx.font='bold 7px Arial'; ctx.fillStyle='#1e293b';
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(lbl,0,0); ctx.restore();
+          break;
+        }
+
+        // ── СВАЯ ────────────────────────────────────────────────────────
+        case 'svaya':{
+          var dia=parseFloat(sym.props&&sym.props.dia||0.3);
+          var r3=Math.max(dia/2,1/scl);
+          // Filled circle (головка сваи)
+          ctx.beginPath(); ctx.arc(pts[0].x,pts[0].y,r3,0,Math.PI*2);
+          ctx.fill();
+          // Cross inside
+          ctx.strokeStyle='#fff'; ctx.lineWidth=Math.max(0.02,0.4/scl);
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x-r3,pts[0].y); ctx.lineTo(pts[0].x+r3,pts[0].y);
+          ctx.moveTo(pts[0].x,pts[0].y-r3); ctx.lineTo(pts[0].x,pts[0].y+r3);
+          ctx.stroke();
+          // Elevation label
+          if(sym.props&&sym.props.h){
+            ctx.save(); ctx.translate(pts[0].x,pts[0].y); ctx.scale(1/scl,-1/scl);
+            ctx.font='5px Arial'; ctx.fillStyle='#1e293b';
+            ctx.textAlign='left'; ctx.textBaseline='top';
+            ctx.fillText(parseFloat(sym.props.h).toFixed(2),r3*scl+2,0);
+            ctx.restore();
+          }
+          break;
+        }
+
+        default: break;
       }
       ctx.restore();
-    }catch(_){}
+    }catch(ex){/* silent */}
   });
+}
+
+// ── Manhole helper ──────────────────────────────────────────────────────
+function _drawManhole(ctx,scl,pt,col,inner,props){
+  var r=Math.max(0.06,2/scl);
+  ctx.strokeStyle=col; ctx.lineWidth=Math.max(0.03,0.6/scl);
+  // Outer circle
+  ctx.beginPath(); ctx.arc(pt.x,pt.y,r,0,Math.PI*2); ctx.stroke();
+  // Inner symbol
+  var h=r*0.65;
+  ctx.lineWidth=Math.max(0.02,0.4/scl);
+  if(inner==='+'){
+    ctx.beginPath();
+    ctx.moveTo(pt.x-h,pt.y); ctx.lineTo(pt.x+h,pt.y);
+    ctx.moveTo(pt.x,pt.y-h); ctx.lineTo(pt.x,pt.y+h);
+    ctx.stroke();
+  } else if(inner==='H'||inner==='—'){
+    ctx.beginPath();
+    ctx.moveTo(pt.x-h,pt.y); ctx.lineTo(pt.x+h,pt.y);
+    ctx.stroke();
+  } else if(inner==='/'){
+    ctx.beginPath();
+    ctx.moveTo(pt.x-h,pt.y+h); ctx.lineTo(pt.x+h,pt.y-h);
+    ctx.stroke();
+  } else if(inner==='#'){
+    ctx.beginPath();
+    ctx.moveTo(pt.x-h,pt.y-h/2); ctx.lineTo(pt.x+h,pt.y-h/2);
+    ctx.moveTo(pt.x-h,pt.y+h/2); ctx.lineTo(pt.x+h,pt.y+h/2);
+    ctx.stroke();
+  } else if(inner==='E'){
+    ctx.beginPath();
+    ctx.moveTo(pt.x-h/2,pt.y-h); ctx.lineTo(pt.x-h/2,pt.y+h);
+    ctx.moveTo(pt.x-h/2,pt.y); ctx.lineTo(pt.x+h/2,pt.y);
+    ctx.stroke();
+  }
+  // Number label
+  if(props&&props.num){
+    ctx.save(); ctx.translate(pt.x,pt.y); ctx.scale(1/scl,-1/scl);
+    ctx.font='5px Arial'; ctx.fillStyle='#1e293b';
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillText(props.num,r*scl+1,0); ctx.restore();
+  }
+  // Elevation label
+  if(props&&props.el){
+    ctx.save(); ctx.translate(pt.x,pt.y); ctx.scale(1/scl,-1/scl);
+    ctx.font='5px Arial'; ctx.fillStyle='#1e293b';
+    ctx.textAlign='left'; ctx.textBaseline='bottom';
+    ctx.fillText(parseFloat(props.el).toFixed(2),r*scl+1,0); ctx.restore();
+  }
 }
 function _pipe(ctx,pts,oX,oY,scl,col,dash,ltr){
   if(pts.length<2)return;
@@ -2903,19 +3200,87 @@ function snpClose(){
 // ── Build pictogram grid ───────────────────────────────────────────────────
 function _snpBuildGrid(){
   var g=document.getElementById('snp-grid'); if(!g)return; g.innerHTML='';
-  Object.keys(_ST).forEach(function(id){
-    var t=_ST[id];
-    var btn=document.createElement('button');
-    btn.id='snp-btn-'+id;
-    btn.title=t.label;
-    btn.innerHTML='<div style="font-size:20px;line-height:1.2;">'+t.icon+'</div>'+
-      '<div style="font-size:9px;margin-top:2px;line-height:1.1;word-break:break-word;">'+t.label+'</div>';
-    btn.style.cssText='background:#2d3e6a;border:2px solid transparent;border-radius:8px;'+
-      'padding:5px 2px;cursor:pointer;color:#f1f5f9;transition:.1s;text-align:center;'+
-      'min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;';
-    btn.onclick=function(){_snpSelectType(id);};
-    g.appendChild(btn);
+  // Group symbols by category
+  var cats={
+    'Трубопроводы':['voda','kanal','gaz','teplo','kabel','svyaz'],
+    'Колодцы':['kol_voda','kol_kanal','kol_gaz','kol_teplo','kol_el'],
+    'Столбы':['stolb_d','stolb_m','stolb_zh'],
+    'Ограды':['ograda_kap','ograda_d','podpor'],
+    'Прочие':['zdanie','svaya']
+  };
+  g.style.gridTemplateColumns='repeat(5,1fr)';
+  g.innerHTML='';
+
+  Object.keys(cats).forEach(function(catName){
+    // Category header
+    var h=document.createElement('div');
+    h.style.cssText='grid-column:1/-1;font-size:8px;color:#64748b;font-weight:700;'+
+      'text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;';
+    h.textContent=catName;
+    g.appendChild(h);
+
+    cats[catName].forEach(function(id){
+      var t=_ST[id]; if(!t)return;
+      var btn=document.createElement('button');
+      btn.id='snp-btn-'+id;
+      btn.title=t.label;
+
+      // SVG mini-preview of the symbol
+      var svg=_snpMiniSvg(id,t);
+      btn.innerHTML=svg+'<div style="font-size:8px;margin-top:2px;color:#cbd5e1;'+
+        'line-height:1.1;word-break:break-word;text-align:center;">'+
+        (t.code?'<b>'+t.code+'</b> ':'')+
+        t.label.replace('Водопровод','Водопр.').replace('Канализация','Канализ.').
+          replace('Теплосеть','Тепло').replace('деревян.','дер.').
+          replace('Подпорная стенка','Подпорн.')+'</div>';
+      btn.style.cssText='background:#1e3a5f;border:2px solid transparent;border-radius:6px;'+
+        'padding:4px 2px 3px;cursor:pointer;color:#f1f5f9;min-height:50px;'+
+        'display:flex;flex-direction:column;align-items:center;justify-content:flex-start;';
+      btn.onclick=function(){_snpSelectType(id);};
+      g.appendChild(btn);
+    });
   });
+}
+
+function _snpMiniSvg(id,t){
+  var c=t.color||'#2563eb';
+  var w=44,h=28;
+  // Pipe-type symbols
+  if(['voda','kanal','gaz','teplo','kabel','svyaz'].indexOf(id)>=0){
+    return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28">'+
+      '<line x1="4" y1="14" x2="40" y2="14" stroke="'+c+'" stroke-width="1.5" stroke-dasharray="6,3"/>'+
+      '<text x="22" y="11" text-anchor="middle" fill="'+c+'" font-size="8" font-weight="bold" font-family="Arial">'+t.code+'</text>'+
+      '</svg>';
+  }
+  // Manhole symbols
+  if(id==='kol_voda') return _mhSvg(c,'—');
+  if(id==='kol_kanal') return _mhSvg(c,'+');
+  if(id==='kol_gaz') return _mhSvg(c,'/');
+  if(id==='kol_teplo') return _mhSvg(c,'#');
+  if(id==='kol_el') return _mhSvg(c,'E');
+  // Poles
+  if(id==='stolb_d') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><circle cx="22" cy="14" r="7" fill="none" stroke="'+c+'" stroke-width="1.5"/><text x="22" y="28" text-anchor="middle" fill="'+c+'" font-size="7">д</text></svg>';
+  if(id==='stolb_m') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><circle cx="22" cy="14" r="6" fill="'+c+'"/><text x="22" y="28" text-anchor="middle" fill="'+c+'" font-size="7">м</text></svg>';
+  if(id==='stolb_zh') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><rect x="16" y="8" width="12" height="12" fill="'+c+'"/><text x="22" y="28" text-anchor="middle" fill="'+c+'" font-size="7">ж/б</text></svg>';
+  // Fences
+  if(id==='ograda_kap') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><line x1="4" y1="14" x2="40" y2="14" stroke="'+c+'" stroke-width="2"/><line x1="10" y1="14" x2="10" y2="21" stroke="'+c+'" stroke-width="1.2"/><line x1="18" y1="14" x2="18" y2="21" stroke="'+c+'" stroke-width="1.2"/><line x1="26" y1="14" x2="26" y2="21" stroke="'+c+'" stroke-width="1.2"/><line x1="34" y1="14" x2="34" y2="21" stroke="'+c+'" stroke-width="1.2"/></svg>';
+  if(id==='ograda_d') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><line x1="4" y1="14" x2="40" y2="14" stroke="'+c+'" stroke-width="1.2" stroke-dasharray="5,3"/><line x1="10" y1="14" x2="10" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="20" y1="14" x2="20" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="30" y1="14" x2="30" y2="21" stroke="'+c+'" stroke-width="1"/></svg>';
+  if(id==='podpor') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><line x1="4" y1="14" x2="40" y2="14" stroke="'+c+'" stroke-width="2"/><line x1="10" y1="14" x2="7" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="18" y1="14" x2="15" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="26" y1="14" x2="23" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="34" y1="14" x2="31" y2="21" stroke="'+c+'" stroke-width="1"/></svg>';
+  // Building
+  if(id==='zdanie') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><rect x="5" y="5" width="34" height="18" fill="rgba(220,180,160,0.5)" stroke="'+c+'" stroke-width="1.5"/><text x="22" y="16" text-anchor="middle" fill="'+c+'" font-size="7">КЖ</text></svg>';
+  // Svaya
+  if(id==='svaya') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><circle cx="22" cy="14" r="7" fill="'+c+'"/><line x1="15" y1="14" x2="29" y2="14" stroke="white" stroke-width="1.2"/><line x1="22" y1="7" x2="22" y2="21" stroke="white" stroke-width="1.2"/></svg>';
+  return '<svg width="'+w+'" height="'+h+'"><text x="22" y="16" text-anchor="middle" font-size="8">'+t.code+'</text></svg>';
+}
+function _mhSvg(c,inner){
+  var svg='<svg width="44" height="28" viewBox="0 0 44 28"><circle cx="22" cy="14" r="8" fill="none" stroke="'+c+'" stroke-width="1.5"/>';
+  if(inner==='+') svg+='<line x1="16" y1="14" x2="28" y2="14" stroke="'+c+'" stroke-width="1.2"/><line x1="22" y1="8" x2="22" y2="20" stroke="'+c+'" stroke-width="1.2"/>';
+  else if(inner==='—') svg+='<line x1="16" y1="14" x2="28" y2="14" stroke="'+c+'" stroke-width="1.2"/>';
+  else if(inner==='/') svg+='<line x1="16" y1="20" x2="28" y2="8" stroke="'+c+'" stroke-width="1.2"/>';
+  else if(inner==='#') svg+='<line x1="16" y1="11" x2="28" y2="11" stroke="'+c+'" stroke-width="1"/><line x1="16" y1="17" x2="28" y2="17" stroke="'+c+'" stroke-width="1"/>';
+  else if(inner==='E') svg+='<line x1="19" y1="8" x2="19" y2="20" stroke="'+c+'" stroke-width="1.2"/><line x1="19" y1="14" x2="26" y2="14" stroke="'+c+'" stroke-width="1"/>';
+  svg+='</svg>';
+  return svg;
 }
 
 // ── Select element type ────────────────────────────────────────────────────
@@ -3028,6 +3393,11 @@ function _snpHandleClick(wx,wy){
 
   if(t.clicks==='one'){ snpFinish(); }
   else if(t.clicks==='two'&&_snpPts.length>=2){ snpFinish(); }
+  else if(t.clicks==='area'&&_snpPts.length>=3){
+    // Auto-close check: click near first point
+    var fp=_snpPts[0];
+    if(Math.hypot(wx-fp.x,wy-fp.y)<10/scale){ snpFinish(); }
+  }
 
   requestDraw();
   return true;
@@ -3045,9 +3415,13 @@ function snpFinish(){
   }
   var col=document.getElementById('snp-color');
   var c=col?col.value:'#1e3a5f';
+  // For area types, close the polygon
+  var finalPts=_snpPts.slice();
+  if((_ST[_snpType]&&_ST[_snpType].clicks==='area')&&finalPts.length>=3){
+    finalPts.push({x:finalPts[0].x,y:finalPts[0].y});}
   cadSymbols.push({
     type:_snpType,
-    pts:_snpPts.slice(),
+    pts:finalPts,
     props:Object.assign({},_snpProp),
     color:c,
     label:t.label
@@ -3130,3 +3504,397 @@ document.addEventListener('keydown',function(e){
     e.preventDefault();
   }
 });
+
+
+// ── DOCX Export via server-side API ───────────────────────────────────────
+function exportToDocx(){
+  var pts=currentMode==='dxf'?points:manualPoints;
+  if(!pts||pts.length===0){showMessage('DOCX','Нет точек для экспорта','warning');return;}
+
+  // Build data payload
+  var payload={
+    title:'Ведомость геодезических точек',
+    date:new Date().toLocaleDateString('ru-RU'),
+    points:pts.map(function(p){
+      return{id:p.id,x:p.x.toFixed(4),y:p.y.toFixed(4),z:p.z!=null?p.z.toFixed(4):'—',type:p.type||''};
+    }),
+    dimensions:(dimensions||[]).map(function(d){
+      return{name:'P'+d.p1.id+'−P'+d.p2.id,length:Math.hypot(d.p2.x-d.p1.x,d.p2.y-d.p1.y).toFixed(4)};
+    }),
+    area:_savedArea>0?{
+      area:_savedArea.toFixed(4),
+      perim:_savedPerimeter.toFixed(4),
+      vol:(_savedVolume||0).toFixed(4),
+      pileVol:(_savedPileVolume||0).toFixed(4)
+    }:null,
+    symbols:(cadSymbols||[]).map(function(s){
+      return{type:s.label,pts:s.pts.length};
+    })
+  };
+
+  // Send to /api/export-docx
+  showMessage('DOCX','Формирование документа...','info');
+  fetch('/api/export-docx',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  }).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.blob();
+  }).then(function(blob){
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download='geodesy_'+new Date().getTime()+'.docx';
+    a.click();URL.revokeObjectURL(url);
+    showMessage('DOCX','Файл скачан ✓','success');
+  }).catch(function(err){
+    showMessage('DOCX','Ошибка: '+err.message,'error');
+  });
+}
+
+
+// ── Export to DOCX via server ─────────────────────────────────────────────
+async function _exportDocx(pts, dims, meta){
+  try{
+    var payload={
+      title: meta.title||'Исполнительная схема',
+      org: meta.org||'',
+      coord: meta.coord||'',
+      height: meta.height||'',
+      scale: meta.scale||'',
+      note: meta.note||'',
+      date: new Date().toLocaleDateString('ru-RU'),
+      points: pts.map(function(p){return{id:p.id,x:p.x,y:p.y,z:p.z,type:p.type||''}}),
+      dimensions: (dims||[]).map(function(d){
+        return{p1:d.p1.id,p2:d.p2.id,len:Math.hypot(d.p2.x-d.p1.x,d.p2.y-d.p1.y)};
+      }),
+      area: _savedArea||0,
+      perimeter: _savedPerimeter||0,
+      volume: _savedVolume||0,
+      pileVolume: _savedPileVolume||0
+    };
+    var resp=await fetch('/api/export-docx',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    if(resp.status===401){window.location.href='/login';return;}
+    if(!resp.ok){var err=await resp.text();showMessage('Ошибка','DOCX: '+err,'error');return;}
+    var blob=await resp.blob();
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=(meta.title||'report').replace(/\s+/g,'_')+'.docx';
+    a.click();URL.revokeObjectURL(url);
+    showMessage('DOCX','Файл скачан успешно','success');
+  }catch(e){showMessage('Ошибка','DOCX: '+e.message,'error');}
+}
+
+
+// ═══ TOPO SIGN DRAWING FUNCTIONS ═══════════════════════════════════════════
+function _tpLine(ctx,pts,scl,col,lw,dash){
+  if(pts.length<2)return;
+  ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw/scl;
+  if(dash&&dash.length)ctx.setLineDash(dash.map(function(v){return v/scl;}));
+  ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+  ctx.stroke();ctx.setLineDash([]);ctx.restore();
+}
+function _tpPoly(ctx,pts,scl,fill,stroke,lw,dash){
+  if(pts.length<2)return;
+  ctx.save();ctx.beginPath();
+  pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+  ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw/scl;
+    if(dash&&dash.length)ctx.setLineDash(dash.map(function(v){return v/scl;}));
+    ctx.stroke();ctx.setLineDash([]);}
+  ctx.restore();
+}
+function _tpLabel(ctx,x,y,text,px,col,bold,scl){
+  ctx.save();ctx.translate(x,y);ctx.scale(1/scl,-1/scl);
+  ctx.fillStyle=col||'#000';ctx.font=(bold?'bold ':'')+px+'px Arial';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,0,0);ctx.restore();
+}
+function _tpOffsetPoly(pts,off){
+  return pts.map(function(p,i){
+    var nx=0,ny=0,cnt=0;
+    if(i<pts.length-1){var dx=pts[i+1].x-p.x,dy=pts[i+1].y-p.y,l=Math.hypot(dx,dy)||1;nx+=(-dy/l);ny+=(dx/l);cnt++;}
+    if(i>0){var dx2=p.x-pts[i-1].x,dy2=p.y-pts[i-1].y,l2=Math.hypot(dx2,dy2)||1;nx+=(-dy2/l2);ny+=(dx2/l2);cnt++;}
+    if(cnt){nx/=cnt;ny/=cnt;var nl=Math.hypot(nx,ny)||1;nx/=nl;ny/=nl;}
+    return{x:p.x+off*nx,y:p.y+off*ny};
+  });
+}
+function _ptInPoly(pt,vs){
+  var inside=false;
+  for(var i=0,j=vs.length-1;i<vs.length;j=i++){
+    var xi=vs[i].x,yi=vs[i].y,xj=vs[j].x,yj=vs[j].y;
+    if(((yi>pt.y)!==(yj>pt.y))&&(pt.x<(xj-xi)*(pt.y-yi)/(yj-yi)+xi))inside=!inside;
+  }
+  return inside;
+}
+// Building (capital/non-capital)
+function _tpDrawBuilding(ctx,pts,scl,prop,capital){
+  if(pts.length<3)return;
+  _tpPoly(ctx,pts,scl,capital?'rgba(180,180,185,.4)':'rgba(220,220,220,.25)',
+    '#1e293b',capital?0.5:0.4,capital?null:[4,2]);
+  var cx=pts.reduce(function(a,p){return a+p.x;},0)/pts.length;
+  var cy=pts.reduce(function(a,p){return a+p.y;},0)/pts.length;
+  if(prop&&prop.floors&&prop.floors!=='1')_tpLabel(ctx,cx,cy,prop.floors,7,'#1e293b',true,scl);
+}
+// Ruin
+function _tpDrawRuin(ctx,pts,scl){
+  _tpPoly(ctx,pts,scl,'rgba(200,200,200,.15)','#94a3b8',0.3,[2,2]);
+}
+// Chimney
+function _tpDrawChimney(ctx,p,scl,prop){
+  if(!p)return;
+  var r=2.5/scl;
+  ctx.save();ctx.strokeStyle='#1e293b';ctx.lineWidth=0.6/scl;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#1e293b';ctx.beginPath();ctx.arc(p.x,p.y,0.5/scl,0,Math.PI*2);ctx.fill();
+  if(prop&&prop.h)_tpLabel(ctx,p.x,p.y+r*2.2,'тр.'+prop.h+'м',5,'#374151',false,scl);
+  ctx.restore();
+}
+// Water tower
+function _tpDrawWaterTower(ctx,p,scl,prop){
+  if(!p)return;
+  var r=2.5/scl;
+  ctx.save();ctx.strokeStyle='#1e293b';ctx.lineWidth=0.6/scl;ctx.fillStyle='rgba(180,200,220,.3)';
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+  var s=r*0.55;ctx.strokeRect(p.x-s,p.y-s,s*2,s*2);
+  if(prop&&prop.h)_tpLabel(ctx,p.x,p.y-r*2,'бш.'+prop.h+'м',5,'#1e293b',false,scl);
+  ctx.restore();
+}
+// Fence
+function _tpDrawFence(ctx,pts,scl,capital){
+  if(pts.length<2)return;
+  var col=capital?'#1e293b':'#475569';
+  _tpLine(ctx,pts,scl,col,capital?0.8:0.5,null);
+  var step=3;
+  for(var i=0;i<pts.length-1;i++){
+    var ax=pts[i].x,ay=pts[i].y,bx=pts[i+1].x,by=pts[i+1].y;
+    var len=Math.hypot(bx-ax,by-ay),tx=(bx-ax)/len,ty=(by-ay)/len,nx=-ty,ny=tx;
+    var n=Math.floor(len/step);
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=(capital?0.5:0.35)/scl;
+    for(var k=1;k<n;k++){
+      var px2=ax+tx*k*step,py2=ay+ty*k*step;
+      ctx.beginPath();ctx.moveTo(px2,py2);ctx.lineTo(px2+nx*1.2/scl,py2+ny*1.2/scl);ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+// Pipe (utilities: В,К,Г,Т)
+function _tpDrawPipe(ctx,pts,scl,letter,sub){
+  if(pts.length<2)return;
+  var cols={В:'#2563eb',К:'#7c3aed',Г:'#16a34a',Т:'#ea580c'};
+  var col=cols[letter]||'#374151';
+  _tpLine(ctx,pts,scl,col,0.7,null);
+  var total=0;
+  for(var i=0;i<pts.length-1;i++)total+=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);
+  var mid=total/2,dist=0;
+  for(var i=0;i<pts.length-1;i++){
+    var seg=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);
+    if(dist+seg>=mid){
+      var t=(mid-dist)/seg;
+      var mx=pts[i].x+(pts[i+1].x-pts[i].x)*t;
+      var my=pts[i].y+(pts[i+1].y-pts[i].y)*t;
+      var angle=Math.atan2(pts[i+1].y-pts[i].y,pts[i+1].x-pts[i].x);
+      ctx.save();ctx.translate(mx,my);ctx.scale(1/scl,-1/scl);ctx.rotate(-angle);
+      ctx.fillStyle=col;ctx.font='bold 8px Arial';ctx.textAlign='center';
+      ctx.fillText(letter+(sub?'('+sub+')':''),0,-3);ctx.restore();break;
+    }
+    dist+=seg;
+  }
+}
+// Cable (electricity/telecom)
+function _tpDrawCable(ctx,pts,scl,letter,sub){
+  if(pts.length<2)return;
+  var col='#dc2626';
+  _tpLine(ctx,pts,scl,col,0.5,null);
+  // Arrow marks at midpoints
+  for(var i=0;i<pts.length-1;i++){
+    var ax=pts[i].x,ay=pts[i].y,bx=pts[i+1].x,by=pts[i+1].y;
+    var len=Math.hypot(bx-ax,by-ay),tx=(bx-ax)/len,ty=(by-ay)/len,nx=-ty,ny=tx;
+    var ar=1.5/scl,mx=ax+tx*len/2,my=ay+ty*len/2;
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=0.4/scl;
+    ctx.beginPath();ctx.moveTo(mx+nx*ar,my+ny*ar);ctx.lineTo(mx,my);ctx.lineTo(mx-nx*ar,my-ny*ar);ctx.stroke();
+    ctx.restore();
+  }
+  if(pts.length>=2){
+    var mx2=(pts[0].x+pts[pts.length-1].x)/2,my2=(pts[0].y+pts[pts.length-1].y)/2;
+    _tpLabel(ctx,mx2,my2+2/scl,letter+(sub?'('+sub+'кВ)':''),5,col,false,scl);
+  }
+}
+// Well
+function _tpDrawWell(ctx,p,scl,prop){
+  if(!p)return;
+  var r=1.8/scl;
+  ctx.save();ctx.strokeStyle='#0284c7';ctx.fillStyle='#fff';ctx.lineWidth=0.7/scl;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(p.x-r,p.y);ctx.lineTo(p.x+r,p.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(p.x,p.y-r);ctx.lineTo(p.x,p.y+r);ctx.stroke();
+  if(prop&&prop.type==='артезианский'){ctx.beginPath();ctx.arc(p.x,p.y,r*1.5,0,Math.PI*2);ctx.stroke();}
+  ctx.restore();
+}
+// Spring
+function _tpDrawSpring(ctx,p,scl){
+  if(!p)return;
+  var r=1.2/scl;
+  ctx.save();ctx.fillStyle='#0284c7';ctx.strokeStyle='#0284c7';ctx.lineWidth=0.6/scl;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.moveTo(p.x+r,p.y);ctx.lineTo(p.x+r*3,p.y);ctx.stroke();
+  ctx.restore();
+}
+// Ditch
+function _tpDrawDitch(ctx,pts,scl,w){
+  if(pts.length<2)return;
+  var lw=Math.max(parseFloat(w||0.5)*0.4,0.4);
+  _tpLine(ctx,pts,scl,'#0284c7',lw,null);
+  for(var i=0;i<pts.length-1;i++){
+    var ax=pts[i].x,ay=pts[i].y,bx=pts[i+1].x,by=pts[i+1].y;
+    var len=Math.hypot(bx-ax,by-ay),tx=(bx-ax)/len,ty=(by-ay)/len,nx=-ty,ny=tx;
+    ctx.save();ctx.strokeStyle='#0284c7';ctx.lineWidth=0.3/scl;
+    for(var k=2;k<len;k+=2){
+      var px2=ax+tx*k,py2=ay+ty*k;
+      ctx.beginPath();ctx.moveTo(px2,py2);ctx.lineTo(px2+nx*0.8/scl,py2+ny*0.8/scl);ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+// Tree
+function _tpDrawTree(ctx,p,scl,prop){
+  if(!p)return;
+  var d=parseFloat(prop&&prop.d||4),h=parseFloat(prop&&prop.h||10);
+  var cr=d/2,sr=Math.max(0.4/scl,0.3);
+  ctx.save();
+  ctx.fillStyle='#15803d';ctx.beginPath();ctx.arc(p.x,p.y,sr,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#15803d';ctx.fillStyle='rgba(21,128,61,.1)';ctx.lineWidth=0.5/scl;
+  ctx.beginPath();ctx.arc(p.x,p.y,cr,0,Math.PI*2);ctx.fill();ctx.stroke();
+  _tpLabel(ctx,p.x,p.y+cr+1.5/scl,h+'м',5,'#15803d',false,scl);
+  ctx.restore();
+}
+// Shrub
+function _tpDrawShrub(ctx,p,scl){
+  if(!p)return;
+  var r=1.2/scl;
+  ctx.save();ctx.strokeStyle='#15803d';ctx.fillStyle='rgba(21,128,61,.15)';ctx.lineWidth=0.5/scl;
+  [[-r,0],[0,r*0.7],[r,0]].forEach(function(o){
+    ctx.beginPath();ctx.arc(p.x+o[0],p.y+o[1],r*0.8,0,Math.PI*2);ctx.fill();ctx.stroke();
+  });
+  ctx.restore();
+}
+// Lawn contour
+function _tpDrawLawn(ctx,pts,scl){
+  if(pts.length<3)return;
+  _tpPoly(ctx,pts,scl,'rgba(21,128,61,.1)','#15803d',0.3,[4,2]);
+}
+// Road
+function _tpDrawRoad(ctx,pts,scl,capital,w){
+  if(pts.length<2)return;
+  var hw=parseFloat(w||6)/2,col=capital?'#374151':'#92400e';
+  var outer=_tpOffsetPoly(pts,hw),inner=_tpOffsetPoly(pts,-hw);
+  ctx.save();
+  if(capital){
+    ctx.beginPath();
+    outer.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+    for(var k=inner.length-1;k>=0;k--)ctx.lineTo(inner[k].x,inner[k].y);
+    ctx.closePath();ctx.fillStyle='rgba(200,200,200,.35)';ctx.fill();
+  }
+  ctx.strokeStyle=col;ctx.lineWidth=0.6/scl;
+  [outer,inner].forEach(function(e){
+    ctx.beginPath();e.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();
+  });
+  if(!capital){ctx.lineWidth=0.3/scl;ctx.setLineDash([5/scl,3/scl]);
+    ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();ctx.setLineDash([]);}
+  ctx.restore();
+}
+// Geodetic point (triangulation)
+function _tpDrawGeoPt(ctx,p,scl,prop){
+  if(!p)return;
+  var r=3/scl;
+  ctx.save();ctx.strokeStyle='#dc2626';ctx.fillStyle='#dc2626';ctx.lineWidth=0.7/scl;
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y+r);
+  ctx.lineTo(p.x+r*0.866,p.y-r*0.5);
+  ctx.lineTo(p.x-r*0.866,p.y-r*0.5);
+  ctx.closePath();ctx.stroke();
+  ctx.beginPath();ctx.arc(p.x,p.y,0.7/scl,0,Math.PI*2);ctx.fill();
+  if(prop&&prop.n)_tpLabel(ctx,p.x,p.y+r+1.5/scl,prop.n,6,'#dc2626',true,scl);
+  ctx.restore();
+}
+// Benchmark (репер)
+function _tpDrawReper(ctx,p,scl,prop){
+  if(!p)return;
+  var r=2/scl;
+  ctx.save();ctx.strokeStyle='#dc2626';ctx.lineWidth=0.7/scl;ctx.fillStyle='rgba(220,38,38,.15)';
+  ctx.fillRect(p.x-r,p.y-r*0.5,r*2,r);ctx.strokeRect(p.x-r,p.y-r*0.5,r*2,r);
+  ctx.beginPath();ctx.moveTo(p.x-r*1.5,p.y+r*0.5);ctx.lineTo(p.x+r*1.5,p.y+r*0.5);ctx.stroke();
+  if(prop&&prop.h)_tpLabel(ctx,p.x,p.y-r*1.5,'Rp '+prop.h,5,'#dc2626',false,scl);
+  ctx.restore();
+}
+// Boundary
+function _tpDrawBoundary(ctx,pts,scl,type){
+  if(pts.length<2)return;
+  var col=type==='red'?'#dc2626':'#1e293b';
+  _tpLine(ctx,pts,scl,col,type==='red'?0.7:0.5,type==='red'?[6,3]:[3,3]);
+  if(type==='plot'){
+    ctx.save();ctx.fillStyle=col;
+    pts.forEach(function(p){ctx.beginPath();ctx.arc(p.x,p.y,0.8/scl,0,Math.PI*2);ctx.fill();});
+    ctx.restore();
+  }
+}
+
+// ── _drawSymbols: render all placed topo signs (world transform active) ────
+function _drawSymbols(ctx,scl,oX,oY,pr){
+  cadSymbols.forEach(function(sym){
+    try{
+      var def=_TP[sym.type];
+      if(!def||!def.draw)return;
+      ctx.save();
+      def.draw(ctx,sym.pts,scl,sym.props||{});
+      ctx.restore();
+    }catch(e){}
+  });
+}
+
+// ── Preview in draw() (world transform active) ─────────────────────────────
+function _snpDrawPreview(ctx,scl){
+  if(!_tpActive||!_tpType||_tpPts.length===0)return;
+  var def=_TP[_tpType]; if(!def)return;
+  var pts=_tpPts.slice();
+  if(_tpMouse&&def.clicks!=='one')pts.push({x:_tpMouse.x,y:_tpMouse.y});
+  ctx.save();ctx.globalAlpha=0.6;
+  if(pts.length>=1)try{def.draw(ctx,pts,scl,_tpProp);}catch(e){}
+  ctx.globalAlpha=1;
+  _tpPts.forEach(function(p,i){
+    ctx.fillStyle=i===0?'#16a34a':'#2563eb';
+    ctx.beginPath();ctx.arc(p.x,p.y,4/scl,0,Math.PI*2);ctx.fill();
+  });
+  if(_tpMouse&&_tpPts.length>0&&def.clicks!=='one'){
+    ctx.setLineDash([4/scl,3/scl]);ctx.strokeStyle='#94a3b8';ctx.lineWidth=0.5/scl;
+    ctx.beginPath();var lp=_tpPts[_tpPts.length-1];
+    ctx.moveTo(lp.x,lp.y);ctx.lineTo(_tpMouse.x,_tpMouse.y);
+    ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+// ── Click handler ─────────────────────────────────────────────────────────
+function _tpHandleClick(wx,wy){
+  if(!_tpActive||!_tpType)return false;
+  var def=_TP[_tpType];
+  var th=12/scale,best=null,bd=Infinity;
+  if(cadSnapPoints)cadSnapPoints.forEach(function(p){
+    var d=Math.hypot(p.x-wx,p.y-wy);if(d<th&&d<bd){bd=d;best=p;}
+  });
+  if(best){wx=best.x;wy=best.y;}
+  var now=Date.now();
+  if((def.clicks==='line'||def.clicks==='poly')&&_tpPts.length>=2&&now-_tpLastT<400){
+    snpFinish();_tpLastT=0;return true;
+  }
+  _tpLastT=now;
+  _tpPts.push({x:wx,y:wy});
+  var cnt=document.getElementById('snp-pts-count');
+  if(cnt)cnt.textContent=_tpPts.length+' pt';
+  if(def.clicks==='one')snpFinish();
+  requestDraw();return true;
+}
