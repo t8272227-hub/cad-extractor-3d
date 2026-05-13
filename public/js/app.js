@@ -366,7 +366,7 @@ draw();
 }
 function cadToScreen(x,y){return{x:panX+(x-cadOriginX)*scale,y:panY-(y-cadOriginY)*scale};}
 function screenToCad(x,y){if(northAngle!==0){var _cv=document.getElementById('cad-canvas'),_cx=_cv.width/2,_cy=_cv.height/2;var _a=northAngle*Math.PI/180,_dx=x-_cx,_dy=y-_cy;x=_cx+_dx*Math.cos(_a)-_dy*Math.sin(_a);y=_cy+_dx*Math.sin(_a)+_dy*Math.cos(_a);}return{x:cadOriginX+(x-panX)/scale,y:cadOriginY+(panY-y)/scale};}
-function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=isExportingPDF?4:1;if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';return;}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid&&cadMaxX>cadMinX){var _rw=cadMaxX-cadMinX;var _mag=Math.pow(10,Math.floor(Math.log10(_rw/8)));var _gs=[1,2,5].reduce(function(p,v){return Math.abs(_rw/8-v*_mag)<Math.abs(_rw/8-p*_mag)?v:p;})*_mag;cx.save();cx.strokeStyle="rgba(100,140,220,0.18)";cx.lineWidth=0.4/scale;for(var _xi=Math.floor(cadMinX/_gs)*_gs;_xi<=cadMaxX+_gs;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,cadMinY-_gs);cx.lineTo(_xi,cadMaxY+_gs);cx.stroke();}for(var _yi=Math.floor(cadMinY/_gs)*_gs;_yi<=cadMaxY+_gs;_yi+=_gs){cx.beginPath();cx.moveTo(cadMinX-_gs,_yi);cx.lineTo(cadMaxX+_gs,_yi);cx.stroke();}cx.restore();}if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}
+function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=(typeof window._pdfPr!=='undefined'&&window._pdfPr>0)?window._pdfPr:(isExportingPDF?4:1);if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';return;}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid&&cadMaxX>cadMinX){var _rw=cadMaxX-cadMinX;var _mag=Math.pow(10,Math.floor(Math.log10(_rw/8)));var _gs=[1,2,5].reduce(function(p,v){return Math.abs(_rw/8-v*_mag)<Math.abs(_rw/8-p*_mag)?v:p;})*_mag;cx.save();cx.strokeStyle="rgba(100,140,220,0.18)";cx.lineWidth=0.4/scale;for(var _xi=Math.floor(cadMinX/_gs)*_gs;_xi<=cadMaxX+_gs;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,cadMinY-_gs);cx.lineTo(_xi,cadMaxY+_gs);cx.stroke();}for(var _yi=Math.floor(cadMinY/_gs)*_gs;_yi<=cadMaxY+_gs;_yi+=_gs){cx.beginPath();cx.moveTo(cadMinX-_gs,_yi);cx.lineTo(cadMaxX+_gs,_yi);cx.stroke();}cx.restore();}if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}
   // Draw symbols in world space
   _drawSymbols(cx,scale,cadOriginX,cadOriginY,pr);
   // Live symbol preview
@@ -654,7 +654,7 @@ function deleteManualLine(id){manualLines=manualLines.filter(l=>l.id!==id);saveM
 function clearManualPoints(){manualPoints=[];manualLines=[];manLineStartPoint=null;earthworksData=null;editingManualPointId=null;customBoundaryPoly=null;const b=document.getElementById('btn-add-manual-point');b.innerHTML='<i class="fa-solid fa-plus mr-1"></i> Добавить';b.classList.remove('bg-emerald-600');b.classList.add('bg-blue-600');const r=document.getElementById('ew-result-box');if(r)r.classList.add('hidden');clearContours();saveManState();updateManualTable();updateManualLinesTable();fitManualView();}
 
 function drawManualCanvas(){
-    const c=document.getElementById('manual-canvas'),ctx=c.getContext('2d'),pr=manIsExportingPDF?4:1;ctx.fillStyle='#ffffff';ctx.fillRect(0,0,c.width,c.height);
+    const c=document.getElementById('manual-canvas'),ctx=c.getContext('2d'),pr=(typeof window._pdfPr!=='undefined'&&window._pdfPr>0)?window._pdfPr:(manIsExportingPDF?4:1);ctx.fillStyle='#ffffff';ctx.fillRect(0,0,c.width,c.height);
     if(bgImageProps.img&&bgImageProps.visible&&!manIsExportingPDF){ctx.save();ctx.globalAlpha=bgImageProps.opacity;const sp=manToScreen(bgImageProps.x,bgImageProps.y),w=bgImageProps.img.width*bgImageProps.scale*manScale,h=bgImageProps.img.height*bgImageProps.scale*manScale;ctx.drawImage(bgImageProps.img,sp.x,sp.y-h,w,h);ctx.restore();}
     if(!manIsExportingPDF){ctx.strokeStyle='#f1f5f9';ctx.lineWidth=1*pr;for(let x=(manPanX%50);x<c.width;x+=50*pr){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,c.height);ctx.stroke();}for(let y=(manPanY%50);y<c.height;y+=50*pr){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(c.width,y);ctx.stroke();}const o=manToScreen(0,0);ctx.strokeStyle='#cbd5e1';ctx.lineWidth=1.5*pr;ctx.setLineDash([5*pr,5*pr]);if(o.y>=0&&o.y<=c.height){ctx.beginPath();ctx.moveTo(0,o.y);ctx.lineTo(c.width,o.y);ctx.stroke();}if(o.x>=0&&o.x<=c.width){ctx.beginPath();ctx.moveTo(o.x,0);ctx.lineTo(o.x,c.height);ctx.stroke();}ctx.setLineDash([]);}
     if(earthworksData&&earthworksData.polygon){ctx.beginPath();earthworksData.polygon.forEach((p,i)=>{const sp=manToScreen(p.x,p.y);if(i===0)ctx.moveTo(sp.x,sp.y);else ctx.lineTo(sp.x,sp.y);});ctx.closePath();ctx.fillStyle='rgba(249, 115, 22, 0.15)';ctx.fill();ctx.strokeStyle='#f97316';ctx.lineWidth=1.5*pr;ctx.setLineDash([5*pr,5*pr]);ctx.stroke();ctx.setLineDash([]);}
@@ -796,10 +796,12 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     panY=10+(DH-20-wh*pdfSc)/2+mxY*pdfSc;
     scale=pdfSc;
     isExportingPDF=true;
+    window._pdfPr=1; // force pr=1 during PDF render (not pr=4)
     if(canvasId==='cad-canvas')draw();else drawManualCanvas();
     // Restore everything BEFORE copying snapshot
     document.getElementById=_gEBI;
     isExportingPDF=false;
+    window._pdfPr=0;
     panX=prevPanX;panY=prevPanY;scale=prevScale;
     if(canvasId==='cad-canvas')draw();else drawManualCanvas();
     // Copy off-screen render to A3 PDF canvas
@@ -973,72 +975,19 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
   var tblHtml='';
   // ── Build print overlay HTML ──────────────────────────────────────────
   var imgData=oc.toDataURL('image/jpeg',0.95);
-  var thS='font-size:'+fontPt+'pt;padding:0.5mm 1mm;background:#1e293b;color:#fff;'+
-    'border:0.3pt solid #334155;';
-  var tdS='font-size:'+fontPt+'pt;padding:0.4mm 1mm;border:0.2pt solid #cbd5e1;font-family:monospace;';
 
-  var tblHtml='<table style="border-collapse:collapse;width:100%;font-size:'+fontPt+'pt;margin-top:4mm;">'+
-    '<thead><tr>'+
-    '<th style="'+thS+'width:8mm">№</th>'+
-    '<th style="'+thS+'width:28mm">X, м</th>'+
-    '<th style="'+thS+'width:28mm">Y, м</th>'+
-    '<th style="'+thS+'width:18mm">Z, м</th>'+
-    '<th style="'+thS+'width:18mm">Тип</th>'+
-    '</tr></thead><tbody>';
-  pts.forEach(function(p,i){
-    var bg=i%2===0?'background:#f8fafc;':'';
-    tblHtml+='<tr style="'+bg+'">'+
-      '<td style="'+tdS+'">P'+p.id+'</td>'+
-      '<td style="'+tdS+'">'+p.x.toFixed(3)+'</td>'+
-      '<td style="'+tdS+'">'+p.y.toFixed(3)+'</td>'+
-      '<td style="'+tdS+'">'+(p.z!=null?p.z.toFixed(3):'—')+'</td>'+
-      '<td style="'+tdS+'">'+(p.type||'—')+'</td>'+
-      '</tr>';
-  });
-  tblHtml+='</tbody></table>';
-
-  // Add dimensions table
-  if(dims&&dims.length){
-    tblHtml+='<table style="border-collapse:collapse;margin-top:4mm;font-size:'+fontPt+'pt;">'+
-      '<thead><tr>'+
-      '<th style="'+thS+'width:20mm">Отрезок</th>'+
-      '<th style="'+thS+'width:25mm">Длина, м</th>'+
-      '</tr></thead><tbody>';
-    dims.forEach(function(d,i){
-      var bg=i%2===0?'background:#f8fafc;':'';
-      var len=Math.hypot(d.p2.x-d.p1.x,d.p2.y-d.p1.y);
-      tblHtml+='<tr style="'+bg+'">'+
-        '<td style="'+tdS+'">P'+d.p1.id+'–P'+d.p2.id+'</td>'+
-        '<td style="'+tdS+'">'+len.toFixed(3)+'</td>'+
-        '</tr>';
-    });
-    tblHtml+='</tbody></table>';
-  }
-
-  // Area/volume
-  if(_savedArea>0){
-    tblHtml+='<table style="border-collapse:collapse;margin-top:4mm;font-size:'+fontPt+'pt;">'+
-      '<thead><tr><th style="'+thS+'width:40mm">Параметр</th>'+
-      '<th style="'+thS+'width:25mm">Значение</th></tr></thead><tbody>'+
-      '<tr><td style="'+tdS+'">Площадь</td><td style="'+tdS+'">'+_savedArea.toFixed(3)+' м²</td></tr>'+
-      '<tr style="background:#f8fafc"><td style="'+tdS+'">Периметр</td><td style="'+tdS+'">'+_savedPerimeter.toFixed(3)+' м</td></tr>'+
-      (_savedVolume>0?'<tr><td style="'+tdS+'">Объём грунта</td><td style="'+tdS+'">'+_savedVolume.toFixed(3)+' м³</td></tr>':'');
-    if(_savedPileVolume>0){
-      tblHtml+='<tr style="background:#f8fafc"><td style="'+tdS+'">Объём бетона (сваи)</td><td style="'+tdS+'">'+_savedPileVolume.toFixed(3)+' м³</td></tr>'+
-        '<tr><td style="'+tdS+'font-weight:bold">Итого</td><td style="'+tdS+'font-weight:bold">'+(_savedVolume+_savedPileVolume).toFixed(3)+' м³</td></tr>';
-    }
-    tblHtml+='</tbody></table>';
-  }
-
-  // ── Build print overlay ───────────────────────────────────────────────
+  // ── Show overlay (image only — tables are separate DOCX) ────────────
   var overlay=document.getElementById('print-overlay');
-  if(!overlay){overlay=document.createElement('div');overlay.id='print-overlay';document.body.appendChild(overlay);}
+  if(!overlay){
+    overlay=document.createElement('div');
+    overlay.id='print-overlay';
+    document.body.appendChild(overlay);
+  }
   overlay.style.cssText='display:none;position:fixed;inset:0;background:#fff;z-index:9999;overflow-y:auto;';
   overlay.className='pdf-printing';
   overlay.innerHTML=
-    '<div style="max-width:297mm;margin:0 auto;padding:4mm;">' +
-    '<img src="'+imgData+'" style="width:100%;border:0.5pt solid #e2e8f0;display:block;" alt="Чертёж">' +
-    tblHtml +
+    '<div style="max-width:297mm;margin:8mm auto;padding:4mm;">' +
+    '<img src="'+imgData+'" style="width:100%;display:block;border:0.5pt solid #e2e8f0;" alt="Чертёж">' +
     '</div>';
 
   // Close btn (no-print)
