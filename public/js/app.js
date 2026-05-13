@@ -371,6 +371,7 @@ function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext(
   _drawSymbols(cx,scale,cadOriginX,cadOriginY,pr);
   // Live symbol preview
   if(typeof _snpActive!=='undefined'&&_snpActive)_snpDrawPreview(cx,scale);
+  if(typeof _tpActive!=='undefined'&&_tpActive)_tpDrawPreview(cx,scale);
   cx.restore();cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.fillStyle='#334155';cx.beginPath();cadPoints.forEach(p=>{const sp=cadToScreen(p.x,p.y);cx.moveTo(sp.x+1.2*pr,sp.y);cx.arc(sp.x,sp.y,1.2*pr,0,Math.PI*2);});cx.fill();if(earthworksData&&earthworksData.polygon){cx.beginPath();earthworksData.polygon.forEach((p,i)=>{const sp=cadToScreen(p.x,p.y);if(i===0)cx.moveTo(sp.x,sp.y);else cx.lineTo(sp.x,sp.y);});cx.closePath();cx.fillStyle='rgba(249, 115, 22, 0.15)';cx.fill();cx.strokeStyle='#f97316';cx.lineWidth=0.8*pr;cx.setLineDash([4*pr,4*pr]);cx.stroke();cx.setLineDash([]);}if(dxfShowContours&&dxfCachedContours.length>0){cx.lineWidth=1.2*pr;cx.globalAlpha=typeof dxfContourOpacity!=='undefined'?dxfContourOpacity:0.55;cx.strokeStyle=dxfContourColor||'#78716c';cx.beginPath();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length<2)return;const s0=cadToScreen(pt[0].x,pt[0].y);cx.moveTo(s0.x,s0.y);if(pt.length===2){const s1=cadToScreen(pt[1].x,pt[1].y);cx.lineTo(s1.x,s1.y);}else{for(let i=1;i<pt.length-1;i++){const sc=cadToScreen(pt[i].x,pt[i].y),sn=cadToScreen(pt[i+1].x,pt[i+1].y),mx=(sc.x+sn.x)/2,my=(sc.y+sn.y)/2;cx.quadraticCurveTo(sc.x,sc.y,mx,my);}const sl=cadToScreen(pt[pt.length-1].x,pt[pt.length-1].y);cx.lineTo(sl.x,sl.y);}});cx.stroke();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length>=2){const mid=Math.floor(pt.length/2),p1=pt[mid-1]||pt[0],p2=pt[mid]||pt[1],s1=cadToScreen(p1.x,p1.y),s2=cadToScreen(p2.x,p2.y);let a=Math.atan2(s2.y-s1.y,s2.x-s1.x);if(a>Math.PI/2||a<-Math.PI/2)a+=Math.PI;cx.save();cx.translate((s1.x+s2.x)/2,(s1.y+s2.y)/2);cx.rotate(a);cx.textAlign='center';cx.textBaseline='middle';const t=c.z.toFixed(2);cx.font=`bold ${8*pr}px sans-serif`;cx.lineWidth=1.5*pr;cx.strokeStyle='#ffffff';cx.strokeText(t,0,0);cx.fillStyle='#78350f';cx.fillText(t,0,0);cx.restore();}});}const padX=100/scale,padY=100/scale,mx=cadOriginX-panX/scale-padX,Mx=cadOriginX+(cv.width-panX)/scale+padX,my=cadOriginY+(panY-cv.height)/scale-padY,My=cadOriginY+panY/scale+padY;for(let i=0;i<cadTexts.length;i++){const t=cadTexts[i];if(t.x<mx||t.x>Mx||t.y<my||t.y>My)continue;if(points.some(p=>`P${p.id}`===t.text.trim()||p.id.toString()===t.text.trim()))continue;let sh=t.h*scale;
 // Clamp: tiny when zoomed out, capped at 9px max — unobtrusive
 let shClamp=Math.max(6,Math.min(sh,9));
@@ -3062,15 +3063,15 @@ function toggleLeaders(){
 
 // Keyboard shortcuts for sym panel
 document.addEventListener('keydown',function(e){
-  if(!_sdpActive)return;
-  if(e.key==='Enter'){sdpFinish();}
-  else if(e.key==='u'||e.key==='U'){sdpUndo();}
-  else if(e.key==='Escape'){sdpClose();}
+  if(!_snpActive)return;
+  if(e.key==='Enter'){snpFinish();}
+  else if(e.key==='u'||e.key==='U'){snpUndo();}
+  else if(e.key==='Escape'){snpClose();}
   else if(e.key==='Tab'){
     // Cycle through types
     var keys=Object.keys(_ST);
-    var idx=keys.indexOf(_sdpType);
-    _sdpSelectType(keys[(idx+1)%keys.length]);
+    var idx=keys.indexOf(_snpType);
+    _snpSelectType(keys[(idx+1)%keys.length]);
     e.preventDefault();
   }
 });
@@ -3856,8 +3857,17 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
   });
 }
 
+// ── Topo-points (TP) state variables ─────────────────────────────────────
+var _TP      = {};     // topo type registry (populated by topo panel init)
+var _tpActive  = false; // topo panel open
+var _tpType    = null;  // current topo type key
+var _tpPts     = [];    // placed topo points
+var _tpMouse   = null;  // cursor world pos for preview
+var _tpProp    = {};    // current topo props
+var _tpLastT   = 0;     // for double-click detection
+
 // ── Preview in draw() (world transform active) ─────────────────────────────
-function _snpDrawPreview(ctx,scl){
+function _tpDrawPreview(ctx,scl){
   if(!_tpActive||!_tpType||_tpPts.length===0)return;
   var def=_TP[_tpType]; if(!def)return;
   var pts=_tpPts.slice();
