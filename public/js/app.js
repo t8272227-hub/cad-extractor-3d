@@ -377,7 +377,7 @@ function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext(
 let shClamp=Math.max(6,Math.min(sh,9));
 if(sh>0.5&&sh<5000){let sp=cadToScreen(t.x,t.y);cx.save();cx.font=`${shClamp}px sans-serif`;cx.fillStyle='rgba(100, 116, 139, 0.75)';cx.textBaseline='bottom';cx.translate(sp.x,sp.y);if(t.rot!==0)cx.rotate(-t.rot);cx.fillText(t.text,0,0);cx.restore();}}// Fixed small screen-size labels (pr=1 normally, 4 for PDF export)
 const r=2.5*pr,f=8*pr,sw=0.8*pr;
-points.forEach(p=>{const sp=cadToScreen(p.x,p.y);cx.beginPath();cx.arc(sp.x,sp.y,r,0,Math.PI*2);cx.fillStyle='#ef4444';cx.fill();cx.strokeStyle='#ffffff';cx.lineWidth=sw;cx.stroke();if(showPointLabels){cx.fillStyle='#0f172a';cx.font=`bold ${f}px sans-serif`;cx.fillText(`P${p.id}`,sp.x+r+2*pr,sp.y-r-2*pr);}});cx.strokeStyle='#8b5cf6';cx.fillStyle='#8b5cf6';cx.lineWidth=0.8*pr;const dt=3*pr;if(!isExportingPDF&&currentTool==='dimension'&&currentDimStart&&currentMouseCAD){const s1=cadToScreen(currentDimStart.x,currentDimStart.y),tg=currentSnapPoint?currentSnapPoint:currentMouseCAD,s2=cadToScreen(tg.x,tg.y);cx.beginPath();cx.moveTo(s1.x,s1.y);cx.lineTo(s2.x,s2.y);cx.setLineDash([4*pr,4*pr]);cx.strokeStyle=(currentSnapPoint&&currentSnapPoint.x!==currentDimStart.x)?'#10b981':'#ef4444';cx.stroke();cx.setLineDash([]);cx.strokeStyle='#8b5cf6';}dimensions.forEach(d=>{const s1=cadToScreen(d.p1.x,d.p1.y),s2=cadToScreen(d.p2.x,d.p2.y);cx.beginPath();cx.moveTo(s1.x,s1.y);cx.lineTo(s2.x,s2.y);cx.stroke();const a=Math.atan2(s2.y-s1.y,s2.x-s1.x);cx.beginPath();cx.moveTo(s1.x-Math.sin(a)*dt,s1.y+Math.cos(a)*dt);cx.lineTo(s1.x+Math.sin(a)*dt,s1.y-Math.cos(a)*dt);cx.moveTo(s2.x-Math.sin(a)*dt,s2.y+Math.cos(a)*dt);cx.lineTo(s2.x+Math.sin(a)*dt,s2.y-Math.cos(a)*dt);cx.stroke();});// exportArea rectangle hidden — frame is not shown after selection// ─── Draw saved filled contours ──────────────────────────────────────────────
+points.forEach(p=>{const sp=cadToScreen(p.x,p.y);cx.beginPath();cx.arc(sp.x,sp.y,r,0,Math.PI*2);cx.fillStyle='#ef4444';cx.fill();cx.strokeStyle='#ffffff';cx.lineWidth=sw;cx.stroke();if(showPointLabels){cx.fillStyle='#0f172a';cx.font=`bold ${f}px sans-serif`;cx.fillText(`P${p.id}`,sp.x+r+2*pr,sp.y-r-2*pr);}});cx.strokeStyle='#8b5cf6';cx.fillStyle='#8b5cf6';cx.lineWidth=0.8*pr;const dt=3*pr;if(!isExportingPDF&&currentTool==='dimension'&&currentDimStart&&currentMouseCAD){const s1=cadToScreen(currentDimStart.x,currentDimStart.y),tg=currentSnapPoint?currentSnapPoint:currentMouseCAD,s2=cadToScreen(tg.x,tg.y);cx.beginPath();cx.moveTo(s1.x,s1.y);cx.lineTo(s2.x,s2.y);cx.setLineDash([4*pr,4*pr]);cx.strokeStyle=(currentSnapPoint&&currentSnapPoint.x!==currentDimStart.x)?'#10b981':'#ef4444';cx.stroke();cx.setLineDash([]);cx.strokeStyle='#8b5cf6';}dimensions.forEach(d=>{const s1=cadToScreen(d.p1.x,d.p1.y),s2=cadToScreen(d.p2.x,d.p2.y);cx.beginPath();cx.moveTo(s1.x,s1.y);cx.lineTo(s2.x,s2.y);cx.stroke();const a=Math.atan2(s2.y-s1.y,s2.x-s1.x);cx.beginPath();cx.moveTo(s1.x-Math.sin(a)*dt,s1.y+Math.cos(a)*dt);cx.lineTo(s1.x+Math.sin(a)*dt,s1.y-Math.cos(a)*dt);cx.moveTo(s2.x-Math.sin(a)*dt,s2.y+Math.cos(a)*dt);cx.lineTo(s2.x+Math.sin(a)*dt,s2.y-Math.cos(a)*dt);cx.stroke();});// exportArea rect hidden after selection// ─── Draw saved filled contours ──────────────────────────────────────────────
 if(savedContours.length>0){
   savedContours.forEach(function(sc,sci){
     if(!sc.pts||sc.pts.length<3)return;
@@ -456,7 +456,8 @@ if(_stp==='node'){
   cx.beginPath();cx.moveTo(sp.x,sp.y-sz/2);cx.lineTo(sp.x+sz/2,sp.y+sz/2);
   cx.lineTo(sp.x-sz/2,sp.y+sz/2);cx.closePath();cx.fill();cx.stroke();
 }}cx.restore()
-// pdfFrame rectangle hidden after selection — shown only while drawing}
+// pdfFrame rect hidden after selection
+}
 
 const dxfCanvasEv=document.getElementById('cad-canvas');
 dxfCanvasEv.addEventListener('mousedown',(e)=>{
@@ -783,21 +784,19 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     mnX-=pad;mxX+=pad;mnY-=pad;mxY+=pad;
     var ww=mxX-mnX,wh=mxY-mnY;
     var pdfSc=Math.min((DW-20)/ww,(DH-20)/wh);
-    // Recalculate offsets for cv origin at (0,0), NOT at (DX,DY)
+    // Offsets relative to canvas (0,0), not to A3 origin (DX,DY)
     var offX=10+(DW-20-ww*pdfSc)/2-mnX*pdfSc;
     var offY=10+(DH-20-wh*pdfSc)/2+mxY*pdfSc;
 
-    // Resize canvas to exactly match the PDF drawing field (pr=1, full resolution)
+    // Resize canvas to PDF drawing field for pixel-perfect render
     var prevW=cv.width,prevH=cv.height;
     cv.width=DW;cv.height=DH;
     isExportingPDF=true;
-    window._pdfPr=1; // override pr=4 so elements aren't drawn oversized
+    window._pdfPr=1;
     var prevPanX=panX,prevPanY=panY,prevScale=scale;
     panX=offX;panY=offY;scale=pdfSc;
     if(canvasId==='cad-canvas')draw();else drawManualCanvas();
-    // Snapshot — cv is now DW×DH, copy exactly to the drawing field
     c.drawImage(cv,0,0,DW,DH,DX,DY,DW,DH);
-    // Restore canvas and view state
     cv.width=prevW;cv.height=prevH;
     panX=prevPanX;panY=prevPanY;scale=prevScale;
     isExportingPDF=false;
@@ -806,7 +805,8 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     drawnOk=true;
     c.restore();
   }catch(ex){
-    isExportingPDF=false;
+    isExportingPDF=false;window._pdfPr=0;
+    try{if(typeof prevW!=='undefined'&&cv.width!==prevW){cv.width=prevW;cv.height=prevH;}if(typeof prevPanX!=='undefined'){panX=prevPanX;panY=prevPanY;scale=prevScale;}if(canvasId==='cad-canvas')draw();else drawManualCanvas();}catch(e2){}
     c.restore();
     c.fillStyle='#f8fafc';c.fillRect(DX+1,DY+1,DW-2,DH-2);
     c.fillStyle='#94a3b8';c.font='16px Arial';c.textAlign='center';
@@ -966,13 +966,66 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     });
   }
 
-  // ── (summary line removed — tables are separate documents) ──────────
-  var fontPt=5.5; // kept for variable scope
-  // ── Tables removed — they are exported as a separate DOCX document ──
+  var fontPt=5.5; // summary and table removed — separate DOCX
   var tblHtml='';
-
   // ── Build print overlay HTML ──────────────────────────────────────────
   var imgData=oc.toDataURL('image/jpeg',0.95);
+  var thS='font-size:'+fontPt+'pt;padding:0.5mm 1mm;background:#1e293b;color:#fff;'+
+    'border:0.3pt solid #334155;';
+  var tdS='font-size:'+fontPt+'pt;padding:0.4mm 1mm;border:0.2pt solid #cbd5e1;font-family:monospace;';
+
+  var tblHtml='<table style="border-collapse:collapse;width:100%;font-size:'+fontPt+'pt;margin-top:4mm;">'+
+    '<thead><tr>'+
+    '<th style="'+thS+'width:8mm">№</th>'+
+    '<th style="'+thS+'width:28mm">X, м</th>'+
+    '<th style="'+thS+'width:28mm">Y, м</th>'+
+    '<th style="'+thS+'width:18mm">Z, м</th>'+
+    '<th style="'+thS+'width:18mm">Тип</th>'+
+    '</tr></thead><tbody>';
+  pts.forEach(function(p,i){
+    var bg=i%2===0?'background:#f8fafc;':'';
+    tblHtml+='<tr style="'+bg+'">'+
+      '<td style="'+tdS+'">P'+p.id+'</td>'+
+      '<td style="'+tdS+'">'+p.x.toFixed(3)+'</td>'+
+      '<td style="'+tdS+'">'+p.y.toFixed(3)+'</td>'+
+      '<td style="'+tdS+'">'+(p.z!=null?p.z.toFixed(3):'—')+'</td>'+
+      '<td style="'+tdS+'">'+(p.type||'—')+'</td>'+
+      '</tr>';
+  });
+  tblHtml+='</tbody></table>';
+
+  // Add dimensions table
+  if(dims&&dims.length){
+    tblHtml+='<table style="border-collapse:collapse;margin-top:4mm;font-size:'+fontPt+'pt;">'+
+      '<thead><tr>'+
+      '<th style="'+thS+'width:20mm">Отрезок</th>'+
+      '<th style="'+thS+'width:25mm">Длина, м</th>'+
+      '</tr></thead><tbody>';
+    dims.forEach(function(d,i){
+      var bg=i%2===0?'background:#f8fafc;':'';
+      var len=Math.hypot(d.p2.x-d.p1.x,d.p2.y-d.p1.y);
+      tblHtml+='<tr style="'+bg+'">'+
+        '<td style="'+tdS+'">P'+d.p1.id+'–P'+d.p2.id+'</td>'+
+        '<td style="'+tdS+'">'+len.toFixed(3)+'</td>'+
+        '</tr>';
+    });
+    tblHtml+='</tbody></table>';
+  }
+
+  // Area/volume
+  if(_savedArea>0){
+    tblHtml+='<table style="border-collapse:collapse;margin-top:4mm;font-size:'+fontPt+'pt;">'+
+      '<thead><tr><th style="'+thS+'width:40mm">Параметр</th>'+
+      '<th style="'+thS+'width:25mm">Значение</th></tr></thead><tbody>'+
+      '<tr><td style="'+tdS+'">Площадь</td><td style="'+tdS+'">'+_savedArea.toFixed(3)+' м²</td></tr>'+
+      '<tr style="background:#f8fafc"><td style="'+tdS+'">Периметр</td><td style="'+tdS+'">'+_savedPerimeter.toFixed(3)+' м</td></tr>'+
+      (_savedVolume>0?'<tr><td style="'+tdS+'">Объём грунта</td><td style="'+tdS+'">'+_savedVolume.toFixed(3)+' м³</td></tr>':'');
+    if(_savedPileVolume>0){
+      tblHtml+='<tr style="background:#f8fafc"><td style="'+tdS+'">Объём бетона (сваи)</td><td style="'+tdS+'">'+_savedPileVolume.toFixed(3)+' м³</td></tr>'+
+        '<tr><td style="'+tdS+'font-weight:bold">Итого</td><td style="'+tdS+'font-weight:bold">'+(_savedVolume+_savedPileVolume).toFixed(3)+' м³</td></tr>';
+    }
+    tblHtml+='</tbody></table>';
+  }
 
   // ── Build print overlay ───────────────────────────────────────────────
   var overlay=document.getElementById('print-overlay');
@@ -3782,15 +3835,7 @@ function _drawSymbols(ctx,scl,oX,oY,pr){
   });
 }
 
-// ── Topo-points (TP) state variables ─────────────────────────────────────
-var _TP      = {};     // topo type registry (populated by topo panel init)
-var _tpActive  = false; // topo panel open
-var _tpType    = null;  // current topo type key
-var _tpPts     = [];    // placed topo points
-var _tpMouse   = null;  // cursor world pos for preview
-var _tpProp    = {};    // current topo props
-var _tpLastT   = 0;     // for double-click detection
-
+var _TP={};var _tpActive=false;var _tpType=null;var _tpPts=[];var _tpMouse=null;var _tpProp={};var _tpLastT=0;
 // ── Preview in draw() (world transform active) ─────────────────────────────
 function _tpDrawPreview(ctx,scl){
   if(!_tpActive||!_tpType||_tpPts.length===0)return;
