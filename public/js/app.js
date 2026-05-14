@@ -764,15 +764,11 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
   c.lineWidth=0.5;
   c.strokeRect(DX,DY,DW,DH);
 
-  // ── DRAWING: capture canvas content ───────────────────────────────────
-  var snapScale=pdfFrame?1:1;
+  // ── DRAWING: render directly to A3 canvas ──────────────────────────────────
+  // No document.getElementById override needed — browser-safe approach
   var drawnOk=false;
   try{
-    // Clip to drawing field
-    c.save();
-    c.beginPath();c.rect(DX+1,DY+1,DW-2,DH-2);c.clip();
-
-    // Get bounding box from pdfFrame (DXF only) or from content
+    // Bounding box
     var mnX=Infinity,mxX=-Infinity,mnY=Infinity,mxY=-Infinity;
     var _usePdfFrame=(canvasId==='cad-canvas')&&pdfFrame&&Number.isFinite(pdfFrame.x1);
     if(_usePdfFrame){
@@ -781,71 +777,125 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     } else {
       pts.forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});
       if(canvasId==='cad-canvas'&&dxfElements){
-        dxfElements.forEach(function(el){if(el.pts)el.pts.forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});});
+        dxfElements.forEach(function(el){
+          if(el.pts)el.pts.forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});
+          else if(el.type==='CIRCLE'&&el.c){mnX=Math.min(mnX,el.c.x-el.r);mxX=Math.max(mxX,el.c.x+el.r);mnY=Math.min(mnY,el.c.y-el.r);mxY=Math.max(mxY,el.c.y+el.r);}
+        });
       }
       if(canvasId==='manual-canvas'){
         lines.forEach(function(l){[l.p1,l.p2].forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});});
       }
     }
-    if(!Number.isFinite(mnX)){mnX=0;mxX=100;mnY=0;mxY=100;}
-
+    if(!Number.isFinite(mnX)||mxX<=mnX){
+      mnX=(canvasId==='cad-canvas'?cadOriginX:manOriginX)-50;
+      mxX=(canvasId==='cad-canvas'?cadOriginX:manOriginX)+50;
+      mnY=(canvasId==='cad-canvas'?cadOriginY:manOriginY)-50;
+      mxY=(canvasId==='cad-canvas'?cadOriginY:manOriginY)+50;
+    }
     var pad=Math.max((mxX-mnX),(mxY-mnY))*0.06||5;
     mnX-=pad;mxX+=pad;mnY-=pad;mxY+=pad;
     var ww=mxX-mnX,wh=mxY-mnY;
     var pdfSc=Math.min((DW-20)/ww,(DH-20)/wh);
-    // Off-screen render canvas: avoids resizing the live canvas
-    var renderCv=document.createElement('canvas');
-    renderCv.width=DW; renderCv.height=DH;
-    // Temporarily intercept getElementById so draw() renders to renderCv
-    var _gEBI=document.getElementById.bind(document);
-    document.getElementById=function(id){return id===canvasId?renderCv:_gEBI(id);};
 
-    isExportingPDF=true;manIsExportingPDF=true;
-    window._pdfPr=1;
+    // Clip to drawing field
+    c.save();
+    c.beginPath();c.rect(DX+1,DY+1,DW-2,DH-2);c.clip();
+
+    // Transform: world coords → A3 canvas pixels
+    // Numerically stable: translate to canvas center, scale, then offset by world center
+    // This avoids overflow with large geodetic coords (e.g. mnX=450000, pdfSc=1200)
+    var _wcX=(mnX+mxX)/2, _wcY=(mnY+mxY)/2; // world center
+    c.save();
+    c.translate(DX+DW/2, DY+DH/2); // canvas center
+    c.scale(pdfSc,-pdfSc);
+    c.translate(-_wcX,-_wcY); // offset world to center
 
     if(canvasId==='cad-canvas'){
-      // DXF mode: draw() uses panX/panY/scale with cadOriginX/cadOriginY offset
-      // Screen X = panX + (worldX - cadOriginX)*scale
-      // We want worldX=mnX to map to screen 10+(DW-20-ww*pdfSc)/2
-      // => panX = 10+(DW-20-ww*pdfSc)/2 - (mnX-cadOriginX)*pdfSc
-      var prevPanX=panX,prevPanY=panY,prevScale=scale;
-      panX=10+(DW-20-ww*pdfSc)/2-(mnX-cadOriginX)*pdfSc;
-      panY=10+(DH-20-wh*pdfSc)/2+(mxY-cadOriginY)*pdfSc;
-      scale=pdfSc;
-      draw();
-      document.getElementById=_gEBI;
-      isExportingPDF=false;manIsExportingPDF=false;
-      window._pdfPr=0;
-      panX=prevPanX;panY=prevPanY;scale=prevScale;
-      draw();
+      // ── DXF lines, circles, arcs ──────────────────────────────────────
+      c.strokeStyle=lineColor||'#334155';c.lineWidth=1.2/pdfSc;
+      c.lineCap='round';c.lineJoin='round';
+      if(dxfElements&&dxfElements.length){
+        var _pp=new Path2D();
+        dxfElements.forEach(function(el){
+          if(el.type==='POLYLINE'&&el.pts&&el.pts.length>=2){
+            _pp.moveTo(el.pts[0].x,el.pts[0].y);
+            for(var _pi=1;_pi<el.pts.length;_pi++)_pp.lineTo(el.pts[_pi].x,el.pts[_pi].y);
+            if(el.closed)_pp.closePath();
+          } else if(el.type==='CIRCLE'&&el.c){
+            _pp.moveTo(el.c.x+el.r,el.c.y);
+            _pp.arc(el.c.x,el.c.y,el.r,0,Math.PI*2);
+          } else if(el.type==='ARC'&&el.c){
+            _pp.moveTo(el.c.x+el.r*Math.cos(el.sa),el.c.y+el.r*Math.sin(el.sa));
+            _pp.arc(el.c.x,el.c.y,el.r,el.sa,el.ea,false);
+          }
+        });
+        c.stroke(_pp);
+      }
+      // Georef overlay (orange)
+      if(secondDxfElements&&secondDxfElements.length&&secondDxfVisible&&secondDxfLinesVisible){
+        var _sp2=new Path2D();
+        secondDxfElements.forEach(function(el){
+          if(el.type==='POLYLINE'&&el.pts&&el.pts.length>=2){
+            _sp2.moveTo(el.pts[0].x,el.pts[0].y);
+            for(var _pi=1;_pi<el.pts.length;_pi++)_sp2.lineTo(el.pts[_pi].x,el.pts[_pi].y);
+            if(el.closed)_sp2.closePath();
+          } else if(el.type==='CIRCLE'&&el.c){
+            _sp2.moveTo(el.c.x+el.r,el.c.y);
+            _sp2.arc(el.c.x,el.c.y,el.r,0,Math.PI*2);
+          }
+        });
+        c.strokeStyle='#f97316';c.lineWidth=1.8/pdfSc;c.stroke(_sp2);
+      }
+      // Survey points
+      var _pr=2.5/pdfSc;
+      pts.forEach(function(p){
+        c.beginPath();c.arc(p.x,p.y,_pr,0,Math.PI*2);
+        c.fillStyle='#ef4444';c.fill();
+        c.strokeStyle='#fff';c.lineWidth=0.6/pdfSc;c.stroke();
+        if(showPointLabels){
+          c.save();c.scale(1/pdfSc,-1/pdfSc);
+          c.fillStyle='#0f172a';c.font='bold 6.5px sans-serif';
+          c.textBaseline='alphabetic';
+          c.fillText('P'+p.id,p.x*pdfSc+_pr*pdfSc+1.5,-p.y*pdfSc+_pr*pdfSc+1.5);
+          c.restore();
+        }
+      });
+      // Dimension lines
+      c.strokeStyle='#8b5cf6';c.lineWidth=0.7/pdfSc;
+      dims.forEach(function(d){
+        c.beginPath();c.moveTo(d.p1.x,d.p1.y);c.lineTo(d.p2.x,d.p2.y);c.stroke();
+      });
+
     } else {
-      // Manual mode: drawManualCanvas() uses manPanX/manPanY/manScale with manOriginX/manOriginY
-      // Screen X = manPanX + (worldX - manOriginX)*manScale
-      // => manPanX = 10+(DW-20-ww*pdfSc)/2 - (mnX-manOriginX)*pdfSc
-      var prevManPanX=manPanX,prevManPanY=manPanY,prevManScale=manScale;
-      manPanX=10+(DW-20-ww*pdfSc)/2-(mnX-manOriginX)*pdfSc;
-      manPanY=10+(DH-20-wh*pdfSc)/2+(mxY-manOriginY)*pdfSc;
-      manScale=pdfSc;
-      drawManualCanvas();
-      document.getElementById=_gEBI;
-      isExportingPDF=false;manIsExportingPDF=false;
-      window._pdfPr=0;
-      manPanX=prevManPanX;manPanY=prevManPanY;manScale=prevManScale;
-      drawManualCanvas();
+      // ── Manual mode: lines and points ────────────────────────────────
+      c.strokeStyle=manLineColor||'#334155';c.lineWidth=1.5/pdfSc;c.lineCap='round';
+      lines.forEach(function(l){
+        c.beginPath();c.moveTo(l.p1.x,l.p1.y);c.lineTo(l.p2.x,l.p2.y);c.stroke();
+      });
+      var _prm=2.5/pdfSc;
+      pts.forEach(function(p){
+        c.beginPath();c.arc(p.x,p.y,_prm,0,Math.PI*2);
+        c.fillStyle='#ef4444';c.fill();
+        c.strokeStyle='#fff';c.lineWidth=0.6/pdfSc;c.stroke();
+        if(showPointLabels){
+          c.save();c.scale(1/pdfSc,-1/pdfSc);
+          c.fillStyle='#0f172a';c.font='bold 6.5px sans-serif';
+          c.textBaseline='alphabetic';
+          c.fillText('P'+p.id,p.x*pdfSc+_prm*pdfSc+1.5,-p.y*pdfSc+_prm*pdfSc+1.5);
+          c.restore();
+        }
+      });
     }
 
-    // Copy off-screen render to A3 PDF canvas
-    c.drawImage(renderCv,0,0,DW,DH,DX,DY,DW,DH);
+    c.restore(); // restore scale/translate
     drawnOk=true;
-    c.restore();
+    c.restore(); // restore clip
   }catch(ex){
-    isExportingPDF=false;
-    try{document.getElementById=(typeof _gEBI!=='undefined'?_gEBI:document.getElementById.bind(document));}catch(e2){}
-    try{if(canvasId==='cad-canvas'){if(typeof prevPanX!=='undefined'){panX=prevPanX;panY=prevPanY;scale=prevScale;}draw();}else{if(typeof prevManPanX!=='undefined'){manPanX=prevManPanX;manPanY=prevManPanY;manScale=prevManScale;}drawManualCanvas();}}catch(e3){}
-    c.restore();
+    try{c.restore();c.restore();}catch(e2){}
     c.fillStyle='#f8fafc';c.fillRect(DX+1,DY+1,DW-2,DH-2);
     c.fillStyle='#94a3b8';c.font='16px Arial';c.textAlign='center';
-    c.fillText('Ошибка захвата чертежа: '+ex.message,DX+DW/2,DY+DH/2);
+    c.fillText('Ошибка: '+ex.message,DX+DW/2,DY+DH/2);
+    c.textAlign='left';
   }
 
   // ── RIGHT PANEL vertical line ─────────────────────────────────────────
