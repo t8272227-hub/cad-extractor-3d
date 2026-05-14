@@ -772,14 +772,20 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     c.save();
     c.beginPath();c.rect(DX+1,DY+1,DW-2,DH-2);c.clip();
 
-    // Get bounding box from points or pdfFrame
+    // Get bounding box from pdfFrame (DXF only) or from content
     var mnX=Infinity,mxX=-Infinity,mnY=Infinity,mxY=-Infinity;
-    if(pdfFrame&&Number.isFinite(pdfFrame.x1)){
+    var _usePdfFrame=(canvasId==='cad-canvas')&&pdfFrame&&Number.isFinite(pdfFrame.x1);
+    if(_usePdfFrame){
       mnX=Math.min(pdfFrame.x1,pdfFrame.x2);mxX=Math.max(pdfFrame.x1,pdfFrame.x2);
       mnY=Math.min(pdfFrame.y1,pdfFrame.y2);mxY=Math.max(pdfFrame.y1,pdfFrame.y2);
     } else {
       pts.forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});
-      if(dxfElements)dxfElements.forEach(function(el){if(el.pts)el.pts.forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});});
+      if(canvasId==='cad-canvas'&&dxfElements){
+        dxfElements.forEach(function(el){if(el.pts)el.pts.forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});});
+      }
+      if(canvasId==='manual-canvas'){
+        lines.forEach(function(l){[l.p1,l.p2].forEach(function(p){mnX=Math.min(mnX,p.x);mxX=Math.max(mxX,p.x);mnY=Math.min(mnY,p.y);mxY=Math.max(mxY,p.y);});});
+      }
     }
     if(!Number.isFinite(mnX)){mnX=0;mxX=100;mnY=0;mxY=100;}
 
@@ -793,20 +799,41 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     // Temporarily intercept getElementById so draw() renders to renderCv
     var _gEBI=document.getElementById.bind(document);
     document.getElementById=function(id){return id===canvasId?renderCv:_gEBI(id);};
-    var prevPanX=panX,prevPanY=panY,prevScale=scale;
-    // Position: DX/DY offset removed — renderCv starts at (0,0)
-    panX=10+(DW-20-ww*pdfSc)/2-mnX*pdfSc;
-    panY=10+(DH-20-wh*pdfSc)/2+mxY*pdfSc;
-    scale=pdfSc;
-    isExportingPDF=true;
-    window._pdfPr=1; // force pr=1 during PDF render (not pr=4)
-    if(canvasId==='cad-canvas')draw();else drawManualCanvas();
-    // Restore everything BEFORE copying snapshot
-    document.getElementById=_gEBI;
-    isExportingPDF=false;
-    window._pdfPr=0;
-    panX=prevPanX;panY=prevPanY;scale=prevScale;
-    if(canvasId==='cad-canvas')draw();else drawManualCanvas();
+
+    isExportingPDF=true;manIsExportingPDF=true;
+    window._pdfPr=1;
+
+    if(canvasId==='cad-canvas'){
+      // DXF mode: draw() uses panX/panY/scale with cadOriginX/cadOriginY offset
+      // Screen X = panX + (worldX - cadOriginX)*scale
+      // We want worldX=mnX to map to screen 10+(DW-20-ww*pdfSc)/2
+      // => panX = 10+(DW-20-ww*pdfSc)/2 - (mnX-cadOriginX)*pdfSc
+      var prevPanX=panX,prevPanY=panY,prevScale=scale;
+      panX=10+(DW-20-ww*pdfSc)/2-(mnX-cadOriginX)*pdfSc;
+      panY=10+(DH-20-wh*pdfSc)/2+(mxY-cadOriginY)*pdfSc;
+      scale=pdfSc;
+      draw();
+      document.getElementById=_gEBI;
+      isExportingPDF=false;manIsExportingPDF=false;
+      window._pdfPr=0;
+      panX=prevPanX;panY=prevPanY;scale=prevScale;
+      draw();
+    } else {
+      // Manual mode: drawManualCanvas() uses manPanX/manPanY/manScale with manOriginX/manOriginY
+      // Screen X = manPanX + (worldX - manOriginX)*manScale
+      // => manPanX = 10+(DW-20-ww*pdfSc)/2 - (mnX-manOriginX)*pdfSc
+      var prevManPanX=manPanX,prevManPanY=manPanY,prevManScale=manScale;
+      manPanX=10+(DW-20-ww*pdfSc)/2-(mnX-manOriginX)*pdfSc;
+      manPanY=10+(DH-20-wh*pdfSc)/2+(mxY-manOriginY)*pdfSc;
+      manScale=pdfSc;
+      drawManualCanvas();
+      document.getElementById=_gEBI;
+      isExportingPDF=false;manIsExportingPDF=false;
+      window._pdfPr=0;
+      manPanX=prevManPanX;manPanY=prevManPanY;manScale=prevManScale;
+      drawManualCanvas();
+    }
+
     // Copy off-screen render to A3 PDF canvas
     c.drawImage(renderCv,0,0,DW,DH,DX,DY,DW,DH);
     drawnOk=true;
@@ -814,7 +841,7 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
   }catch(ex){
     isExportingPDF=false;
     try{document.getElementById=(typeof _gEBI!=='undefined'?_gEBI:document.getElementById.bind(document));}catch(e2){}
-    try{if(typeof prevPanX!=='undefined'){panX=prevPanX;panY=prevPanY;scale=prevScale;}if(canvasId==='cad-canvas')draw();else drawManualCanvas();}catch(e3){}
+    try{if(canvasId==='cad-canvas'){if(typeof prevPanX!=='undefined'){panX=prevPanX;panY=prevPanY;scale=prevScale;}draw();}else{if(typeof prevManPanX!=='undefined'){manPanX=prevManPanX;manPanY=prevManPanY;manScale=prevManScale;}drawManualCanvas();}}catch(e3){}
     c.restore();
     c.fillStyle='#f8fafc';c.fillRect(DX+1,DY+1,DW-2,DH-2);
     c.fillStyle='#94a3b8';c.font='16px Arial';c.textAlign='center';
