@@ -717,18 +717,21 @@ function generateContours(){var st=parseFloat(document.getElementById('contour-s
 function toggleDxfContourVis(){dxfShowContours=document.getElementById('dxf-contour-visible').checked;requestDraw();}
 
 // -- PDF Export --------------------------------------------------------------
-function openPdfSettings(mode){currentPdfMode=mode;var m=document.getElementById('pdf-modal'),c=document.getElementById('pdf-modal-content');m.classList.remove('hidden');setTimeout(function(){m.classList.remove('opacity-0');c.classList.remove('scale-95');c.classList.add('scale-100');},10);}
+function openPdfSettings(mode){currentPdfMode=mode;var _scEl=document.getElementById('pdf-scale');if(_scEl&&!_scEl.value&&typeof pdfSc!=='undefined'&&pdfSc>0){var _as=Math.round(3778/pdfSc);_scEl.value='1:'+_as;}var m=document.getElementById('pdf-modal'),c=document.getElementById('pdf-modal-content');m.classList.remove('hidden');setTimeout(function(){m.classList.remove('opacity-0');c.classList.remove('scale-95');c.classList.add('scale-100');},10);}
 function closePdfSettings(){var m=document.getElementById('pdf-modal'),c=document.getElementById('pdf-modal-content');m.classList.add('opacity-0');c.classList.remove('scale-100');c.classList.add('scale-95');setTimeout(function(){m.classList.add('hidden');},300);}
 function executeExportPDF(){
   function _g(id){var el=document.getElementById(id);return el?(el.value||'').trim():'';}
   var pdfMeta={
     org:_g('pdf-org'),
     project:_g('pdf-project-name')||'Без названия',
+    title:_g('pdf-drawing-name')||'Исполнительная схема',
     drawing:_g('pdf-drawing-name')||'Исполнительная схема',
     developer:_g('pdf-developer'),
     geodesist:_g('pdf-geodesist'),
     checker:_g('pdf-checker'),
-    scale:_g('pdf-scale'),
+    scale:_g('pdf-scale').replace('1:',''),
+    coord:_g('pdf-coord'),
+    height:_g('pdf-height'),
     date:new Date().toLocaleDateString('ru-RU')
   };
   var li=document.getElementById('pdf-logo-input');
@@ -846,17 +849,20 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
         });
         c.strokeStyle='#f97316';c.lineWidth=1.8/pdfSc;c.stroke(_sp2);
       }
-      // Survey points
-      var _pr=2.5/pdfSc;
+      // Survey points — draw in world space, labels in canvas space
+      var _pr=3/pdfSc; // 3px radius on paper
       pts.forEach(function(p){
         c.beginPath();c.arc(p.x,p.y,_pr,0,Math.PI*2);
         c.fillStyle='#ef4444';c.fill();
-        c.strokeStyle='#fff';c.lineWidth=0.6/pdfSc;c.stroke();
+        c.strokeStyle='#fff';c.lineWidth=0.8/pdfSc;c.stroke();
         if(showPointLabels){
-          c.save();c.scale(1/pdfSc,-1/pdfSc);
-          c.fillStyle='#0f172a';c.font='bold 6.5px sans-serif';
-          c.textBaseline='alphabetic';
-          c.fillText('P'+p.id,p.x*pdfSc+_pr*pdfSc+1.5,-p.y*pdfSc+_pr*pdfSc+1.5);
+          // Compute canvas coords and draw text with identity transform
+          var _cx=DX+DW/2+(p.x-_wcX)*pdfSc;
+          var _cy=DY+DH/2-(p.y-_wcY)*pdfSc;
+          c.save();c.setTransform(1,0,0,1,0,0);
+          c.fillStyle='#0f172a';c.font='bold 6.5px Arial';
+          c.textBaseline='alphabetic';c.textAlign='left';
+          c.fillText('P'+p.id,_cx+4,_cy-3);
           c.restore();
         }
       });
@@ -865,6 +871,13 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
       dims.forEach(function(d){
         c.beginPath();c.moveTo(d.p1.x,d.p1.y);c.lineTo(d.p2.x,d.p2.y);c.stroke();
       });
+      // cadSymbols (topo signs) — delegate to _drawSymbols
+      if(cadSymbols&&cadSymbols.length){
+        try{
+          _drawSymbols(c,pdfSc,_wcX-DW/(2*pdfSc),_wcY-DH/(2*pdfSc),1);
+          _drawTPSymbols(c,pdfSc,_wcX-DW/(2*pdfSc),_wcY-DH/(2*pdfSc),1);
+        }catch(_){}
+      }
 
     } else {
       // ── Manual mode: lines and points ────────────────────────────────
@@ -872,16 +885,18 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
       lines.forEach(function(l){
         c.beginPath();c.moveTo(l.p1.x,l.p1.y);c.lineTo(l.p2.x,l.p2.y);c.stroke();
       });
-      var _prm=2.5/pdfSc;
+      var _prm=3/pdfSc;
       pts.forEach(function(p){
         c.beginPath();c.arc(p.x,p.y,_prm,0,Math.PI*2);
         c.fillStyle='#ef4444';c.fill();
-        c.strokeStyle='#fff';c.lineWidth=0.6/pdfSc;c.stroke();
+        c.strokeStyle='#fff';c.lineWidth=0.8/pdfSc;c.stroke();
         if(showPointLabels){
-          c.save();c.scale(1/pdfSc,-1/pdfSc);
-          c.fillStyle='#0f172a';c.font='bold 6.5px sans-serif';
-          c.textBaseline='alphabetic';
-          c.fillText('P'+p.id,p.x*pdfSc+_prm*pdfSc+1.5,-p.y*pdfSc+_prm*pdfSc+1.5);
+          var _cx2=DX+DW/2+(p.x-_wcX)*pdfSc;
+          var _cy2=DY+DH/2-(p.y-_wcY)*pdfSc;
+          c.save();c.setTransform(1,0,0,1,0,0);
+          c.fillStyle='#0f172a';c.font='bold 6.5px Arial';
+          c.textBaseline='alphabetic';c.textAlign='left';
+          c.fillText('P'+p.id,_cx2+4,_cy2-3);
           c.restore();
         }
       });
@@ -950,13 +965,18 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     ly+=16;
   });
 
-  // Scale bar
+  // Scale bar — auto-calculate actual drawing scale
+  // 1px = 25.4/96 mm on paper; pdfSc px/worldUnit
+  // 1 world unit (m) = pdfSc * (25.4/96) mm on paper = pdfSc*0.265mm
+  // Scale 1:N where N = 1000/(pdfSc*0.265mm/mm) = 1000/pdfSc/0.265 = 3778/pdfSc
+  var _autoScale=Math.round(3778/pdfSc);
+  var _userScale=pdfMeta.scale?parseFloat(pdfMeta.scale):0;
+  var _dispScale=_userScale>0?_userScale:_autoScale;
   ly+=8;
   if(ly<A3H-MARGIN-140){
-    var scText='Масштаб: 1:'+(pdfMeta.scale||'500');
-    c.font='9px Arial';c.fillStyle='#000';c.textAlign='left';
-    c.fillText(scText,lx,ly);ly+=12;
-    // Scale bar graphic
+    c.font='bold 9px Arial';c.fillStyle='#000';c.textAlign='left';
+    c.fillText('Масштаб 1:'+_dispScale,lx,ly);ly+=14;
+    // Scale bar graphic (60mm wide)
     var barW=60,barSeg=3;
     for(var bi=0;bi<barSeg;bi++){
       c.fillStyle=bi%2===0?'#000':'#fff';
@@ -968,8 +988,9 @@ function _buildAndSavePDF(pdfMeta,canvasId,pts,dims,lines){
     c.font='8px Arial';c.fillStyle='#000';c.textAlign='left';
     c.fillText('0',lx-2,ly+6);
     c.textAlign='right';
-    var mNum=pdfMeta.scale?Math.round(barW/pdfSc*parseFloat(pdfMeta.scale)):100;
-    c.fillText(mNum+'м',lx+barW+2,ly+6);
+    // Bar represents: 60px * _dispScale / (pdfSc * 3778/_autoScale) metres
+    var _barM=Math.round(barW*_dispScale/_autoScale);
+    c.fillText(_barM+'м',lx+barW+2,ly+6);
     ly+=14;
   }
 
@@ -3231,6 +3252,19 @@ var _snpMouse   = null;    // cursor world pos for preview
 var _snpLastClickTime = 0; // for double-click detection
 
 // ── Open panel ─────────────────────────────────────────────────────────────
+// ── Standalone DOCX export (bypasses PDF) ───────────────────────────────
+function exportDocxOnly(){
+  var mode=currentMode;
+  var pts2=mode==='dxf'?points:manualPoints;
+  if(!pts2||pts2.length===0){showMessage('Нет данных','Добавьте хотя бы одну точку','warning');return;}
+  var meta={
+    title:document.getElementById('pdf-drawing-name')?(document.getElementById('pdf-drawing-name').value||'Ведомость точек'):'Ведомость точек',
+    org:document.getElementById('pdf-org')?(document.getElementById('pdf-org').value||''):'',
+    scale:document.getElementById('pdf-scale')?(document.getElementById('pdf-scale').value||''):'',
+    date:new Date().toLocaleDateString('ru-RU')
+  };
+  _exportDocx(pts2,dimensions,meta);
+}
 function openSymDrawPanel(typeId){
   if(contourActive) clearContour();
   pdfFrameDrawing=false;
