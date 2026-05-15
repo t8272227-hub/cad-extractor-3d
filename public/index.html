@@ -944,7 +944,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 
 
 <!-- Snap mode panel -->
-<div id="snap-panel" class="fixed left-16 md:left-20 bottom-14 bg-white rounded-xl shadow-lg border border-slate-200 z-40 p-2 hidden">
+<div id="snap-panel" style="position:fixed;right:12px;bottom:60px;background:rgba(255,255,255,0.97);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);border:1px solid #e2e8f0;z-index:150;padding:10px 12px;display:none;" class="hidden">
   <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-1.5 px-1">Режим привязки</div>
   <div class="flex flex-col gap-1">
     <label class="flex items-center gap-2 cursor-pointer text-[10px] px-1 py-0.5 rounded hover:bg-slate-50">
@@ -1201,4 +1201,19 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
   </div>
 </div>
 
+
+<!-- ── Cursor coordinates HUD ── -->
+<div id="coords-hud" style="
+  position:fixed;bottom:10px;left:50%;transform:translateX(-50%);
+  background:rgba(15,23,42,0.82);color:#e2e8f0;
+  border-radius:8px;padding:5px 14px;font-size:11px;
+  font-family:monospace;letter-spacing:.3px;
+  pointer-events:none;z-index:100;display:none;
+  backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.08);
+  gap:14px;align-items:center;">
+  <span>X: <b id="hud-x" style="color:#60a5fa">—</b></span>
+  <span>Y: <b id="hud-y" style="color:#60a5fa">—</b></span>
+  <span>Z: <b id="hud-z" style="color:#34d399">—</b></span>
+  <span id="hud-snap" style="color:#f59e0b;font-size:10px;"></span>
+</div>
 </body></html>
