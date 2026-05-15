@@ -337,7 +337,49 @@ function requestDraw(){if(!isDrawingScheduled){isDrawingScheduled=true;requestAn
 function setTool(t){currentTool=t;currentDimStart=null;document.getElementById('tool-point').className=t==='point'?'p-2 md:p-2.5 rounded-lg bg-blue-100 text-blue-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';document.getElementById('tool-interpolate').className=t==='interpolate'?'p-2 md:p-2.5 rounded-lg bg-indigo-100 text-indigo-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';document.getElementById('tool-dimension').className=t==='dimension'?'p-2 md:p-2.5 rounded-lg bg-purple-100 text-purple-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';var _ta=document.getElementById('tool-area');if(_ta)_ta.className=t==='area'?'p-2 md:p-2.5 rounded-lg bg-amber-100 text-amber-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';const h=document.getElementById('tool-hint');if(t==='point'){h.innerHTML='<p><i class="fa-solid fa-mouse-pointer w-3 md:w-4"></i> Клик ЛКМ по узлу — отметить</p><p><i class="fa-solid fa-hand w-3 md:w-4"></i> Панорамирование</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else if(t==='interpolate'){h.innerHTML='<p><i class="fa-solid fa-mountain w-3 md:w-4 text-indigo-500"></i> Вычислить Z</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else if(t==='dimension'){h.innerHTML='<p><i class="fa-solid fa-ruler-horizontal w-3 md:w-4 text-purple-500"></i> Рулетка (Shift=Орто)</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else{h.innerHTML='<p><i class="fa-solid fa-crop-simple w-3 md:w-4 text-amber-500"></i> Рамка для PDF</p>';document.getElementById('cad-canvas').style.cursor='cell';}requestDraw();}
 function updateZDropdown(){const s=document.getElementById('edit-z-point-select');if(!s)return;const v=s.value;s.innerHTML='<option value="" disabled selected>Выберите точку...</option>';const tp=currentMode==='dxf'?points:manualPoints;if(tp.length===0){s.disabled=true;document.getElementById('edit-z-value').disabled=true;document.getElementById('edit-z-type').disabled=true;document.getElementById('btn-apply-z').disabled=true;return;}else{s.disabled=false;document.getElementById('edit-z-value').disabled=false;document.getElementById('edit-z-type').disabled=false;document.getElementById('btn-apply-z').disabled=false;}tp.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=`P${p.id} ${p.z!==null?'(Z: '+p.z.toFixed(3)+')':'(Z: нет)'}`;s.appendChild(o);});if(v&&tp.find(p=>p.id==v))s.value=v;}
 document.getElementById('edit-z-point-select')?.addEventListener('change',function(e){const i=parseInt(e.target.value),tp=currentMode==='dxf'?points:manualPoints,p=tp.find(pt=>pt.id===i);if(p){document.getElementById('edit-z-value').value=p.z!==null?p.z:'';document.getElementById('edit-z-type').value=(p.type==='Отн.'||p.type==='Абс.')?p.type:'Абс.';}});
-function applyZToPoint(){const s=document.getElementById('edit-z-point-select'),i=parseInt(s.value),zi=document.getElementById('edit-z-value').value,t=document.getElementById('edit-z-type').value;if(isNaN(i)||zi===''){showMessage('Внимание','Выберите точку и введите Z.','warning');return;}const tp=currentMode==='dxf'?points:manualPoints,p=tp.find(pt=>pt.id===i);if(p){p.z=parseFloat(zi.replace(',','.'));p.type=t;if(currentMode==='dxf'){updateTable();requestDraw();}else{saveManState();updateManualTable();requestManualDraw();}const b=document.getElementById('btn-apply-z'),o=b.innerHTML;b.innerHTML='<i class="fa-solid fa-check"></i> Сохранено!';b.className='w-full bg-emerald-600 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm flex items-center justify-center gap-1 md:gap-1.5 mt-0.5 md:mt-1';setTimeout(()=>{b.innerHTML=o;b.className='w-full bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm flex items-center justify-center gap-1 md:gap-1.5 mt-0.5 md:mt-1';},1500);}}
+function applyZToPoint(){
+  var sel=document.getElementById('edit-z-point-select');
+  var valRaw=document.getElementById('edit-z-value').value.trim();
+  var typ=document.getElementById('edit-z-type').value;
+  if(!sel||sel.value===''||valRaw===''){
+    showMessage('Внимание','Выберите точку и введите значение Z.','warning');return;
+  }
+  var pid=parseInt(sel.value);
+  if(isNaN(pid)){showMessage('Ошибка','Некорректный ID точки.','error');return;}
+
+  // For Призма/Поверхность — compute Z from вешка parameters
+  var zFinal;
+  if(typ==='Призма'||typ==='Поверхность'){
+    zFinal=calcVekhaZ();
+    typ='Абс.'; // store as absolute after calculation
+  } else {
+    zFinal=parseFloat(valRaw.replace(',','.'));
+  }
+  if(isNaN(zFinal)){showMessage('Ошибка','Некорректное значение Z.','error');return;}
+
+  var arr=currentMode==='dxf'?points:manualPoints;
+  var p=arr.find(function(pt){return pt.id===pid;});
+  if(!p){showMessage('Ошибка','Точка не найдена (ID='+pid+').','error');return;}
+
+  p.z=zFinal; p.type=typ;
+
+  if(currentMode==='dxf'){
+    updateTable(); requestDraw();
+  } else {
+    saveManState(); updateManualTable(); requestManualDraw();
+  }
+  // Refresh dropdown to show updated Z
+  if(typeof _updateZPointSelect==='function')_updateZPointSelect();
+
+  var b=document.getElementById('btn-apply-z');
+  if(b){
+    var orig=b.innerHTML;
+    b.innerHTML='<i class="fa-solid fa-check"></i> Сохранено!';
+    b.style.background='#16a34a';
+    setTimeout(function(){b.innerHTML=orig;b.style.background='';},1800);
+  }
+  showMessage('Z-высота','P'+pid+': Z = '+zFinal.toFixed(3)+' м ('+typ+')','success');
+}
 function addPoint(x,y,fz=undefined,ft=undefined){if(!Number.isFinite(x)||!Number.isFinite(y))return;let z=null,t='-';if(fz!==undefined){z=fz;t=ft||'Интерп.';}points.push({id:points.length>0?Math.max(...points.map(p=>p.id))+1:1,x,y,z,type:t});updateTable();requestDraw();}
 function addInterpolatedPoint(tx,ty){const zp=points.filter(p=>p.z!==null&&Number.isFinite(p.z));if(zp.length<3){showMessage('Ошибка','Минимум 3 точки с Z','warning');return;}let sw=0,swz=0;for(let i=0;i<zp.length;i++){const p=zp[i],d2=(p.x-tx)**2+(p.y-ty)**2;if(d2<0.0001){addPoint(tx,ty,p.z,p.type);return;}const w=1/d2;sw+=w;swz+=p.z*w;}addPoint(tx,ty,swz/sw,'Интерп.');}
 function interpolateMissingZ(){const tp=currentMode==='dxf'?points:manualPoints,zp=tp.filter(p=>p.z!==null&&Number.isFinite(p.z));if(zp.length<3){showMessage('Внимание','Задайте Z минимум 3 точкам.','warning');return;}let c=0;tp.forEach(t=>{if(t.z===null||!Number.isFinite(t.z)){let sw=0,swz=0;for(let i=0;i<zp.length;i++){const p=zp[i],d2=(p.x-t.x)**2+(p.y-t.y)**2;if(d2<0.0001){t.z=p.z;t.type=p.type;break;}const w=1/d2;sw+=w;swz+=p.z*w;}if(sw>0&&t.z===null){t.z=swz/sw;t.type='Интерп.';c++;}}});if(c>0){if(currentMode==='dxf'){updateTable();requestDraw();}else{saveManState();updateManualTable();requestManualDraw();}showMessage('Готово',`Интерполировано: ${c}`,'success');}else showMessage('Внимание','Все с высотами.','warning');}
@@ -551,7 +593,21 @@ if(snapModes.lines||snapModes.midpoints){
 }
 if(cp)currentSnapType=cp._snapType||'node';
 else currentSnapType='';
-if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-currentDimStart.x,dy=cm.y-currentDimStart.y;if(Math.abs(dx)>Math.abs(dy))cm.y=currentDimStart.y;else cm.x=currentDimStart.x;}currentMouseCAD=cm;let nr=false;if(cp!==currentSnapPoint){currentSnapPoint=cp;nr=true;}if(currentTool==='dimension'&&currentDimStart)nr=true;if(nr)requestDraw();}});
+if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-currentDimStart.x,dy=cm.y-currentDimStart.y;if(Math.abs(dx)>Math.abs(dy))cm.y=currentDimStart.y;else cm.x=currentDimStart.x;}currentMouseCAD=cm;let nr=false;if(cp!==currentSnapPoint){currentSnapPoint=cp;nr=true;}
+// Update HUD
+var _hud=document.getElementById('coords-hud');
+if(_hud){
+  _hud.style.display='flex';
+  var _hc=cp||cm;
+  document.getElementById('hud-x').textContent=_hc.x.toFixed(3);
+  document.getElementById('hud-y').textContent=_hc.y.toFixed(3);
+  var _hz=document.getElementById('hud-z');
+  var _hz_val=null;
+  if(cp&&typeof cp.z!=='undefined'&&cp.z!==null)_hz_val=cp.z;
+  else if(cadSnapPoints&&cp){var _sp2=cadSnapPoints.find(function(s){return Math.abs(s.x-cp.x)<0.001&&Math.abs(s.y-cp.y)<0.001;});if(_sp2&&_sp2.z!=null)_hz_val=_sp2.z;}
+  _hz.textContent=_hz_val!==null?_hz_val.toFixed(3):'—';
+  document.getElementById('hud-snap').textContent=cp?'⊕ '+currentSnapType:'';
+}if(currentTool==='dimension'&&currentDimStart)nr=true;if(nr)requestDraw();}});
 window.addEventListener('mouseup',(e)=>{
   if(e.button===0&&pdfFrameDrawing){
     pdfFrameDrawing=false;
@@ -584,7 +640,8 @@ window.addEventListener('mouseup',(e)=>{
     updateContourPanel();requestDraw();return;
   }
   if(isDragging){isDragging=false;if(!dragMoved&&e.target===dxfCanvasEv&&e.button===0&&currentTool!=='area'){if(!currentSnapPoint)return;const t=currentSnapPoint;if(currentTool==='point')addPoint(t.x,t.y);else if(currentTool==='interpolate')addInterpolatedPoint(t.x,t.y);else if(currentTool==='dimension'){if(!currentDimStart)currentDimStart=t;else{if(currentDimStart.x!==t.x||currentDimStart.y!==t.y)addDimension(currentDimStart,t);currentDimStart=null;}}requestDraw();}}else if(isDrawingArea){isDrawingArea=false;if(exportArea&&Math.abs(exportArea.x1-exportArea.x2)<0.1)exportArea=null;requestDraw();}});
-dxfCanvasEv.addEventListener('mouseleave',()=>{isDragging=false;isDrawingArea=false;currentMouseCAD=null;currentSnapPoint=null;requestDraw();});
+dxfCanvasEv.addEventListener('mouseleave',()=>{isDragging=false;isDrawingArea=false;currentMouseCAD=null;currentSnapPoint=null;requestDraw();
+  var _h=document.getElementById('coords-hud');if(_h)_h.style.display='none';});
 dxfCanvasEv.addEventListener('wheel',(e)=>{if(currentMode!=='dxf'||!dxfData)return;e.preventDefault();currentSnapPoint=null;const z=1.1,r=dxfCanvasEv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,rx=mx-panX,ry=my-panY,os=scale;if(e.deltaY<0)scale*=z;else scale/=z;if(scale>baseScale*100000)scale=baseScale*100000;if(scale<baseScale/10000)scale=baseScale/10000;panX=mx-rx*(scale/os);panY=my-ry*(scale/os);requestDraw();});
 
 document.getElementById('file-input').addEventListener('change',function(e){
@@ -2484,7 +2541,10 @@ function saveContourToReport(){
 
 function toggleSnapPanel(){
   var p=document.getElementById('snap-panel');
-  if(p)p.classList.toggle('hidden');
+  if(!p)return;
+  var showing=p.style.display!=='none'&&!p.classList.contains('hidden');
+  if(showing){p.style.display='none';p.classList.add('hidden');}
+  else{p.style.display='block';p.classList.remove('hidden');}
 }
 function updateSnapModes(){
   snapModes.nodes   =document.getElementById('snap-nodes')   ?document.getElementById('snap-nodes').checked   :true;
@@ -2549,22 +2609,7 @@ function calcVekhaZ(){
   return zFinal;
 }
 // Override applyZToPoint to use vekha calculation
-var _origApplyZ=applyZToPoint;
-function applyZToPoint(){
-  var t=document.getElementById('edit-z-type').value;
-  if(t==='Призма'||t==='Поверхность'){
-    // Get computed Z and write it to the Z input
-    var zFinal=calcVekhaZ();
-    document.getElementById('edit-z-value').value=zFinal.toFixed(3);
-    // Temporarily set type to Абс. so it saves correctly
-    document.getElementById('edit-z-type').value='Абс.';
-    _origApplyZ();
-    document.getElementById('edit-z-type').value=t;
-    document.getElementById('edit-z-value').value='';
-    return;
-  }
-  _origApplyZ();
-}
+
 
 // ─── Symbols Table ────────────────────────────────────────────────────────────
 var symTableRows=[]; // manual extra rows not from cadSymbols
