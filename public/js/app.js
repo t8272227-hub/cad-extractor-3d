@@ -333,7 +333,9 @@ requestDraw();
 }
 function clearDxfContours(){dxfShowContours=false;dxfCachedContours=[];const b=document.getElementById('btn-build-dxf-contours');if(b){b.textContent='Построить';b.className='w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm mt-1';}document.getElementById('dxf-contour-visible').checked=true;requestDraw();}
 function generateDxfContours(){const st=parseFloat(document.getElementById('dxf-contour-step').value);if(isNaN(st)||st<=0){showMessage('Ошибка','Шаг > 0','warning');return;}const p=points.filter(pt=>pt.z!==null&&Number.isFinite(pt.z));if(p.length<3){showMessage('Ошибка','Мин 3 точки с Z','warning');return;}try{const c=[];p.forEach(pt=>c.push(pt.x,pt.y));const d=new Delaunator(c);dxfCachedContours=[];const eps=0.00001,s={};for(let i=0;i<d.triangles.length;i+=3){const i0=d.triangles[i],i1=d.triangles[i+1],i2=d.triangles[i+2],p0={x:p[i0].x,y:p[i0].y,z:p[i0].z+eps},p1={x:p[i1].x,y:p[i1].y,z:p[i1].z+eps*2},p2={x:p[i2].x,y:p[i2].y,z:p[i2].z+eps*3},mz=Math.min(p0.z,p1.z,p2.z),Mz=Math.max(p0.z,p1.z,p2.z),sl=Math.ceil(mz/st)*st;for(let l=sl;l<=Mz;l+=st){let x=[];const e=[[p0,p1],[p1,p2],[p2,p0]];e.forEach(ed=>{const a=ed[0],b=ed[1];if((a.z<l&&b.z>l)||(a.z>l&&b.z<l)){const t=(l-a.z)/(b.z-a.z);x.push({x:a.x+t*(b.x-a.x),y:a.y+t*(b.y-a.y)});}});if(x.length===2){if(!s[l])s[l]=[];s[l].push({p1:x[0],p2:x[1]});}}}const pm=(a,b)=>Math.abs(a.x-b.x)<0.0001&&Math.abs(a.y-b.y)<0.0001;for(const ls in s){const l=parseFloat(ls),seg=s[l],pa=[];let r=[...seg];while(r.length>0){const cp=[];let sg=r.shift();cp.push(sg.p1,sg.p2);let a;do{a=false;for(let i=0;i<r.length;i++){const rs=r[i],h=cp[0],t=cp[cp.length-1];if(pm(t,rs.p1)){cp.push(rs.p2);r.splice(i,1);a=true;break;}else if(pm(t,rs.p2)){cp.push(rs.p1);r.splice(i,1);a=true;break;}else if(pm(h,rs.p1)){cp.unshift(rs.p2);r.splice(i,1);a=true;break;}else if(pm(h,rs.p2)){cp.unshift(rs.p1);r.splice(i,1);a=true;break;}}}while(a);pa.push(cp);}pa.forEach(pt=>dxfCachedContours.push({z:l,points:pt}));}dxfShowContours=true;document.getElementById('dxf-contour-visible').checked=true;const btn=document.getElementById('btn-build-dxf-contours');btn.textContent='Обновить';btn.className='w-full bg-blue-600 hover:bg-blue-500 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm mt-1';requestDraw();}catch(e){showMessage('Ошибка','Сбой триангуляции','error');}}
-function requestDraw(){if(!isDrawingScheduled){isDrawingScheduled=true;requestAnimationFrame(()=>{draw();isDrawingScheduled=false;});}}
+function requestDraw(){if(!isDrawingScheduled){isDrawingScheduled=true;requestAnimationFrame(()=>{draw();isDrawingScheduled=false;});}
+  if(typeof _updateHudScale==='function')_updateHudScale();
+}
 function setTool(t){currentTool=t;currentDimStart=null;document.getElementById('tool-point').className=t==='point'?'p-2 md:p-2.5 rounded-lg bg-blue-100 text-blue-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';document.getElementById('tool-interpolate').className=t==='interpolate'?'p-2 md:p-2.5 rounded-lg bg-indigo-100 text-indigo-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';document.getElementById('tool-dimension').className=t==='dimension'?'p-2 md:p-2.5 rounded-lg bg-purple-100 text-purple-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';var _ta=document.getElementById('tool-area');if(_ta)_ta.className=t==='area'?'p-2 md:p-2.5 rounded-lg bg-amber-100 text-amber-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';const h=document.getElementById('tool-hint');if(t==='point'){h.innerHTML='<p><i class="fa-solid fa-mouse-pointer w-3 md:w-4"></i> Клик ЛКМ по узлу — отметить</p><p><i class="fa-solid fa-hand w-3 md:w-4"></i> Панорамирование</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else if(t==='interpolate'){h.innerHTML='<p><i class="fa-solid fa-mountain w-3 md:w-4 text-indigo-500"></i> Вычислить Z</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else if(t==='dimension'){h.innerHTML='<p><i class="fa-solid fa-ruler-horizontal w-3 md:w-4 text-purple-500"></i> Рулетка (Shift=Орто)</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else{h.innerHTML='<p><i class="fa-solid fa-crop-simple w-3 md:w-4 text-amber-500"></i> Рамка для PDF</p>';document.getElementById('cad-canvas').style.cursor='cell';}requestDraw();}
 function updateZDropdown(){const s=document.getElementById('edit-z-point-select');if(!s)return;const v=s.value;s.innerHTML='<option value="" disabled selected>Выберите точку...</option>';const tp=currentMode==='dxf'?points:manualPoints;if(tp.length===0){s.disabled=true;document.getElementById('edit-z-value').disabled=true;document.getElementById('edit-z-type').disabled=true;document.getElementById('btn-apply-z').disabled=true;return;}else{s.disabled=false;document.getElementById('edit-z-value').disabled=false;document.getElementById('edit-z-type').disabled=false;document.getElementById('btn-apply-z').disabled=false;}tp.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=`P${p.id} ${p.z!==null?'(Z: '+p.z.toFixed(3)+')':'(Z: нет)'}`;s.appendChild(o);});if(v&&tp.find(p=>p.id==v))s.value=v;}
 document.getElementById('edit-z-point-select')?.addEventListener('change',function(e){const i=parseInt(e.target.value),tp=currentMode==='dxf'?points:manualPoints,p=tp.find(pt=>pt.id===i);if(p){document.getElementById('edit-z-value').value=p.z!==null?p.z:'';document.getElementById('edit-z-type').value=(p.type==='Отн.'||p.type==='Абс.')?p.type:'Абс.';}});
@@ -641,6 +643,7 @@ window.addEventListener('mouseup',(e)=>{
   }
   if(isDragging){isDragging=false;if(!dragMoved&&e.target===dxfCanvasEv&&e.button===0&&currentTool!=='area'){if(!currentSnapPoint)return;const t=currentSnapPoint;if(currentTool==='point')addPoint(t.x,t.y);else if(currentTool==='interpolate')addInterpolatedPoint(t.x,t.y);else if(currentTool==='dimension'){if(!currentDimStart)currentDimStart=t;else{if(currentDimStart.x!==t.x||currentDimStart.y!==t.y)addDimension(currentDimStart,t);currentDimStart=null;}}requestDraw();}}else if(isDrawingArea){isDrawingArea=false;if(exportArea&&Math.abs(exportArea.x1-exportArea.x2)<0.1)exportArea=null;requestDraw();}});
 dxfCanvasEv.addEventListener('mouseleave',()=>{isDragging=false;isDrawingArea=false;currentMouseCAD=null;currentSnapPoint=null;requestDraw();
+  var _h=document.getElementById('coords-hud');if(_h)_h.style.display='none';
   var _h=document.getElementById('coords-hud');if(_h)_h.style.display='none';});
 dxfCanvasEv.addEventListener('wheel',(e)=>{if(currentMode!=='dxf'||!dxfData)return;e.preventDefault();currentSnapPoint=null;const z=1.1,r=dxfCanvasEv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,rx=mx-panX,ry=my-panY,os=scale;if(e.deltaY<0)scale*=z;else scale/=z;if(scale>baseScale*100000)scale=baseScale*100000;if(scale<baseScale/10000)scale=baseScale/10000;panX=mx-rx*(scale/os);panY=my-ry*(scale/os);requestDraw();});
 
@@ -2542,9 +2545,7 @@ function saveContourToReport(){
 function toggleSnapPanel(){
   var p=document.getElementById('snap-panel');
   if(!p)return;
-  var showing=p.style.display!=='none'&&!p.classList.contains('hidden');
-  if(showing){p.style.display='none';p.classList.add('hidden');}
-  else{p.style.display='block';p.classList.remove('hidden');}
+  p.style.display=(p.style.display==='none'||p.style.display==='')?'block':'none';
 }
 function updateSnapModes(){
   snapModes.nodes   =document.getElementById('snap-nodes')   ?document.getElementById('snap-nodes').checked   :true;
@@ -2557,6 +2558,7 @@ function updateSnapModes(){
   if(snapModes.midpoints)active.push('Середина');
   var lbl=document.getElementById('snap-mode-label');
   if(lbl)lbl.textContent=active.length?active.join('+'):'Выкл';
+  var h2=document.getElementById('hud-snap-mode');if(h2)h2.textContent=active.length?active.join('+'):'Выкл';
 }
 
 function editPtField(id,field,val){
@@ -3970,4 +3972,15 @@ function _updateZPointSelect(){
     sel.appendChild(o);
   });
   if(prev)sel.value=prev;
+}
+
+
+// ── Bottom bar scale update ──────────────────────────────────────────────────
+function _updateHudScale(){
+  var el=document.getElementById('hud-scale');
+  if(!el)return;
+  // Compute approx map scale: 1px = 1/scale world units
+  // If scale is ~pixels-per-world-unit, display as "1:X"
+  var m=Math.round(1/scale*1000)/1000;
+  el.textContent=m>0?'1:'+m.toFixed(3):'—';
 }
