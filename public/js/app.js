@@ -597,9 +597,7 @@ if(cp)currentSnapType=cp._snapType||'node';
 else currentSnapType='';
 if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-currentDimStart.x,dy=cm.y-currentDimStart.y;if(Math.abs(dx)>Math.abs(dy))cm.y=currentDimStart.y;else cm.x=currentDimStart.x;}currentMouseCAD=cm;let nr=false;if(cp!==currentSnapPoint){currentSnapPoint=cp;nr=true;}
 // Update HUD
-var _hud=document.getElementById('coords-hud');
-if(_hud){
-  _hud.style.display='flex';
+if(true){
   var _hc=cp||cm;
   document.getElementById('hud-x').textContent=_hc.x.toFixed(3);
   document.getElementById('hud-y').textContent=_hc.y.toFixed(3);
@@ -643,8 +641,8 @@ window.addEventListener('mouseup',(e)=>{
   }
   if(isDragging){isDragging=false;if(!dragMoved&&e.target===dxfCanvasEv&&e.button===0&&currentTool!=='area'){if(!currentSnapPoint)return;const t=currentSnapPoint;if(currentTool==='point')addPoint(t.x,t.y);else if(currentTool==='interpolate')addInterpolatedPoint(t.x,t.y);else if(currentTool==='dimension'){if(!currentDimStart)currentDimStart=t;else{if(currentDimStart.x!==t.x||currentDimStart.y!==t.y)addDimension(currentDimStart,t);currentDimStart=null;}}requestDraw();}}else if(isDrawingArea){isDrawingArea=false;if(exportArea&&Math.abs(exportArea.x1-exportArea.x2)<0.1)exportArea=null;requestDraw();}});
 dxfCanvasEv.addEventListener('mouseleave',()=>{isDragging=false;isDrawingArea=false;currentMouseCAD=null;currentSnapPoint=null;requestDraw();
-  var _h=document.getElementById('coords-hud');if(_h)_h.style.display='none';
-  var _h=document.getElementById('coords-hud');if(_h)_h.style.display='none';});
+  
+  });
 dxfCanvasEv.addEventListener('wheel',(e)=>{if(currentMode!=='dxf'||!dxfData)return;e.preventDefault();currentSnapPoint=null;const z=1.1,r=dxfCanvasEv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top,rx=mx-panX,ry=my-panY,os=scale;if(e.deltaY<0)scale*=z;else scale/=z;if(scale>baseScale*100000)scale=baseScale*100000;if(scale<baseScale/10000)scale=baseScale/10000;panX=mx-rx*(scale/os);panY=my-ry*(scale/os);requestDraw();});
 
 document.getElementById('file-input').addEventListener('change',function(e){
