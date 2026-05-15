@@ -487,11 +487,7 @@ dxfCanvasEv.addEventListener('mousemove',(e)=>{if(currentMode!=='dxf')return;if(
 if(contourActive&&!contourClosed){contourMousePos=screenToCad(mx,my);requestDraw();}
   if(_snpActive){_snpMouse=screenToCad(mx,my);requestDraw();}
 
-if(pdfFrameDrawing&&pdfFrameStart){
-  var _pfend=screenToCad(mx,my);
-  pdfFrame={x1:pdfFrameStart.x,y1:pdfFrameStart.y,x2:_pfend.x,y2:_pfend.y};
-  requestDraw();
-}
+
 var _sbco=document.getElementById('sb-coords');if(_sbco&&dxfData){var _scc=screenToCad(mx,my);_sbco.textContent='X: '+_scc.x.toFixed(2)+'  Y: '+_scc.y.toFixed(2);}var _sbzm=document.getElementById('sb-zoom');if(_sbzm&&baseScale>0)_sbzm.textContent=(scale/baseScale).toFixed(1)+'×';if(isDrawingArea){const c=screenToCad(mx,my);exportArea.x2=c.x;exportArea.y2=c.y;requestDraw();}else if(dxfData&&(currentTool==='point'||currentTool==='dimension'||currentTool==='interpolate')){const cm=screenToCad(mx,my),st=15/scale,sts=st*st;
 let cd=Infinity,cp=null;
 // NODE snap
@@ -2048,6 +2044,1976 @@ function _drawManhole(ctx,scl,pt,col,inner,props,mm){
     ctx.restore();
   }
 }
+
+function _pipe(ctx,pts,oX,oY,scl,col,dash,ltr){
+  if(pts.length<2)return;
+  ctx.strokeStyle=col;ctx.lineWidth=1.5/scl;ctx.setLineDash(dash||[]);
+  ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x-oX,p.y-oY):ctx.moveTo(p.x-oX,p.y-oY);});ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=col;for(var i=0;i<pts.length-1;i++){var dx=pts[i+1].x-pts[i].x,dy=pts[i+1].y-pts[i].y,seg=Math.hypot(dx,dy);for(var t=seg/2;t<seg;t+=5){var fx=pts[i].x+dx/seg*t-oX,fy=pts[i].y+dy/seg*t-oY;ctx.save();ctx.scale(1,-1);ctx.font='bold '+(3.5/scl)+'px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(ltr,fx,-fy);ctx.restore();}}
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GEOREF MINI CANVAS — второй DXF preview + point picking
+// ══════════════════════════════════════════════════════════════════════════════
+var _georefParsedDxf=null;
+var _georefMiniSnaps=[];
+// Coordinate storage — JS variables survive modal reopen
+var _grP1L=null; // {x,y} local P1 (survey DXF)
+var _grP2L=null; // {x,y} local P2 (survey DXF)
+var _grP1G=null; // {x,y} geodetic P1 (main DXF)
+var _grP2G=null; // {x,y} geodetic P2 (main DXF)
+
+   // snap points from second DXF
+var _georefMiniElems=[];   // simplified elements for rendering
+var _georefMiniScale=1, _georefMiniOX=0, _georefMiniOY=0;
+var _georefPickTarget=0;   // 0=none, 1=picking P1, 2=picking P2
+var _georefMiniP1=null, _georefMiniP2=null;
+
+function _georefExtractMiniSnaps(dxf){
+  _georefMiniSnaps=[];
+  _georefMiniElems=[];
+  var minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  function addPt(x,y){
+    if(!isFinite(x)||!isFinite(y))return;
+    _georefMiniSnaps.push({x:x,y:y});
+    if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
+  }
+  function traverse(entities,tx,ty,sx,sy){
+    if(!entities)return;
+    entities.forEach(function(en){
+      if(!en)return;
+      try{
+        if(en.type==='INSERT'&&dxf.blocks&&en.name&&dxf.blocks[en.name]){
+          var _blk=dxf.blocks[en.name];
+          var bx=(en.position?(en.position.x||0):0)*sx+tx;
+          var by=(en.position?(en.position.y||0):0)*sy+ty;
+          var bsx=sx*(en.scaleX||en.scale&&en.scale.x||1);
+          var bsy=sy*(en.scaleY||en.scale&&en.scale.y||1);
+          if(_blk.entities)traverse(_blk.entities,bx,by,bsx,bsy);
+          return;
+        }
+        var pts=[];
+        if(en.type==='LINE'){
+          // dxf-parser v1.x uses start/end; some versions use vertices
+          if(en.start&&en.end){
+            pts.push({x:en.start.x*sx+tx,y:en.start.y*sy+ty});
+            pts.push({x:en.end.x*sx+tx,y:en.end.y*sy+ty});
+          } else if(en.vertices&&en.vertices.length>=2){
+            en.vertices.forEach(function(v){pts.push({x:v.x*sx+tx,y:v.y*sy+ty});});
+          }
+        } else if((en.type==='LWPOLYLINE'||en.type==='POLYLINE'||en.type==='SPLINE')){
+          var _verts=en.vertices||[];
+          _verts.forEach(function(v){pts.push({x:(v.x||0)*sx+tx,y:(v.y||0)*sy+ty});});
+        } else if(en.type==='TEXT'||en.type==='MTEXT'){
+          if(en.startPoint)pts.push({x:en.startPoint.x*sx+tx,y:en.startPoint.y*sy+ty});
+          else if(en.position)pts.push({x:en.position.x*sx+tx,y:en.position.y*sy+ty});
+        } else if((en.type==='CIRCLE'||en.type==='ARC')&&en.center){
+          pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
+        } else if(en.type==='ELLIPSE'&&en.center){
+          pts.push({x:en.center.x*sx+tx,y:en.center.y*sy+ty});
+        } else if(en.type==='POINT'){
+          var _pp=en.position||en.point;
+          if(_pp)pts.push({x:_pp.x*sx+tx,y:_pp.y*sy+ty});
+        }
+        pts.forEach(function(p){addPt(p.x,p.y);});
+        if(pts.length>=2)_georefMiniElems.push({type:'line',pts:pts});
+        else if(pts.length===1)_georefMiniElems.push({type:'point',pt:pts[0]});
+        if((en.type==='CIRCLE'||en.type==='ARC')&&en.center&&en.radius)
+          _georefMiniElems.push({type:'circle',cx:en.center.x*sx+tx,cy:en.center.y*sy+ty,r:en.radius*Math.abs(sx)});
+      }catch(_){}
+    });
+  }
+  traverse(dxf.entities,0,0,1,1);
+  // Compute transform for mini canvas
+  var cv=document.getElementById('georef-mini-canvas');
+  if(!cv||!isFinite(minX))return;
+  var W=cv.width,H=cv.height,pad=20;
+  var rangeX=maxX-minX||1,rangeY=maxY-minY||1;
+  _georefMiniScale=Math.min((W-2*pad)/rangeX,(H-2*pad)/rangeY);
+  _georefMiniOX=minX-(W/2-rangeX*_georefMiniScale/2)/_georefMiniScale;
+  _georefMiniOY=minY-(H/2-rangeY*_georefMiniScale/2)/_georefMiniScale;
+}
+
+function _georefRenderMini(){
+  var cv=document.getElementById('georef-mini-canvas');if(!cv)return;
+  var ctx=cv.getContext('2d'),W=cv.width,H=cv.height;
+  var sc=_georefMiniScale,oX=_georefMiniOX,oY=_georefMiniOY;
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  // Draw elements
+  ctx.save();ctx.translate(0,H);ctx.scale(sc,-sc);ctx.translate(-oX,-oY);
+  ctx.strokeStyle='#334155';ctx.lineWidth=0.8/sc;ctx.lineCap='round';
+  _georefMiniElems.forEach(function(el){
+    if(el.type==='line'&&el.pts.length>=2){
+      ctx.beginPath();el.pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();
+    } else if(el.type==='circle'){
+      ctx.beginPath();ctx.arc(el.cx,el.cy,el.r,0,Math.PI*2);ctx.stroke();
+    } else if(el.type==='point'){
+      ctx.beginPath();ctx.arc(el.pt.x,el.pt.y,1.5/sc,0,Math.PI*2);ctx.fillStyle='#334155';ctx.fill();
+    }
+  });
+  // Snap points for selection only — not rendered as visible dots
+  // Draw picked points
+  if(_georefMiniP1){
+    ctx.fillStyle='#f97316';ctx.beginPath();ctx.arc(_georefMiniP1.x,_georefMiniP1.y,5/sc,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.scale(1,-1);ctx.fillStyle='#f97316';ctx.font='bold '+(9/sc)+'px Arial';
+    ctx.textAlign='center';ctx.fillText('P1',_georefMiniP1.x,-_georefMiniP1.y-6/sc);ctx.restore();
+  }
+  if(_georefMiniP2){
+    ctx.fillStyle='#8b5cf6';ctx.beginPath();ctx.arc(_georefMiniP2.x,_georefMiniP2.y,5/sc,0,Math.PI*2);ctx.fill();
+    ctx.save();ctx.scale(1,-1);ctx.fillStyle='#8b5cf6';ctx.font='bold '+(9/sc)+'px Arial';
+    ctx.textAlign='center';ctx.fillText('P2',_georefMiniP2.x,-_georefMiniP2.y-6/sc);ctx.restore();
+  }
+  ctx.restore();
+}
+
+
+// ─── Mini canvas zoom / pan ──────────────────────────────────────────────────
+function georefPickMini(target){
+  if(!_georefParsedDxf){
+    showMessage('Файл не загружен','Сначала загрузите DXF файл съёмки.','warning');return;
+  }
+  _georefPickTarget=target;
+  var cv=document.getElementById('georef-mini-canvas');
+  cv.style.cursor='crosshair';cv.style.outline='2px solid '+(target===1?'#f97316':'#8b5cf6');
+  document.getElementById('gr-mini-status').textContent=
+    (target===1?'🟠 Кликните по Точке 1':'🟣 Кликните по Точке 2')+' в окне предпросмотра';
+  // Add one-time click listener
+  cv.onclick=function(e){
+    var rect=cv.getBoundingClientRect();
+    var px=e.clientX-rect.left,py=e.clientY-rect.top;
+    // Convert to DXF coords
+    var sc=_georefMiniScale,oX=_georefMiniOX,oY=_georefMiniOY,H=cv.height;
+    var cx2=px/sc+oX,cy2=(H-py)/sc+oY;
+    // Snap to nearest
+    if(_georefMiniSnaps.length){
+      var best=_georefMiniSnaps.reduce(function(a,b){
+        return Math.hypot(b.x-cx2,b.y-cy2)<Math.hypot(a.x-cx2,a.y-cy2)?b:a;
+      });
+      if(Math.hypot(best.x-cx2,best.y-cy2)*sc<15){cx2=best.x;cy2=best.y;}
+    }
+    // Fill input fields
+    var suffix=(_georefPickTarget===1)?'1':'2';
+    document.getElementById('gr-p'+suffix+'-lx').value=cx2.toFixed(3);
+    document.getElementById('gr-p'+suffix+'-ly').value=cy2.toFixed(3);
+    if(suffix==='1')_grP1L={x:cx2,y:cy2}; else _grP2L={x:cx2,y:cy2};
+    // Also fill manual input fields
+    var _mx=document.getElementById('gr-mini-x'+suffix);if(_mx)_mx.value=cx2.toFixed(4);
+    var _my=document.getElementById('gr-mini-y'+suffix);if(_my)_my.value=cy2.toFixed(4);
+    // Store visual point
+    if(_georefPickTarget===1)_georefMiniP1={x:cx2,y:cy2};
+    else _georefMiniP2={x:cx2,y:cy2};
+    _georefRenderMini();
+    // Reset
+    cv.style.outline='1px solid #fed7aa';cv.style.cursor='crosshair';
+    _georefPickTarget=0;cv.onclick=null;
+    document.getElementById('gr-mini-status').textContent=
+      'P'+suffix+' = ('+cx2.toFixed(3)+', '+cy2.toFixed(3)+')  ✓';
+  };
+}
+
+// Wire georef modal to also initialize mini canvas
+
+// ─── Manual / list input for mini-canvas base points ─────────────────────────
+function _georefPopulateSnapList(){
+  [1,2].forEach(function(n){
+    var sel=document.getElementById('gr-mini-snap-sel-'+n);
+    if(!sel)return;
+    while(sel.options.length>1)sel.remove(1);
+    _georefMiniSnaps.forEach(function(p,i){
+      var opt=document.createElement('option');
+      opt.value=i;
+      opt.dataset.x=p.x;
+      opt.dataset.y=p.y;
+      opt.textContent='#'+(i+1)+': ('+p.x.toFixed(3)+', '+p.y.toFixed(3)+')';
+      sel.appendChild(opt);
+    });
+  });
+}
+function georefSnapSel(n,val){
+  if(val==='')return;
+  // Read coords from selected option's data attributes (robust, no array lookup)
+  var sel=document.getElementById('gr-mini-snap-sel-'+n);
+  if(!sel)return;
+  var opt=sel.options[sel.selectedIndex];
+  if(!opt||!opt.dataset.x)return;
+  var x=parseFloat(opt.dataset.x),y=parseFloat(opt.dataset.y);
+  if(isNaN(x)||isNaN(y))return;
+  var ex=document.getElementById('gr-mini-x'+n);
+  var ey=document.getElementById('gr-mini-y'+n);
+  if(ex)ex.value=x.toFixed(4);
+  if(ey)ey.value=y.toFixed(4);
+  var hx=document.getElementById('gr-p'+n+'-lx');
+  var hy=document.getElementById('gr-p'+n+'-ly');
+  if(hx)hx.value=x.toFixed(3);
+  if(hy)hy.value=y.toFixed(3);
+  if(n===1){_georefMiniP1={x:x,y:y}; _grP1L={x:x,y:y};}
+  else      {_georefMiniP2={x:x,y:y}; _grP2L={x:x,y:y};}
+  _georefRenderMini();
+  var st=document.getElementById('gr-mini-status');
+  if(st)st.textContent='P'+n+' = ('+x.toFixed(3)+', '+y.toFixed(3)+') ✓';
+}
+function georefManualFill(n){
+  var ex=document.getElementById('gr-mini-x'+n);
+  var ey=document.getElementById('gr-mini-y'+n);
+  if(!ex||!ey)return;
+  if(ex.value===''||ey.value==='')return;
+  var x=parseFloat(ex.value),y=parseFloat(ey.value);
+  if(isNaN(x)||isNaN(y))return;
+  var hx=document.getElementById('gr-p'+n+'-lx');
+  var hy=document.getElementById('gr-p'+n+'-ly');
+  if(hx)hx.value=x.toFixed(3);
+  if(hy)hy.value=y.toFixed(3);
+  if(n===1)_grP1L={x:x,y:y}; else _grP2L={x:x,y:y};
+  // Mark on canvas
+  if(n===1){_georefMiniP1={x:x,y:y};}
+  else{_georefMiniP2={x:x,y:y};}
+  _georefRenderMini();
+  document.getElementById('gr-mini-status').textContent=
+    'P'+n+' введено вручную: ('+x.toFixed(3)+', '+y.toFixed(3)+')';
+}
+
+// ── Auto-import DXF POINT entities with Z into cadPoints for contours ─────────
+function _autoImportDxfZ(){
+  if(!dxfElements||!dxfElements.length)return;
+  var added=0;
+  dxfElements.forEach(function(el){
+    if(el.type!=='POINT'||!el.p)return;
+    var z=el.p.z;
+    // Only import if Z is a valid finite number (not null/undefined)
+    if(z===null||z===undefined||!Number.isFinite(z))return;
+    // Skip if point already exists at same location
+    var exists=points.find(function(p){
+      return Math.abs(p.x-el.p.x)<0.001&&Math.abs(p.y-el.p.y)<0.001;
+    });
+    if(exists){
+      // Update Z if existing point has no Z
+      if(exists.z===null||exists.z===undefined)exists.z=z;
+      return;
+    }
+    var id=points.length>0?Math.max.apply(null,points.map(function(p){return p.id;}))+1:1;
+    points.push({id:id,x:el.p.x,y:el.p.y,z:z});
+    added++;
+  });
+  if(added>0){
+    updateTable();
+    updateDimsTable();
+    var msg='Из DXF загружено '+added+' высотных точек (Z)\nГоризонтали: нажмите кнопку «Построить»';
+    showMessage('Высотные точки',msg,'info');
+  }
+}
+
+// ─── Layer panel tabs ────────────────────────────────────────────────────────
+function setLayerTab(n){
+  ['lyr-panel-1','lyr-panel-2'].forEach(function(id,i){
+    var p=document.getElementById(id);if(p){p.classList.toggle('hidden',i+1!==n);}
+  });
+  ['lyr-tab-1','lyr-tab-2'].forEach(function(id,i){
+    var b=document.getElementById(id);if(!b)return;
+    if(i+1===n){
+      b.className='flex-1 py-1.5 text-[10px] font-semibold text-blue-600 border-b-2 border-blue-500 bg-white';
+    } else {
+      b.className='flex-1 py-1.5 text-[10px] font-semibold text-slate-400 border-b-2 border-transparent';
+    }
+  });
+}
+// ─── Second DXF visibility ───────────────────────────────────────────────────
+function setSecondDxfVisible(v){secondDxfVisible=v;requestDraw();}
+function setSecondDxfLinesVis(v){secondDxfLinesVisible=v;requestDraw();}
+function setSecondDxfPointsVis(v){secondDxfPointsVisible=v;requestDraw();}
+// ─── Remove second DXF overlay ───────────────────────────────────────────────
+function clearSecondDxf(){
+  secondDxfElements=[];secondDxfVisible=false;
+  var b=document.getElementById('gr-clear-btn');if(b)b.classList.add('hidden');
+  var c=document.getElementById('lyr-dxf2-controls');if(c)c.classList.add('hidden');
+  var e=document.getElementById('lyr-dxf2-empty');if(e)e.classList.remove('hidden');
+  requestDraw();showMessage('Удалено','Вложенный DXF убран.','info');
+}
+// ─── Import Z-heights from second DXF into cadPoints ────────────────────────
+function importDxf2Z(){
+  if(!secondDxfElements.length){showMessage('Нет данных','Вложенный DXF не загружен.','warning');return;}
+  var addedXY=0,addedZ=0,updatedZ=0;
+  secondDxfElements.forEach(function(el){
+    if(el.type!=='POINT'||!el.p)return;
+    var z=el.p.z,hasZ=z!==null&&z!==undefined&&Number.isFinite(z);
+    var ex=points.find(function(p){return Math.abs(p.x-el.p.x)<0.01&&Math.abs(p.y-el.p.y)<0.01;});
+    if(ex){if(hasZ&&(ex.z===null||ex.z===undefined)){ex.z=z;updatedZ++;}}
+    else{var id=points.length>0?Math.max.apply(null,points.map(function(p){return p.id;}))+1:1;
+      points.push({id:id,x:el.p.x,y:el.p.y,z:hasZ?z:null});addedXY++;if(hasZ)addedZ++;}
+  });
+  var total=addedXY+updatedZ;
+  if(total>0){
+    _rebuildSnapWithDxf2();
+    updateTable();updateDimsTable();requestDraw();
+    var msg='Точек перенесено: '+addedXY;
+    if(addedZ>0)msg+='  (с Z: '+addedZ+')';
+    if(updatedZ>0)msg+='\nZ обновлено: '+updatedZ;
+    msg+='\n\n✓ Привязка к точкам активна для:\n• Измерения расстояний\n• Рисования линий\n• Горизонталей';
+    showMessage('Координаты перенесены',msg,'success');
+  } else showMessage('Нет новых точек','Все точки уже импортированы.','info');
+}
+// ─── Update DXF2 layer panel when overlay applied ────────────────────────────
+function _updateDxf2LayerPanel(){
+  var c=document.getElementById('lyr-dxf2-controls');
+  var e=document.getElementById('lyr-dxf2-empty');
+  if(secondDxfElements.length>0){
+    if(c)c.classList.remove('hidden');
+    if(e)e.classList.add('hidden');
+  } else {
+    if(c)c.classList.add('hidden');
+    if(e)e.classList.remove('hidden');
+  }
+  // Reset checkboxes
+  var cv=document.getElementById('lyr-dxf2-visible');if(cv)cv.checked=true;
+  var cl=document.getElementById('lyr-dxf2-lines');if(cl)cl.checked=true;
+  var cp=document.getElementById('lyr-dxf2-points');if(cp)cp.checked=true;
+  secondDxfVisible=true;secondDxfLinesVisible=true;secondDxfPointsVisible=true;
+}
+
+// ─── Add second DXF points to snap grid for measuring/line tools ──────────────
+function _rebuildSnapWithDxf2(){
+  if(!secondDxfElements||!secondDxfElements.length)return;
+  // Add POINT entities
+  secondDxfElements.forEach(function(el){
+    if(el.type!=='POINT'||!el.p)return;
+    if(!cadSnapPoints.some(function(s){return Math.abs(s.x-el.p.x)<0.001&&Math.abs(s.y-el.p.y)<0.001;}))
+      cadSnapPoints.push({x:el.p.x,y:el.p.y,z:el.p.z||null});
+  });
+  // Add polyline vertices
+  secondDxfElements.forEach(function(el){
+    if(el.type!=='POLYLINE'||!el.pts)return;
+    el.pts.forEach(function(p){
+      if(!cadSnapPoints.some(function(s){return Math.abs(s.x-p.x)<0.001&&Math.abs(s.y-p.y)<0.001;}))
+        cadSnapPoints.push({x:p.x,y:p.y,z:p.z||null});
+    });
+  });
+}
+
+function setContourColor(c){dxfContourColor=c;requestDraw();}
+function setContourOpacity(o){dxfContourOpacity=parseFloat(o);requestDraw();}
+
+// --- Area & Volume ---
+var _savedArea=0,_savedVolume=0,_savedPerimeter=0;
+function _shoelaceArea(pts){
+  var a=0,n=pts.length;
+  for(var i=0;i<n;i++){var j=(i+1)%n;a+=pts[i].x*pts[j].y-pts[j].x*pts[i].y;}
+  return Math.abs(a)/2;
+}
+function _perimeterCalc(pts){
+  var p=0,n=pts.length;
+  for(var i=0;i<n;i++){var j=(i+1)%n;p+=Math.hypot(pts[j].x-pts[i].x,pts[j].y-pts[i].y);}
+  return p;
+}
+function openAreaVol(){
+  var pts=points.filter(function(p){return Number.isFinite(p.x)&&Number.isFinite(p.y);});
+  var av=document.getElementById('area-vol-modal');if(!av)return;
+  document.getElementById('av-pt-count').textContent=pts.length;
+  if(pts.length<3){
+    document.getElementById('av-area').textContent='Нужно >= 3 точек';
+    document.getElementById('av-perimeter').textContent='--';
+    document.getElementById('av-volume').textContent='--';
+    av.classList.remove('hidden');return;
+  }
+  var area=_shoelaceArea(pts),perim=_perimeterCalc(pts);
+  _savedArea=area;_savedPerimeter=perim;
+  document.getElementById('av-area').textContent=area.toFixed(3)+' м²';
+  document.getElementById('av-perimeter').textContent=perim.toFixed(3)+' м';
+  updateVolume();
+  av.classList.remove('hidden');
+}
+function updateVolume(){
+  var h=parseFloat(document.getElementById('av-height').value)||0;
+  var vol=_savedArea*Math.abs(h);_savedVolume=vol;
+  document.getElementById('av-volume').textContent=
+    _savedArea>0?(vol.toFixed(3)+' м³'):'--';
+}
+function closeAreaVol(){document.getElementById('area-vol-modal').classList.add('hidden');}
+function saveAreaVolToReport(){
+  closeAreaVol();
+  showMessage('Записано',
+    'Площадь: '+_savedArea.toFixed(3)+' м²\n'+
+    'Периметр: '+_savedPerimeter.toFixed(3)+' м\n'+
+    'Объём: '+_savedVolume.toFixed(3)+' м³\n\nДанные будут включены в PDF.','success');
+}
+
+// ─── Contour drawing tool ─────────────────────────────────────────────────────
+function startContour(){
+  if(typeof _snpActive!=='undefined'&&_snpActive){snpClose();}
+  if(pdfFrameDrawing){pdfFrameDrawing=false;}
+  setTool('point');
+  contourPts=[];contourActive=true;contourClosed=false;contourMousePos=null;
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='crosshair';
+  // Show compact contour panel
+  var p=document.getElementById('contour-panel');
+  if(p)p.style.display='flex';
+  updateContourPanel();
+  requestDraw();
+}
+function undoContourPt(){if(contourPts.length>0){contourPts.pop();contourClosed=false;updateContourPanel();requestDraw();}}
+function closeContour(){
+  if(contourPts.length<3){showMessage('Контур','Нужно минимум 3 точки','warning');return;}
+  contourClosed=true;contourActive=false;
+  // Calculate area, perimeter, well deduction
+  _savedArea=_shoelaceArea(contourPts);
+  _savedPerimeter=_perimeterCalc(contourPts);
+  // Subtract manhole areas that fall inside contour
+  var wellsInside=[];
+  cadSymbols.forEach(function(sym){
+    if((sym.type==='well'||sym.type==='column')&&sym.pts&&sym.pts.length>0){
+      var d=parseFloat(sym.props.d||1.0);
+      if(d>0&&_ptInContour(sym.pts[0].x,sym.pts[0].y,contourPts)){
+        var isSquare=(sym.props.shape==='square');
+        var warea=isSquare?(d*d):Math.PI*(d/2)*(d/2);
+        _savedArea=Math.max(0,_savedArea-warea);
+        wellsInside.push({label:sym.label||sym.type,d:d,area:warea});
+      }
+    }
+  });
+  // Add pile concrete volume
+  var pileVol=0;
+  cadSymbols.forEach(function(sym){
+    if(sym.type==='pile'&&sym.pts&&sym.pts.length>0){
+      var pd=parseFloat(sym.props.d||0.3),ph=parseFloat(sym.props.h||3.0);
+      if(_ptInContour(sym.pts[0].x,sym.pts[0].y,contourPts)){
+        pileVol+=Math.PI*(pd/2)*(pd/2)*ph;
+      }
+    }
+  });
+  _savedPileVolume=pileVol;
+  _savedWellsInside=wellsInside;
+  updateContourPanel();requestDraw();
+}
+function clearContour(){
+  contourPts=[];contourActive=false;contourClosed=false;contourMousePos=null;
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='';
+  var p=document.getElementById('contour-panel');
+  if(p)p.style.display='none';
+  updateContourPanel();
+  requestDraw();
+}
+function updateContourPanel(){
+  var el=document.getElementById('ctr-pts-count');if(el)el.textContent=contourPts.length;
+  var ea=document.getElementById('ctr-area');
+  if(ea)ea.textContent=contourClosed?_savedArea.toFixed(3)+' м²':'— (не замкнут)';
+  var ep=document.getElementById('ctr-perim');
+  if(ep)ep.textContent=contourClosed?_savedPerimeter.toFixed(3)+' м':'—';
+  var ew=document.getElementById('ctr-wells');
+  if(ew)ew.textContent=(_savedWellsInside&&_savedWellsInside.length>0)?
+    _savedWellsInside.map(function(w){return w.label+' Ø'+w.d+'м (-'+w.area.toFixed(2)+'м²)';}).join(', '):'нет';
+  updateContourVol();
+}
+function updateContourVol(){
+  var h=parseFloat(document.getElementById('ctr-depth').value)||0;
+  var vol=_savedArea*Math.abs(h);_savedVolume=vol;
+  var pv=_savedPileVolume||0;
+  var el=document.getElementById('ctr-vol');if(el)el.textContent=_savedArea>0?vol.toFixed(3)+' м³':'—';
+  var ep=document.getElementById('ctr-pile-vol');if(ep)ep.textContent=pv>0?pv.toFixed(3)+' м³':'—';
+  var et=document.getElementById('ctr-total-vol');if(et)et.textContent=_savedArea>0?(vol+pv).toFixed(3)+' м³':'—';
+}
+// Point-in-polygon test (ray casting)
+function _ptInContour(px,py,poly){
+  var n=poly.length,inside=false;
+  for(var i=0,j=n-1;i<n;j=i++){
+    var xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi))inside=!inside;
+  }
+  return inside;
+}
+// ─── PDF Frame ────────────────────────────────────────────────────────────────
+function startPdfFrame(){
+  if(typeof contourActive!=='undefined'&&contourActive&&typeof clearContour==='function'){clearContour();}
+  if(typeof symTool!=='undefined'&&symTool&&typeof _symCancel==='function'){_symCancel();}
+  if(typeof setTool==='function')setTool('point');
+  pdfFrame=null; pdfFrameDrawing=true; pdfFrameStart=null;
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='crosshair';
+  requestDraw();
+}
+function clearPdfFrame(){
+  pdfFrame=null;pdfFrameDrawing=false;pdfFrameStart=null;
+  var cv=document.getElementById('cad-canvas');if(cv)cv.style.cursor='';
+  var btn=document.getElementById('btn-clear-pdf-frame');
+  if(btn)btn.classList.add('hidden');
+  requestDraw();
+}
+var _savedPileVolume=0,_savedWellsInside=[];
+
+function saveContourToReport(){
+  var h=parseFloat(document.getElementById('ctr-depth').value)||0;
+  _savedVolume=_savedArea*Math.abs(h);
+  showMessage('Записано в отчёт',
+    'Площадь: '+_savedArea.toFixed(3)+' м²\n'+
+    'Периметр: '+_savedPerimeter.toFixed(3)+' м\n'+
+    'Объём грунта: '+_savedVolume.toFixed(3)+' м³\n'+
+    'Объём бетона (сваи): '+(_savedPileVolume||0).toFixed(3)+' м³\n'+
+    'Итого: '+((_savedVolume||0)+(_savedPileVolume||0)).toFixed(3)+' м³','success');
+}
+
+function toggleSnapPanel(){
+  var p=document.getElementById('snap-panel');
+  if(p)p.classList.toggle('hidden');
+}
+function sbUpdateSnap(){
+  ['nodes','lines','midpoints'].forEach(function(k){
+    var sb=document.getElementById('sb-snap-'+k);
+    var sp=document.getElementById('snap-'+k);
+    if(sb&&sp){sp.checked=sb.checked;}
+  });
+  updateSnapModes();
+}
+function updateSnapModes(){
+  ['nodes','lines','midpoints'].forEach(function(k){
+    var sb=document.getElementById('sb-snap-'+k);
+    var sp=document.getElementById('snap-'+k);
+    if(sb&&sp){sb.checked=sp.checked;}
+  });
+
+  snapModes.nodes   =document.getElementById('snap-nodes')   ?document.getElementById('snap-nodes').checked   :true;
+  snapModes.lines   =document.getElementById('snap-lines')   ?document.getElementById('snap-lines').checked   :true;
+  snapModes.midpoints=document.getElementById('snap-midpoints')?document.getElementById('snap-midpoints').checked:false;
+  // Update label
+  var active=[];
+  if(snapModes.nodes)active.push('Узлы');
+  if(snapModes.lines)active.push('Линии');
+  if(snapModes.midpoints)active.push('Середина');
+  var lbl=document.getElementById('snap-mode-label');
+  if(lbl)lbl.textContent=active.length?active.join('+'):'Выкл';
+}
+
+function editPtField(id,field,val){
+  var p=points.find(function(pt){return pt.id===id;});
+  if(!p)return;
+  var num=parseFloat((val+'').replace(',','.'));
+  if(field==='z'){
+    p.z=val===''?null:isNaN(num)?null:num;
+    p.type=p.type||'Абс.';
+  } else if(field==='x'||field==='y'){
+    if(!isNaN(num))p[field]=num;
+  }
+  // Rebuild snap for updated point
+  rebuildCachedPath();
+  updateDimsTable();
+  requestDraw();
+}
+
+function onZTypeChange(){
+  var t=document.getElementById('edit-z-type').value;
+  var vf=document.getElementById('z-vekha-fields');
+  var er=document.getElementById('z-extra-h-row');
+  if(t==='Призма'||t==='Поверхность'){
+    if(vf)vf.style.display='flex';
+    // Extra height only for Поверхность
+    if(er)er.style.display=(t==='Поверхность')?'flex':'none';
+    calcVekhaZ();
+  } else {
+    if(vf)vf.style.display='none';
+  }
+}
+function calcVekhaZ(){
+  var zRaw=parseFloat(document.getElementById('edit-z-value').value)||0;
+  var vh=parseFloat(document.getElementById('z-vekha-h').value)||0;
+  var corr=parseFloat(document.getElementById('z-vekha-corr').value)||0;
+  var eh=parseFloat((document.getElementById('z-extra-h')||{}).value)||0;
+  var t=document.getElementById('edit-z-type').value;
+  var zFinal;
+  if(t==='Призма'){
+    // Z = measured - vekha_height + correction
+    zFinal=zRaw-vh+corr;
+  } else if(t==='Поверхность'){
+    // Z = measured - vekha_height + correction + extra_height
+    zFinal=zRaw-vh+corr+eh;
+  } else {
+    zFinal=zRaw;
+  }
+  var r=document.getElementById('z-vekha-result');
+  if(r)r.textContent=zFinal.toFixed(3)+' м';
+  return zFinal;
+}
+// Override applyZToPoint to use vekha calculation
+var _origApplyZ=applyZToPoint;
+function applyZToPoint(){
+  var t=document.getElementById('edit-z-type').value;
+  if(t==='Призма'||t==='Поверхность'){
+    // Get computed Z and write it to the Z input
+    var zFinal=calcVekhaZ();
+    document.getElementById('edit-z-value').value=zFinal.toFixed(3);
+    // Temporarily set type to Абс. so it saves correctly
+    document.getElementById('edit-z-type').value='Абс.';
+    _origApplyZ();
+    document.getElementById('edit-z-type').value=t;
+    document.getElementById('edit-z-value').value='';
+    return;
+  }
+  _origApplyZ();
+}
+
+// ─── Symbols Table ────────────────────────────────────────────────────────────
+var symTableRows=[]; // manual extra rows not from cadSymbols
+var symTableVisible=false;
+
+function openSymTable(){
+  var p=document.getElementById('sym-table-panel');
+  if(!p)return;
+  p.classList.toggle('hidden');
+  if(!p.classList.contains('hidden'))refreshSymTable();
+}
+
+function _symLen(sym){
+  // Calculate length for line-based symbols (wall, sewage, water, gas, heat, cable, fence)
+  if(!sym.pts||sym.pts.length<2)return null;
+  var total=0;
+  for(var i=0;i<sym.pts.length-1;i++){
+    total+=Math.hypot(sym.pts[i+1].x-sym.pts[i].x,sym.pts[i+1].y-sym.pts[i].y);
+  }
+  return total;
+}
+
+function _symPropVal(sym,pid){
+  return sym.props&&sym.props[pid]!==undefined?sym.props[pid]:'';
+}
+
+function refreshSymTable(){
+  // Merge cadSymbols + manual rows into one table
+  var tb=document.getElementById('sym-table-body');
+  var cnt=document.getElementById('sym-table-count');
+  var rows=[];
+  
+  // From placed symbols on plan
+  cadSymbols.forEach(function(sym,i){
+    var st=_ST[sym.type]||{};
+    var d=_symPropVal(sym,'d');
+    var h=_symPropVal(sym,'h');
+    var top=_symPropVal(sym,'top');
+    var shape=_symPropVal(sym,'shape');
+    var len=_symLen(sym);
+    rows.push({
+      _src:'plan',_idx:i,
+      type:sym.type,
+      label:sym.label||(st.label||sym.type),
+      d:d, h:h, top:top, shape:shape,
+      len:len!==null?len.toFixed(2):'',
+      note:sym.note||''
+    });
+  });
+  
+  // Manual rows
+  symTableRows.forEach(function(r,i){
+    rows.push(Object.assign({_src:'manual',_idx:i},r));
+  });
+  
+  if(cnt)cnt.textContent='Объектов: '+rows.length;
+  
+  if(rows.length===0){
+    tb.innerHTML='<tr><td colspan="9" class="text-center py-4 text-slate-400 italic">Нет объектов.</td></tr>';
+    return;
+  }
+  
+  var h='';
+  rows.forEach(function(r,gi){
+    var bg=gi%2===0?'background:#fff':'background:#f8fafc';
+    var src=r._src,idx=r._idx;
+    var typeLabel=(_ST[r.type]&&_ST[r.type].label)||r.label||r.type||'';
+    var icon=(_ST[r.type]&&_ST[r.type].icon)||'📋';
+    
+    // Determine what to show in each column based on type
+    var dVal=r.d||'';
+    var depthVal=''; // глубина
+    var lenVal=r.len||'';
+    var hVal=r.h||'';
+    var topVal=r.top||'';
+    
+    // For line symbols, show length in depth/length column
+    if(['sewage','water','gas','heat','cable','fence','wall'].includes(r.type)){
+      depthVal=lenVal; // length is the "depth/length" column
+      lenVal='';
+    } else {
+      depthVal=r.h||''; // for point symbols h is depth
+      hVal=''; // already used
+    }
+    
+    h+='<tr style="'+bg+';border-bottom:1px solid #e2e8f0;">';
+    h+='<td class="px-2 py-1 text-slate-500 border-r border-slate-100">'+( gi+1)+'</td>';
+    h+='<td class="px-2 py-1 border-r border-slate-100">'+icon+' <span class="font-medium">'+typeLabel+'</span></td>';
+    // Name (editable)
+    h+='<td class="px-1 py-0.5 border-r border-slate-100">'
+      +'<input type="text" value="'+_escHtml(r.label||'')+'" '
+      +'onchange="_symTblEdit(\''+src+'\','+idx+',\'label\',this.value)" '
+      +'class="w-full text-xs border border-transparent hover:border-slate-300 focus:border-blue-400 rounded px-1 py-0.5 focus:outline-none bg-transparent focus:bg-white">'
+      +'</td>';
+    // Diameter (editable)
+    h+='<td class="px-1 py-0.5 border-r border-slate-100">'
+      +'<input type="text" value="'+_escHtml(dVal)+'" '
+      +'onchange="_symTblEdit(\''+src+'\','+idx+',\'d\',this.value)" '
+      +'class="w-full text-xs font-mono border border-transparent hover:border-slate-300 focus:border-blue-400 rounded px-1 py-0.5 focus:outline-none bg-transparent focus:bg-white">'
+      +'</td>';
+    // Depth/Length (editable)
+    h+='<td class="px-1 py-0.5 border-r border-slate-100">'
+      +'<input type="text" value="'+_escHtml(depthVal)+'" '
+      +'onchange="_symTblEdit(\''+src+'\','+idx+',\'depth\',this.value)" '
+      +'class="w-full text-xs font-mono border border-transparent hover:border-slate-300 focus:border-blue-400 rounded px-1 py-0.5 focus:outline-none bg-transparent focus:bg-white">'
+      +'</td>';
+    // Height (editable for walls/columns)
+    h+='<td class="px-1 py-0.5 border-r border-slate-100">'
+      +'<input type="text" value="'+_escHtml(r.type==='pile'?r.h||'':hVal)+'" '
+      +'onchange="_symTblEdit(\''+src+'\','+idx+',\'h\',this.value)" '
+      +'class="w-full text-xs font-mono border border-transparent hover:border-slate-300 focus:border-blue-400 rounded px-1 py-0.5 focus:outline-none bg-transparent focus:bg-white">'
+      +'</td>';
+    // Top mark (editable for piles/wells)
+    h+='<td class="px-1 py-0.5 border-r border-slate-100">'
+      +'<input type="text" value="'+_escHtml(topVal)+'" '
+      +'onchange="_symTblEdit(\''+src+'\','+idx+',\'top\',this.value)" '
+      +'class="w-full text-xs font-mono border border-transparent hover:border-slate-300 focus:border-blue-400 rounded px-1 py-0.5 focus:outline-none bg-transparent focus:bg-white">'
+      +'</td>';
+    // Note (editable)
+    h+='<td class="px-1 py-0.5 border-r border-slate-100">'
+      +'<input type="text" value="'+_escHtml(r.note||'')+'" '
+      +'onchange="_symTblEdit(\''+src+'\','+idx+',\'note\',this.value)" '
+      +'class="w-full text-xs border border-transparent hover:border-slate-300 focus:border-blue-400 rounded px-1 py-0.5 focus:outline-none bg-transparent focus:bg-white">'
+      +'</td>';
+    // Delete
+    h+='<td class="px-1 py-1 text-right">'
+      +'<button onclick="_symTblDel(\''+src+'\','+idx+')" class="text-red-400 hover:text-red-600 text-xs">'
+      +'<i class="fa-solid fa-xmark"></i></button>'
+      +'</td>';
+    h+='</tr>';
+  });
+  tb.innerHTML=h;
+}
+
+function _escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _symTblEdit(src,idx,field,val){
+  if(src==='plan'){
+    var sym=cadSymbols[idx];if(!sym)return;
+    if(field==='label'){sym.label=val;}
+    else if(field==='note'){sym.note=val;}
+    else if(field==='depth'){
+      // For line symbols depth = length (read-only from pts), for point = h
+      if(['pile','column','well'].includes(sym.type))sym.props.h=val;
+    }
+    else if(field==='h'){sym.props.h=val;}
+    else if(field==='d'){sym.props.d=val;}
+    else if(field==='top'){sym.props.top=val;}
+    requestDraw();
+  } else {
+    var r=symTableRows[idx];if(!r)return;
+    if(field==='depth')r.h=val;
+    else r[field]=val;
+  }
+}
+
+function _symTblDel(src,idx){
+  if(src==='plan'){
+    if(confirm('Удалить объект с плана?')){
+      cadSymbols.splice(idx,1);
+      requestDraw();
+      refreshSymTable();
+    }
+  } else {
+    symTableRows.splice(idx,1);
+    refreshSymTable();
+  }
+}
+
+function addSymbolRow(){
+  symTableRows.push({type:'',label:'Новый объект',d:'',h:'',top:'',note:''});
+  refreshSymTable();
+  // Scroll to bottom
+  var tb=document.getElementById('sym-table-panel');
+  if(tb)tb.querySelector('.overflow-auto').scrollTop=99999;
+}
+
+function _buildSymTableHtml(){
+  // Build HTML table for PDF (no edit controls)
+  var rows=[];
+  cadSymbols.forEach(function(sym,i){
+    var st=_ST[sym.type]||{};
+    var d=sym.props&&sym.props.d!==undefined?sym.props.d:'';
+    var h=sym.props&&sym.props.h!==undefined?sym.props.h:'';
+    var top=sym.props&&sym.props.top!==undefined?sym.props.top:'';
+    var len=_symLen(sym);
+    var isLine=['sewage','water','gas','heat','cable','fence','wall'].includes(sym.type);
+    rows.push({
+      num:i+1,
+      icon:(st.icon||''),
+      label:sym.label||(st.label||sym.type),
+      d:d,
+      depth:isLine?(len?len.toFixed(2)+'м':''):h?h+'м':'',
+      height:isLine?(h?h+'м':''):'',
+      top:top,
+      note:sym.note||''
+    });
+  });
+  symTableRows.forEach(function(r,i){
+    rows.push({
+      num:cadSymbols.length+i+1,
+      icon:'',
+      label:r.label||'',
+      d:r.d||'',
+      depth:r.h||'',
+      height:'',
+      top:r.top||'',
+      note:r.note||''
+    });
+  });
+  if(!rows.length)return '';
+  
+  var fpt=5.5,thS='font-size:'+fpt+'pt;padding:0.3mm 1mm;background:#1e293b;color:#fff;border:0.3pt solid #334155;text-align:left;',
+      tdS='font-size:'+(fpt-0.5)+'pt;padding:0.2mm 0.8mm;border:0.3pt solid #e2e8f0;font-family:monospace;';
+  var h2='<div style="font-size:'+(fpt+1)+'pt;font-weight:bold;margin:1.5mm 0 0.5mm;border-bottom:0.3pt solid #94a3b8;padding-bottom:0.3mm;">Ведомость объектов</div>';
+  var tbl='<table style="width:100%;border-collapse:collapse;">';
+  tbl+='<thead><tr>'
+    +'<th style="'+thS+'width:6mm;">№</th>'
+    +'<th style="'+thS+'">Наименование</th>'
+    +'<th style="'+thS+'width:14mm;">Ø/Ст, м</th>'
+    +'<th style="'+thS+'width:16mm;">Глуб/Длина</th>'
+    +'<th style="'+thS+'width:14mm;">Высота</th>'
+    +'<th style="'+thS+'width:14mm;">Отметка</th>'
+    +'<th style="'+thS+'">Примечание</th>'
+    +'</tr></thead><tbody>';
+  rows.forEach(function(r,i){
+    var bg=i%2===0?'':'background:#f8fafc;';
+    tbl+='<tr>'
+      +'<td style="'+tdS+bg+'">'+r.num+'</td>'
+      +'<td style="'+tdS+bg+'">'+r.icon+' '+r.label+'</td>'
+      +'<td style="'+tdS+bg+'">'+r.d+'</td>'
+      +'<td style="'+tdS+bg+'">'+r.depth+'</td>'
+      +'<td style="'+tdS+bg+'">'+r.height+'</td>'
+      +'<td style="'+tdS+bg+'">'+r.top+'</td>'
+      +'<td style="'+tdS+bg+'">'+r.note+'</td>'
+      +'</tr>';
+  });
+  tbl+='</tbody></table>';
+  return h2+tbl;
+}
+
+// ─── Material fill patterns ───────────────────────────────────────────────────
+function _drawMaterialFill(cx,mat,baseColor,x,y,w,h){
+  var sz=12; // pattern tile size in screen px
+  var off=document.createElement('canvas');off.width=sz;off.height=sz;
+  var oc=off.getContext('2d');
+  oc.clearRect(0,0,sz,sz);
+  switch(mat){
+    case 'concrete':
+      // Grey diagonal hatching — ГОСТ для бетона
+      oc.fillStyle='rgba(160,160,160,0.12)';oc.fillRect(0,0,sz,sz);
+      oc.strokeStyle='rgba(100,100,120,0.4)';oc.lineWidth=0.7;
+      oc.beginPath();oc.moveTo(0,sz);oc.lineTo(sz,0);oc.stroke();
+      oc.beginPath();oc.moveTo(-sz/2,sz);oc.lineTo(sz,sz/2);oc.stroke();
+      break;
+    case 'sand':
+      // Yellow dots — ГОСТ для песка
+      oc.fillStyle='rgba(240,210,100,0.18)';oc.fillRect(0,0,sz,sz);
+      oc.fillStyle='rgba(180,150,50,0.5)';
+      [[sz*0.25,sz*0.25],[sz*0.75,sz*0.75],[sz*0.5,sz*0.7],[sz*0.2,sz*0.7]].forEach(function(p){
+        oc.beginPath();oc.arc(p[0],p[1],1.2,0,Math.PI*2);oc.fill();
+      });
+      break;
+    case 'gravel':
+      // Oval stones — ГОСТ для щебня/гравия
+      oc.fillStyle='rgba(180,180,180,0.15)';oc.fillRect(0,0,sz,sz);
+      oc.strokeStyle='rgba(100,100,100,0.5)';oc.lineWidth=0.8;
+      [[sz*0.3,sz*0.3,2.5,1.5,0.3],[sz*0.7,sz*0.7,2,1.2,-0.2],[sz*0.2,sz*0.7,1.8,1.1,0.5]].forEach(function(p){
+        oc.beginPath();oc.ellipse(p[0],p[1],p[2],p[3],p[4],0,Math.PI*2);oc.stroke();
+      });
+      break;
+    case 'clay':
+      // Horizontal wavy lines — ГОСТ для глины
+      oc.fillStyle='rgba(180,130,80,0.12)';oc.fillRect(0,0,sz,sz);
+      oc.strokeStyle='rgba(140,90,40,0.4)';oc.lineWidth=0.7;
+      [sz*0.25,sz*0.75].forEach(function(yy){
+        oc.beginPath();oc.moveTo(0,yy);
+        for(var xi=0;xi<=sz;xi+=sz/4)oc.lineTo(xi,yy+(xi%sz===0?0:1.5*Math.sin(xi/sz*Math.PI*2)));
+        oc.stroke();
+      });
+      break;
+    case 'soil':
+      // Diagonal + horizontal — ГОСТ для грунта
+      oc.fillStyle='rgba(140,100,60,0.12)';oc.fillRect(0,0,sz,sz);
+      oc.strokeStyle='rgba(100,70,30,0.4)';oc.lineWidth=0.7;
+      oc.beginPath();oc.moveTo(0,sz/2);oc.lineTo(sz,sz/2);oc.stroke();
+      oc.beginPath();oc.moveTo(0,sz);oc.lineTo(sz,0);oc.stroke();
+      break;
+    case 'asphalt':
+      // Dense diagonal — ГОСТ для асфальта
+      oc.fillStyle='rgba(60,60,70,0.2)';oc.fillRect(0,0,sz,sz);
+      oc.strokeStyle='rgba(30,30,40,0.5)';oc.lineWidth=0.7;
+      for(var xi=-sz;xi<=sz*2;xi+=4){oc.beginPath();oc.moveTo(xi,0);oc.lineTo(xi+sz,sz);oc.stroke();}
+      break;
+    case 'brick':
+      // Brick rows — ГОСТ для кирпича
+      oc.fillStyle='rgba(200,100,80,0.15)';oc.fillRect(0,0,sz,sz);
+      oc.strokeStyle='rgba(160,60,40,0.5)';oc.lineWidth=0.7;
+      oc.strokeRect(0,0,sz,sz/2);oc.strokeRect(sz/2,sz/2,sz/2,sz/2);oc.strokeRect(0,sz/2,sz/2,sz/2);
+      break;
+    case 'metal':
+      // Cross-hatch — ГОСТ для металла
+      oc.fillStyle='rgba(180,190,200,0.12)';oc.fillRect(0,0,sz,sz);
+      oc.strokeStyle='rgba(80,100,130,0.45)';oc.lineWidth=0.7;
+      oc.beginPath();oc.moveTo(0,sz);oc.lineTo(sz,0);oc.stroke();
+      oc.beginPath();oc.moveTo(0,0);oc.lineTo(sz,sz);oc.stroke();
+      break;
+    default:
+      oc.fillStyle=baseColor||'rgba(100,200,100,0.15)';oc.fillRect(0,0,sz,sz);
+  }
+  var pat=cx.createPattern(off,'repeat');
+  cx.fillStyle=pat;
+  cx.fillRect(x,y,w,h);
+}
+
+// ─── Save current contour as filled area ──────────────────────────────────────
+function saveContourAsFill(){
+  if(!contourClosed||contourPts.length<3){
+    showMessage('Контур','Сначала замкните контур','warning');return;
+  }
+  var mat=document.getElementById('ctr-material')?document.getElementById('ctr-material').value:'concrete';
+  var col=document.getElementById('ctr-fill-color')?document.getElementById('ctr-fill-color').value:'#334155';
+  savedContours.push({
+    pts:contourPts.slice(),
+    material:mat,
+    lineColor:col,
+    area:_savedArea,
+    perimeter:_savedPerimeter,
+    volume:_savedVolume,
+    pileVol:_savedPileVolume||0,
+    wellsInside:(_savedWellsInside||[]).slice(),
+    height:parseFloat(document.getElementById('ctr-depth').value)||0
+  });
+  showMessage('Закрашено','Область сохранена с материалом. Контур очищен.','success');
+  clearContour();
+}
+
+function deleteContourFill(i){
+  if(confirm('Удалить закрашенную область?')){savedContours.splice(i,1);requestDraw();}
+}
+
+// ─── Leader callouts for symbols ──────────────────────────────────────────────
+function _getSymLeaderText(sym){
+  var t=_ST[sym.type]||{};
+  var p=sym.props||{};
+  var parts=[sym.label||(t.label||sym.type)];
+  switch(sym.type){
+    case 'wall':
+      if(p.w)parts.push('w='+p.w+'м');
+      if(p.h)parts.push('h='+p.h+'м');
+      break;
+    case 'column':
+      var shp=p.shape==='square'?'□':'○';
+      parts.push(shp+(p.d||'')+'м');
+      if(p.h)parts.push('h='+p.h+'м');
+      break;
+    case 'pile':
+      parts.push('Ø'+(p.d||'')+'м');
+      if(p.h)parts.push('H='+p.h+'м');
+      if(p.top!==undefined)parts.push(p.top+'м');
+      break;
+    case 'well':
+      parts.push('Ø'+(p.d||'')+'м');
+      if(p.t)parts.push(p.t);
+      break;
+    case 'sewage':case 'water':case 'heat':
+      if(p.d)parts.push('Ø'+p.d+'мм');
+      break;
+    case 'gas':
+      if(p.p)parts.push(p.p);
+      break;
+    case 'cable':
+      if(p.v)parts.push(p.v+'кВ');
+      break;
+    default: break;
+  }
+  // Add auto-length for line symbols
+  if(['sewage','water','gas','heat','cable','fence','wall'].includes(sym.type)&&sym.pts&&sym.pts.length>=2){
+    var len=0;
+    for(var i=0;i<sym.pts.length-1;i++)
+      len+=Math.hypot(sym.pts[i+1].x-sym.pts[i].x,sym.pts[i+1].y-sym.pts[i].y);
+    parts.push('L='+len.toFixed(1)+'м');
+  }
+  return parts;
+}
+
+function _drawLeaders(ctx,pr){
+  if(!showLeaders||!cadSymbols.length)return;
+  var FONT_SZ=6.5*pr, LINE_H=8*pr;
+  var DIST=38*pr;   // leader length in screen px
+  var DOT_R=1.8*pr; // dot at symbol
+  
+  cadSymbols.forEach(function(sym,idx){
+    if(!sym.pts||!sym.pts.length)return;
+    // Anchor: centroid of pts
+    var ax=0,ay=0;
+    sym.pts.forEach(function(p){ax+=p.x;ay+=p.y;});
+    ax/=sym.pts.length;ay/=sym.pts.length;
+    var sp=cadToScreen(ax,ay);
+    
+    // Leader direction using Fibonacci/golden angle spread → no overlap
+    var angle=(idx*137.508)*Math.PI/180;
+    
+    // Check if symbol is on right or left of canvas center to flip angle
+    var cx0=document.getElementById('cad-canvas').width/2;
+    if(sp.x>cx0) angle=Math.abs(angle)%(Math.PI*2); // bias right
+    
+    var ex=sp.x+Math.cos(angle)*DIST;
+    var ey=sp.y+Math.sin(angle)*DIST;
+    
+    var col=sym.color||'#334155';
+    var lines=_getSymLeaderText(sym);
+    
+    // Elbow: horizontal extension from end point
+    ctx.save();
+    ctx.font=FONT_SZ+'px sans-serif';
+    
+    // Measure max text width
+    var maxW=0;
+    lines.forEach(function(l){maxW=Math.max(maxW,ctx.measureText(l).width);});
+    
+    // Elbow direction
+    var elbowRight=(Math.cos(angle)>=0);
+    var elbowLen=Math.min(maxW+6*pr,55*pr);
+    var ex2=elbowRight?ex+elbowLen:ex-elbowLen;
+    
+    // Leader line
+    ctx.strokeStyle=col;
+    ctx.lineWidth=0.5*pr;
+    ctx.globalAlpha=0.85;
+    ctx.beginPath();
+    ctx.moveTo(sp.x,sp.y);
+    ctx.lineTo(ex,ey);
+    ctx.lineTo(ex2,ey);
+    ctx.stroke();
+    
+    // Dot at symbol
+    ctx.fillStyle=col;
+    ctx.beginPath();
+    ctx.arc(sp.x,sp.y,DOT_R,0,Math.PI*2);
+    ctx.fill();
+    
+    // Tick at elbow
+    ctx.beginPath();
+    ctx.arc(ex,ey,DOT_R*0.8,0,Math.PI*2);
+    ctx.fill();
+    
+    // Text lines (tiny)
+    ctx.fillStyle=col;
+    ctx.globalAlpha=0.95;
+    var tx=elbowRight?ex+2*pr:ex-2*pr-maxW;
+    lines.forEach(function(line,li){
+      var ty=ey+(li===0?0:LINE_H*li)-(lines.length>1?LINE_H*(lines.length-1)/2:0);
+      // White knockout for readability
+      ctx.save();
+      ctx.strokeStyle='rgba(255,255,255,0.85)';
+      ctx.lineWidth=2.5*pr;
+      ctx.strokeText(line,tx,ty);
+      ctx.restore();
+      ctx.fillText(line,tx,ty);
+    });
+    ctx.globalAlpha=1;
+    ctx.restore();
+  });
+}
+
+function toggleLeaders(){
+  showLeaders=!showLeaders;
+  var btn=document.getElementById('leaders-toggle-btn');
+  if(btn){
+    btn.classList.toggle('text-emerald-600',showLeaders);
+    btn.classList.toggle('text-slate-400',!showLeaders);
+  }
+  requestDraw();
+}
+
+
+
+// Update quick bar when contour state changes
+
+// Patch startContour and clearContour to update bar
+
+
+
+
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYMBOL DRAWING PANEL — ArchiCAD/AutoCAD style
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Open the drawing panel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// Canvas click handler for symbol drawing panel
+
+
+
+
+// Draw live preview of current symbol being placed
+
+
+// Keyboard shortcuts for sym panel
+document.addEventListener('keydown',function(e){
+  if(!_snpActive)return;
+  if(e.key==='Enter'){snpFinish();}
+  else if(e.key==='u'||e.key==='U'){snpUndo();}
+  else if(e.key==='Escape'){snpClose();}
+  else if(e.key==='Tab'){
+    var keys=Object.keys(_ST);
+    var idx=keys.indexOf(_snpType);
+    _snpSelectType(keys[(idx+1)%keys.length]);
+    e.preventDefault();
+  }
+});
+
+
+// ═══ AI Analysis Panel ════════════════════════════════════════════════════════
+var _aiHistory=[];
+
+function openAIPanel(){
+  var p=document.getElementById('ai-panel');
+  if(p)p.style.display='flex';
+  if(typeof _setupAIPanel==='function')_setupAIPanel();
+}
+function closeAIPanel(){
+  var p=document.getElementById('ai-panel');
+  if(p)p.style.display='none';
+}
+
+function _buildProjectContext(){
+  var c='ДАННЫЕ ПРОЕКТА:\n';
+  var pts=currentMode==='dxf'?points:manualPoints;
+  if(pts&&pts.length){
+    c+='Точек: '+pts.length+'\n';
+    pts.slice(0,20).forEach(function(p){
+      c+='P'+p.id+': X='+p.x.toFixed(3)+' Y='+p.y.toFixed(3)+(p.z!=null?' Z='+p.z.toFixed(3):'')+'\n';
+    });
+    if(pts.length>20)c+='...ещё '+(pts.length-20)+'\n';
+  }
+  if(dimensions&&dimensions.length)c+='Размеров: '+dimensions.length+'\n';
+  if(typeof _savedArea!=='undefined'&&_savedArea>0){
+    c+='Площадь: '+_savedArea.toFixed(3)+' м²\n';
+    if(typeof _savedVolume!=='undefined'&&_savedVolume>0)c+='Объём: '+_savedVolume.toFixed(3)+' м³\n';
+  }
+  if(cadSymbols&&cadSymbols.length)c+='Символов: '+cadSymbols.length+'\n';
+  if(dxfData&&dxfData.entities)c+='DXF объектов: '+dxfData.entities.length+'\n';
+  return c;
+}
+
+var _aiQuickPrompts={
+  summary:'Дай краткую сводку геодезического проекта: параметры, размеры, площади, объёмы.',
+  quality:'Проверь качество геодезических данных: аномалии, пропуски Z-отметок.',
+  volume:'Проанализируй объёмы земляных работ. Дай рекомендации по точности.',
+  pdf:'Подготовь текст для исполнительной схемы PDF: наименование работ, характеристики.',
+  anomaly:'Найди аномалии в данных. Укажи подозрительные координаты или Z-отметки.'
+};
+
+function aiQuick(type){
+  var p=_aiQuickPrompts[type];if(!p)return;
+  var inp=document.getElementById('ai-input');if(inp)inp.value=p;
+  sendAIMessage();
+}
+
+function _aiAddMsg(role,text){
+  var box=document.getElementById('ai-messages');if(!box)return;
+  var d=document.createElement('div');
+  d.style.cssText=role==='user'
+    ?'align-self:flex-end;background:#7c3aed;color:#fff;border-radius:12px 12px 2px 12px;padding:8px 12px;max-width:85%;white-space:pre-wrap;font-size:12px;'
+    :'align-self:flex-start;background:#f1f5f9;color:#1e293b;border-radius:12px 12px 12px 2px;padding:8px 12px;max-width:85%;white-space:pre-wrap;font-size:12px;';
+  d.textContent=text;
+  var empty=box.querySelector('.ai-empty');if(empty)empty.remove();
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+
+async function sendAIMessage(){
+  var inp=document.getElementById('ai-input');
+  var text=(inp&&inp.value||'').trim();if(!text)return;
+  if(inp)inp.value='';
+  _aiAddMsg('user',text);
+  _aiHistory.push({role:'user',content:text});
+  var typing=document.getElementById('ai-typing');
+  var sendBtn=document.getElementById('ai-send-btn');
+  if(typing)typing.style.display='flex';
+  if(sendBtn)sendBtn.disabled=true;
+  var sys={role:'system',content:'Ты геодезический ИИ-помощник. Отвечай по-русски кратко и точно.\n\n'+_buildProjectContext()};
+  var msgs=[sys].concat(_aiHistory.slice(-8));
+  var model=(document.getElementById('ai-model')&&document.getElementById('ai-model').value)||'openai/gpt-4o-mini';
+  try{
+    var resp=await fetch('/api/ai',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:model,messages:msgs,max_tokens:1200})});
+    if(resp.status===401){window.location.href='/login';return;}
+    var data=await resp.json();
+    if(data.error){_aiAddMsg('assistant','⚠ Ошибка: '+data.error);}
+    else{
+      var reply=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+      if(reply){_aiHistory.push({role:'assistant',content:reply});_aiAddMsg('assistant',reply);}
+      else _aiAddMsg('assistant','⚠ Пустой ответ');
+    }
+  }catch(e){_aiAddMsg('assistant','⚠ Ошибка сети: '+e.message);}
+  finally{if(typing)typing.style.display='none';if(sendBtn)sendBtn.disabled=false;}
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYMBOL DRAWING SYSTEM — clean rewrite
+// ═══════════════════════════════════════════════════════════════════════════
+var _snpActive  = false;   // panel open
+var _snpType    = null;    // current type key
+var _snpProp    = {};      // current props
+var _snpPts     = [];      // points being placed
+var _snpMouse   = null;    // cursor world pos for preview
+var _snpLastClickTime = 0; // for double-click detection
+
+// ── Open panel ─────────────────────────────────────────────────────────────
+function openSymDrawPanel(typeId){
+  if(contourActive) clearContour();
+  pdfFrameDrawing=false;
+  var p=document.getElementById('sym-panel-new');
+  if(!p)return;
+  p.style.display='flex';
+  _snpActive=true; _snpPts=[]; _snpMouse=null;
+  _snpBuildGrid();
+  _snpSelectType(typeId||Object.keys(_ST)[0]);
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='crosshair';
+  requestDraw();
+}
+
+function snpClose(){
+  var p=document.getElementById('sym-panel-new');
+  if(p)p.style.display='none';
+  _snpActive=false; _snpType=null; _snpPts=[]; _snpMouse=null;
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor='';
+  requestDraw();
+}
+
+// ── Build pictogram grid ───────────────────────────────────────────────────
+function _snpBuildGrid(){
+  var g=document.getElementById('snp-grid'); if(!g)return; g.innerHTML='';
+  // Group symbols by category
+  var cats={
+    'Трубопроводы':['voda','kanal','gaz','teplo','kabel','svyaz'],
+    'Колодцы':['kol_voda','kol_kanal','kol_gaz','kol_teplo','kol_el'],
+    'Столбы':['stolb_d','stolb_m','stolb_zh'],
+    'Ограды':['ograda_kap','ograda_d','podpor'],
+    'Прочие':['zdanie','svaya']
+  };
+  g.style.gridTemplateColumns='repeat(5,1fr)';
+  g.innerHTML='';
+
+  Object.keys(cats).forEach(function(catName){
+    // Category header
+    var h=document.createElement('div');
+    h.style.cssText='grid-column:1/-1;font-size:8px;color:#64748b;font-weight:700;'+
+      'text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;';
+    h.textContent=catName;
+    g.appendChild(h);
+
+    cats[catName].forEach(function(id){
+      var t=_ST[id]; if(!t)return;
+      var btn=document.createElement('button');
+      btn.id='snp-btn-'+id;
+      btn.title=t.label;
+
+      // SVG mini-preview of the symbol
+      var svg=_snpMiniSvg(id,t);
+      btn.innerHTML=svg+'<div style="font-size:8px;margin-top:2px;color:#cbd5e1;'+
+        'line-height:1.1;word-break:break-word;text-align:center;">'+
+        (t.code?'<b>'+t.code+'</b> ':'')+
+        t.label.replace('Водопровод','Водопр.').replace('Канализация','Канализ.').
+          replace('Теплосеть','Тепло').replace('деревян.','дер.').
+          replace('Подпорная стенка','Подпорн.')+'</div>';
+      btn.style.cssText='background:#1e3a5f;border:2px solid transparent;border-radius:6px;'+
+        'padding:4px 2px 3px;cursor:pointer;color:#f1f5f9;min-height:50px;'+
+        'display:flex;flex-direction:column;align-items:center;justify-content:flex-start;';
+      btn.onclick=function(){_snpSelectType(id);};
+      g.appendChild(btn);
+    });
+  });
+}
+
+function _snpMiniSvg(id,t){
+  var c=t.color||'#2563eb';
+  var w=44,h=28;
+  // Pipe-type symbols
+  if(['voda','kanal','gaz','teplo','kabel','svyaz'].indexOf(id)>=0){
+    return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28">'+
+      '<line x1="4" y1="14" x2="40" y2="14" stroke="'+c+'" stroke-width="1.5" stroke-dasharray="6,3"/>'+
+      '<text x="22" y="11" text-anchor="middle" fill="'+c+'" font-size="8" font-weight="bold" font-family="Arial">'+t.code+'</text>'+
+      '</svg>';
+  }
+  // Manhole symbols
+  if(id==='kol_voda') return _mhSvg(c,'—');
+  if(id==='kol_kanal') return _mhSvg(c,'+');
+  if(id==='kol_gaz') return _mhSvg(c,'/');
+  if(id==='kol_teplo') return _mhSvg(c,'#');
+  if(id==='kol_el') return _mhSvg(c,'E');
+  // Poles
+  if(id==='stolb_d') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><circle cx="22" cy="14" r="7" fill="none" stroke="'+c+'" stroke-width="1.5"/><text x="22" y="28" text-anchor="middle" fill="'+c+'" font-size="7">д</text></svg>';
+  if(id==='stolb_m') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><circle cx="22" cy="14" r="6" fill="'+c+'"/><text x="22" y="28" text-anchor="middle" fill="'+c+'" font-size="7">м</text></svg>';
+  if(id==='stolb_zh') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><rect x="16" y="8" width="12" height="12" fill="'+c+'"/><text x="22" y="28" text-anchor="middle" fill="'+c+'" font-size="7">ж/б</text></svg>';
+  // Fences
+  if(id==='ograda_kap') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><line x1="4" y1="14" x2="40" y2="14" stroke="'+c+'" stroke-width="2"/><line x1="10" y1="14" x2="10" y2="21" stroke="'+c+'" stroke-width="1.2"/><line x1="18" y1="14" x2="18" y2="21" stroke="'+c+'" stroke-width="1.2"/><line x1="26" y1="14" x2="26" y2="21" stroke="'+c+'" stroke-width="1.2"/><line x1="34" y1="14" x2="34" y2="21" stroke="'+c+'" stroke-width="1.2"/></svg>';
+  if(id==='ograda_d') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><line x1="4" y1="14" x2="40" y2="14" stroke="'+c+'" stroke-width="1.2" stroke-dasharray="5,3"/><line x1="10" y1="14" x2="10" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="20" y1="14" x2="20" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="30" y1="14" x2="30" y2="21" stroke="'+c+'" stroke-width="1"/></svg>';
+  if(id==='podpor') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><line x1="4" y1="14" x2="40" y2="14" stroke="'+c+'" stroke-width="2"/><line x1="10" y1="14" x2="7" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="18" y1="14" x2="15" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="26" y1="14" x2="23" y2="21" stroke="'+c+'" stroke-width="1"/><line x1="34" y1="14" x2="31" y2="21" stroke="'+c+'" stroke-width="1"/></svg>';
+  // Building
+  if(id==='zdanie') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><rect x="5" y="5" width="34" height="18" fill="rgba(220,180,160,0.5)" stroke="'+c+'" stroke-width="1.5"/><text x="22" y="16" text-anchor="middle" fill="'+c+'" font-size="7">КЖ</text></svg>';
+  // Svaya
+  if(id==='svaya') return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 44 28"><circle cx="22" cy="14" r="7" fill="'+c+'"/><line x1="15" y1="14" x2="29" y2="14" stroke="white" stroke-width="1.2"/><line x1="22" y1="7" x2="22" y2="21" stroke="white" stroke-width="1.2"/></svg>';
+  return '<svg width="'+w+'" height="'+h+'"><text x="22" y="16" text-anchor="middle" font-size="8">'+t.code+'</text></svg>';
+}
+function _mhSvg(c,inner){
+  var svg='<svg width="44" height="28" viewBox="0 0 44 28"><circle cx="22" cy="14" r="8" fill="none" stroke="'+c+'" stroke-width="1.5"/>';
+  if(inner==='+') svg+='<line x1="16" y1="14" x2="28" y2="14" stroke="'+c+'" stroke-width="1.2"/><line x1="22" y1="8" x2="22" y2="20" stroke="'+c+'" stroke-width="1.2"/>';
+  else if(inner==='—') svg+='<line x1="16" y1="14" x2="28" y2="14" stroke="'+c+'" stroke-width="1.2"/>';
+  else if(inner==='/') svg+='<line x1="16" y1="20" x2="28" y2="8" stroke="'+c+'" stroke-width="1.2"/>';
+  else if(inner==='#') svg+='<line x1="16" y1="11" x2="28" y2="11" stroke="'+c+'" stroke-width="1"/><line x1="16" y1="17" x2="28" y2="17" stroke="'+c+'" stroke-width="1"/>';
+  else if(inner==='E') svg+='<line x1="19" y1="8" x2="19" y2="20" stroke="'+c+'" stroke-width="1.2"/><line x1="19" y1="14" x2="26" y2="14" stroke="'+c+'" stroke-width="1"/>';
+  svg+='</svg>';
+  return svg;
+}
+
+// ── Select element type ────────────────────────────────────────────────────
+function _snpSelectType(id){
+  var t=_ST[id]; if(!t)return;
+  _snpType=id; _snpPts=[]; _snpMouse=null;
+
+  // Update header
+  var ic=document.getElementById('snp-icon'); if(ic)ic.textContent=t.icon;
+  var ti=document.getElementById('snp-title'); if(ti)ti.textContent=t.label;
+
+  // Highlight button
+  Object.keys(_ST).forEach(function(k){
+    var b=document.getElementById('snp-btn-'+k);
+    if(!b)return;
+    if(k===id){
+      b.style.borderColor=t.color;
+      b.style.background='rgba(37,99,235,.25)';
+    } else {
+      b.style.borderColor='transparent';
+      b.style.background='#2d3e6a';
+    }
+  });
+
+  // Build props
+  _snpProp={};
+  var pa=document.getElementById('snp-props-area'); if(!pa)return;
+  pa.innerHTML='';
+  t.props.forEach(function(prop){
+    _snpProp[prop.id]=prop.def;
+    var div=document.createElement('div');
+    div.style.cssText='margin-bottom:10px;';
+    var lbl=document.createElement('label');
+    lbl.textContent=prop.label;
+    lbl.style.cssText='display:block;font-size:10px;color:#94a3b8;'+
+      'font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;';
+    div.appendChild(lbl);
+    if(prop.type==='sel'){
+      var sel=document.createElement('select');
+      sel.style.cssText='width:100%;background:#2d3e6a;border:1px solid #3d5080;'+
+        'border-radius:6px;color:#f1f5f9;padding:6px 8px;font-size:12px;cursor:pointer;';
+      (prop.opts).forEach(function(ov,oi){
+        var o=document.createElement('option');
+        o.value=ov; o.textContent=(prop.optLabels||prop.opts)[oi];
+        if(ov===prop.def)o.selected=true;
+        sel.appendChild(o);
+      });
+      sel.onchange=function(){_snpProp[prop.id]=this.value;};
+      div.appendChild(sel);
+    } else {
+      var inp=document.createElement('input');
+      inp.type='number'; inp.value=prop.def; inp.step=prop.step||'1';
+      inp.style.cssText='width:100%;background:#2d3e6a;border:1px solid #3d5080;'+
+        'border-radius:6px;color:#f1f5f9;padding:6px 8px;font-size:12px;box-sizing:border-box;';
+      inp.oninput=function(){_snpProp[prop.id]=this.value;};
+      div.appendChild(inp);
+    }
+    pa.appendChild(div);
+  });
+
+  // Instruction box
+  var info=document.createElement('div');
+  info.style.cssText='background:#0f1d38;border-radius:8px;padding:10px;'+
+    'font-size:10px;color:#64748b;line-height:1.6;margin-top:6px;';
+  var clicks=t.clicks;
+  info.innerHTML=(clicks==='one')
+    ? '🖱 Клик — разместить элемент на чертеже'
+    : (clicks==='two')
+    ? '🖱 Клик 1 — начало · Клик 2 — конец'
+    : '🖱 Клики — добавить вершины<br>⏎ Enter / 2× клик — завершить<br>U — откат точки · ESC — отмена';
+  pa.appendChild(info);
+
+  _snpUpdateHint();
+  requestDraw();
+}
+
+function _snpUpdateHint(){
+  var h=document.getElementById('snp-hint'); if(!h||!_snpType)return;
+  var t=_ST[_snpType], n=_snpPts.length;
+  var msg=t.clicks==='one'?'Кликните на чертеже':
+    t.clicks==='two'?(n===0?'Укажите начальную точку':'Укажите конечную точку'):
+    n===0?'Укажите первую точку':n===1?'Укажите следующую точку':
+    n+' точек — Enter для завершения';
+  h.textContent=msg;
+  var cnt=document.getElementById('snp-pts-count');
+  if(cnt)cnt.textContent=n>0?n+' pt':'';
+}
+
+// ── Canvas click handler ───────────────────────────────────────────────────
+function _snpHandleClick(wx,wy){
+  if(!_snpActive||!_snpType)return false;
+  var t=_ST[_snpType];
+  // Snap to nearby survey points
+  var th=12/scale, best=null, bd=Infinity;
+  if(cadSnapPoints)cadSnapPoints.forEach(function(p){
+    var d=Math.hypot(p.x-wx,p.y-wy);
+    if(d<th&&d<bd){bd=d;best=p;}
+  });
+  if(best){wx=best.x;wy=best.y;}
+
+  // Double-click → finish for multi
+  var now=Date.now();
+  if(t.clicks==='multi'&&_snpPts.length>=2&&now-_snpLastClickTime<400){
+    snpFinish(); _snpLastClickTime=0; return true;
+  }
+  _snpLastClickTime=now;
+
+  _snpPts.push({x:wx,y:wy});
+  _snpUpdateHint();
+
+  if(t.clicks==='one'){ snpFinish(); }
+  else if(t.clicks==='two'&&_snpPts.length>=2){ snpFinish(); }
+  else if(t.clicks==='area'&&_snpPts.length>=3){
+    // Auto-close check: click near first point
+    var fp=_snpPts[0];
+    if(Math.hypot(wx-fp.x,wy-fp.y)<10/scale){ snpFinish(); }
+  }
+
+  requestDraw();
+  return true;
+}
+
+// ── Finish / save ──────────────────────────────────────────────────────────
+function snpFinish(){
+  if(!_snpType||_snpPts.length===0)return;
+  var t=_ST[_snpType];
+  var minPts={one:1,two:2,multi:2}[t.clicks]||1;
+  if(_snpPts.length<minPts){
+    var h=document.getElementById('snp-hint');
+    if(h)h.textContent='⚠ Нужно ещё '+(minPts-_snpPts.length)+' точки';
+    return;
+  }
+  var col=document.getElementById('snp-color');
+  var c=col?col.value:'#1e3a5f';
+  // For area types, close the polygon
+  var finalPts=_snpPts.slice();
+  if((_ST[_snpType]&&_ST[_snpType].clicks==='area')&&finalPts.length>=3){
+    finalPts.push({x:finalPts[0].x,y:finalPts[0].y});}
+  cadSymbols.push({
+    type:_snpType,
+    pts:finalPts,
+    props:Object.assign({},_snpProp),
+    color:c,
+    label:t.label
+  });
+  _snpPts=[];
+  var h=document.getElementById('snp-hint');
+  if(h)h.textContent='✓ '+t.label+' добавлен';
+  if(typeof _symLegend==='function')_symLegend();
+  requestDraw();requestManualDraw();
+}
+
+function snpUndo(){
+  if(_snpPts.length>0){_snpPts.pop();_snpUpdateHint();requestDraw();}
+}
+// ── Backward-compat aliases for sym-draw-panel buttons ──────────────────
+var sdpClose=snpClose; var sdpFinish=snpFinish; var sdpUndo=snpUndo;
+
+
+// ── Preview drawing (called from draw() — world transform active) ──────────
+function _snpDrawPreview(ctx,scl){
+  if(!_snpActive||!_snpType||_snpPts.length===0)return;
+  var t=_ST[_snpType];
+  var colEl=document.getElementById('snp-color');
+  var c=colEl?colEl.value:'#2563eb';
+  var pts=_snpPts.slice();
+
+  // Add rubber-band point at cursor
+  if(_snpMouse&&t.clicks!=='one') pts.push({x:_snpMouse.x,y:_snpMouse.y});
+  if(pts.length<1)return;
+
+  ctx.save();
+  ctx.strokeStyle=c; ctx.fillStyle=c;
+  ctx.lineWidth=1.5/scl; ctx.globalAlpha=0.8;
+
+  // Rubber-band line
+  if(pts.length>=2){
+    ctx.setLineDash([6/scl,3/scl]);
+    ctx.beginPath();
+    pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Placed points
+  ctx.globalAlpha=1;
+  _snpPts.forEach(function(p,i){
+    ctx.fillStyle=i===0?'#16a34a':c;
+    ctx.strokeStyle=i===0?'#16a34a':c;
+    ctx.beginPath(); ctx.arc(p.x,p.y,5/scl,0,Math.PI*2); ctx.fill();
+    // Label
+    ctx.save(); ctx.translate(p.x,p.y); ctx.scale(1/scl,-1/scl);
+    ctx.fillStyle='#fff'; ctx.font='bold 8px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(i+1,0,0);
+    ctx.restore();
+  });
+
+  // Snap ring at cursor
+  if(_snpMouse){
+    var sn=null, th=12/scl, bd2=Infinity;
+    if(cadSnapPoints)cadSnapPoints.forEach(function(p){
+      var d=Math.hypot(p.x-_snpMouse.x,p.y-_snpMouse.y);
+      if(d<th&&d<bd2){bd2=d;sn=p;}
+    });
+    if(sn){
+      ctx.strokeStyle='#f59e0b'; ctx.lineWidth=1.5/scl;
+      ctx.beginPath(); ctx.arc(sn.x,sn.y,8/scl,0,Math.PI*2); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// ── Keyboard shortcuts ─────────────────────────────────────────────────────
+document.addEventListener('keydown',function(e){
+  if(!_snpActive)return;
+  if(e.key==='Enter'){snpFinish();}
+  else if(e.key==='u'||e.key==='U'){snpUndo();}
+  else if(e.key==='Escape'){snpClose();}
+  else if(e.key==='Tab'){
+    var keys=Object.keys(_ST);
+    var idx=keys.indexOf(_snpType);
+    _snpSelectType(keys[(idx+1)%keys.length]);
+    e.preventDefault();
+  }
+});
+
+
+// ── DOCX Export via server-side API ───────────────────────────────────────
+function exportDocxOnly(){
+  var pts2=currentMode==='dxf'?points:manualPoints;
+  if(!pts2||pts2.length===0){showMessage('Нет данных','Добавьте хотя бы одну точку','warning');return;}
+  var meta={title:document.getElementById('pdf-drawing-name')?(document.getElementById('pdf-drawing-name').value||'Ведомость точек'):'Ведомость точек',
+    org:document.getElementById('pdf-org')?(document.getElementById('pdf-org').value||''):'',
+    scale:document.getElementById('pdf-scale')?(document.getElementById('pdf-scale').value||''):'',
+    date:new Date().toLocaleDateString('ru-RU')};
+  _exportDocx(pts2,currentMode==='dxf'?dimensions:manualDimensions,meta);
+}
+
+function exportToDocx(){
+  var pts=currentMode==='dxf'?points:manualPoints;
+  if(!pts||pts.length===0){showMessage('DOCX','Нет точек для экспорта','warning');return;}
+
+  // Build data payload
+  var payload={
+    title:'Ведомость геодезических точек',
+    date:new Date().toLocaleDateString('ru-RU'),
+    points:pts.map(function(p){
+      return{id:p.id,x:p.x.toFixed(4),y:p.y.toFixed(4),z:p.z!=null?p.z.toFixed(4):'—',type:p.type||''};
+    }),
+    dimensions:(dimensions||[]).map(function(d){
+      return{name:'P'+d.p1.id+'−P'+d.p2.id,length:Math.hypot(d.p2.x-d.p1.x,d.p2.y-d.p1.y).toFixed(4)};
+    }),
+    area:_savedArea>0?{
+      area:_savedArea.toFixed(4),
+      perim:_savedPerimeter.toFixed(4),
+      vol:(_savedVolume||0).toFixed(4),
+      pileVol:(_savedPileVolume||0).toFixed(4)
+    }:null,
+    symbols:(cadSymbols||[]).map(function(s){
+      return{type:s.label,pts:s.pts.length};
+    })
+  };
+
+  // Send to /api/export-docx
+  showMessage('DOCX','Формирование документа...','info');
+  fetch('/api/export-docx',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  }).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.blob();
+  }).then(function(blob){
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download='geodesy_'+new Date().getTime()+'.docx';
+    a.click();URL.revokeObjectURL(url);
+    showMessage('DOCX','Файл скачан ✓','success');
+  }).catch(function(err){
+    showMessage('DOCX','Ошибка: '+err.message,'error');
+  });
+}
+
+
+// ── Export to DOCX via server ─────────────────────────────────────────────
+async function _exportDocx(pts, dims, meta){
+  try{
+    var payload={
+      title: meta.title||'Исполнительная схема',
+      org: meta.org||'',
+      coord: meta.coord||'',
+      height: meta.height||'',
+      scale: meta.scale||'',
+      note: meta.note||'',
+      date: new Date().toLocaleDateString('ru-RU'),
+      points: pts.map(function(p){return{id:p.id,x:p.x,y:p.y,z:p.z,type:p.type||''}}),
+      dimensions: (dims||[]).map(function(d){
+        return{p1:d.p1.id,p2:d.p2.id,len:Math.hypot(d.p2.x-d.p1.x,d.p2.y-d.p1.y)};
+      }),
+      area: _savedArea||0,
+      perimeter: _savedPerimeter||0,
+      volume: _savedVolume||0,
+      pileVolume: _savedPileVolume||0
+    };
+    var resp=await fetch('/api/export-docx',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    if(resp.status===401){window.location.href='/login';return;}
+    if(!resp.ok){var err=await resp.text();showMessage('Ошибка','DOCX: '+err,'error');return;}
+    var blob=await resp.blob();
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=(meta.title||'report').replace(/\s+/g,'_')+'.docx';
+    a.click();URL.revokeObjectURL(url);
+    showMessage('DOCX','Файл скачан успешно','success');
+  }catch(e){showMessage('Ошибка','DOCX: '+e.message,'error');}
+}
+
+
+// ═══ TOPO SIGN DRAWING FUNCTIONS ═══════════════════════════════════════════
+function _tpLine(ctx,pts,scl,col,lw,dash){
+  if(pts.length<2)return;
+  ctx.save();ctx.strokeStyle=col;ctx.lineWidth=lw/scl;
+  if(dash&&dash.length)ctx.setLineDash(dash.map(function(v){return v/scl;}));
+  ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+  ctx.stroke();ctx.setLineDash([]);ctx.restore();
+}
+function _tpPoly(ctx,pts,scl,fill,stroke,lw,dash){
+  if(pts.length<2)return;
+  ctx.save();ctx.beginPath();
+  pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+  ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw/scl;
+    if(dash&&dash.length)ctx.setLineDash(dash.map(function(v){return v/scl;}));
+    ctx.stroke();ctx.setLineDash([]);}
+  ctx.restore();
+}
+function _tpLabel(ctx,x,y,text,px,col,bold,scl){
+  ctx.save();ctx.translate(x,y);ctx.scale(1/scl,-1/scl);
+  ctx.fillStyle=col||'#000';ctx.font=(bold?'bold ':'')+px+'px Arial';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,0,0);ctx.restore();
+}
+function _tpOffsetPoly(pts,off){
+  return pts.map(function(p,i){
+    var nx=0,ny=0,cnt=0;
+    if(i<pts.length-1){var dx=pts[i+1].x-p.x,dy=pts[i+1].y-p.y,l=Math.hypot(dx,dy)||1;nx+=(-dy/l);ny+=(dx/l);cnt++;}
+    if(i>0){var dx2=p.x-pts[i-1].x,dy2=p.y-pts[i-1].y,l2=Math.hypot(dx2,dy2)||1;nx+=(-dy2/l2);ny+=(dx2/l2);cnt++;}
+    if(cnt){nx/=cnt;ny/=cnt;var nl=Math.hypot(nx,ny)||1;nx/=nl;ny/=nl;}
+    return{x:p.x+off*nx,y:p.y+off*ny};
+  });
+}
+function _ptInPoly(pt,vs){
+  var inside=false;
+  for(var i=0,j=vs.length-1;i<vs.length;j=i++){
+    var xi=vs[i].x,yi=vs[i].y,xj=vs[j].x,yj=vs[j].y;
+    if(((yi>pt.y)!==(yj>pt.y))&&(pt.x<(xj-xi)*(pt.y-yi)/(yj-yi)+xi))inside=!inside;
+  }
+  return inside;
+}
+// Building (capital/non-capital)
+function _tpDrawBuilding(ctx,pts,scl,prop,capital){
+  if(pts.length<3)return;
+  _tpPoly(ctx,pts,scl,capital?'rgba(180,180,185,.4)':'rgba(220,220,220,.25)',
+    '#1e293b',capital?0.5:0.4,capital?null:[4,2]);
+  var cx=pts.reduce(function(a,p){return a+p.x;},0)/pts.length;
+  var cy=pts.reduce(function(a,p){return a+p.y;},0)/pts.length;
+  if(prop&&prop.floors&&prop.floors!=='1')_tpLabel(ctx,cx,cy,prop.floors,7,'#1e293b',true,scl);
+}
+// Ruin
+function _tpDrawRuin(ctx,pts,scl){
+  _tpPoly(ctx,pts,scl,'rgba(200,200,200,.15)','#94a3b8',0.3,[2,2]);
+}
+// Chimney
+function _tpDrawChimney(ctx,p,scl,prop){
+  if(!p)return;
+  var r=2.5/scl;
+  ctx.save();ctx.strokeStyle='#1e293b';ctx.lineWidth=0.6/scl;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#1e293b';ctx.beginPath();ctx.arc(p.x,p.y,0.5/scl,0,Math.PI*2);ctx.fill();
+  if(prop&&prop.h)_tpLabel(ctx,p.x,p.y+r*2.2,'тр.'+prop.h+'м',5,'#374151',false,scl);
+  ctx.restore();
+}
+// Water tower
+function _tpDrawWaterTower(ctx,p,scl,prop){
+  if(!p)return;
+  var r=2.5/scl;
+  ctx.save();ctx.strokeStyle='#1e293b';ctx.lineWidth=0.6/scl;ctx.fillStyle='rgba(180,200,220,.3)';
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+  var s=r*0.55;ctx.strokeRect(p.x-s,p.y-s,s*2,s*2);
+  if(prop&&prop.h)_tpLabel(ctx,p.x,p.y-r*2,'бш.'+prop.h+'м',5,'#1e293b',false,scl);
+  ctx.restore();
+}
+// Fence
+function _tpDrawFence(ctx,pts,scl,capital){
+  if(pts.length<2)return;
+  var col=capital?'#1e293b':'#475569';
+  _tpLine(ctx,pts,scl,col,capital?0.8:0.5,null);
+  var step=3;
+  for(var i=0;i<pts.length-1;i++){
+    var ax=pts[i].x,ay=pts[i].y,bx=pts[i+1].x,by=pts[i+1].y;
+    var len=Math.hypot(bx-ax,by-ay),tx=(bx-ax)/len,ty=(by-ay)/len,nx=-ty,ny=tx;
+    var n=Math.floor(len/step);
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=(capital?0.5:0.35)/scl;
+    for(var k=1;k<n;k++){
+      var px2=ax+tx*k*step,py2=ay+ty*k*step;
+      ctx.beginPath();ctx.moveTo(px2,py2);ctx.lineTo(px2+nx*1.2/scl,py2+ny*1.2/scl);ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+// Pipe (utilities: В,К,Г,Т)
+function _tpDrawPipe(ctx,pts,scl,letter,sub){
+  if(pts.length<2)return;
+  var cols={В:'#2563eb',К:'#7c3aed',Г:'#16a34a',Т:'#ea580c'};
+  var col=cols[letter]||'#374151';
+  _tpLine(ctx,pts,scl,col,0.7,null);
+  var total=0;
+  for(var i=0;i<pts.length-1;i++)total+=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);
+  var mid=total/2,dist=0;
+  for(var i=0;i<pts.length-1;i++){
+    var seg=Math.hypot(pts[i+1].x-pts[i].x,pts[i+1].y-pts[i].y);
+    if(dist+seg>=mid){
+      var t=(mid-dist)/seg;
+      var mx=pts[i].x+(pts[i+1].x-pts[i].x)*t;
+      var my=pts[i].y+(pts[i+1].y-pts[i].y)*t;
+      var angle=Math.atan2(pts[i+1].y-pts[i].y,pts[i+1].x-pts[i].x);
+      ctx.save();ctx.translate(mx,my);ctx.scale(1/scl,-1/scl);ctx.rotate(-angle);
+      ctx.fillStyle=col;ctx.font='bold 8px Arial';ctx.textAlign='center';
+      ctx.fillText(letter+(sub?'('+sub+')':''),0,-3);ctx.restore();break;
+    }
+    dist+=seg;
+  }
+}
+// Cable (electricity/telecom)
+function _tpDrawCable(ctx,pts,scl,letter,sub){
+  if(pts.length<2)return;
+  var col='#dc2626';
+  _tpLine(ctx,pts,scl,col,0.5,null);
+  // Arrow marks at midpoints
+  for(var i=0;i<pts.length-1;i++){
+    var ax=pts[i].x,ay=pts[i].y,bx=pts[i+1].x,by=pts[i+1].y;
+    var len=Math.hypot(bx-ax,by-ay),tx=(bx-ax)/len,ty=(by-ay)/len,nx=-ty,ny=tx;
+    var ar=1.5/scl,mx=ax+tx*len/2,my=ay+ty*len/2;
+    ctx.save();ctx.strokeStyle=col;ctx.lineWidth=0.4/scl;
+    ctx.beginPath();ctx.moveTo(mx+nx*ar,my+ny*ar);ctx.lineTo(mx,my);ctx.lineTo(mx-nx*ar,my-ny*ar);ctx.stroke();
+    ctx.restore();
+  }
+  if(pts.length>=2){
+    var mx2=(pts[0].x+pts[pts.length-1].x)/2,my2=(pts[0].y+pts[pts.length-1].y)/2;
+    _tpLabel(ctx,mx2,my2+2/scl,letter+(sub?'('+sub+'кВ)':''),5,col,false,scl);
+  }
+}
+// Well
+function _tpDrawWell(ctx,p,scl,prop){
+  if(!p)return;
+  var r=1.8/scl;
+  ctx.save();ctx.strokeStyle='#0284c7';ctx.fillStyle='#fff';ctx.lineWidth=0.7/scl;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(p.x-r,p.y);ctx.lineTo(p.x+r,p.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(p.x,p.y-r);ctx.lineTo(p.x,p.y+r);ctx.stroke();
+  if(prop&&prop.type==='артезианский'){ctx.beginPath();ctx.arc(p.x,p.y,r*1.5,0,Math.PI*2);ctx.stroke();}
+  ctx.restore();
+}
+// Spring
+function _tpDrawSpring(ctx,p,scl){
+  if(!p)return;
+  var r=1.2/scl;
+  ctx.save();ctx.fillStyle='#0284c7';ctx.strokeStyle='#0284c7';ctx.lineWidth=0.6/scl;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.moveTo(p.x+r,p.y);ctx.lineTo(p.x+r*3,p.y);ctx.stroke();
+  ctx.restore();
+}
+// Ditch
+function _tpDrawDitch(ctx,pts,scl,w){
+  if(pts.length<2)return;
+  var lw=Math.max(parseFloat(w||0.5)*0.4,0.4);
+  _tpLine(ctx,pts,scl,'#0284c7',lw,null);
+  for(var i=0;i<pts.length-1;i++){
+    var ax=pts[i].x,ay=pts[i].y,bx=pts[i+1].x,by=pts[i+1].y;
+    var len=Math.hypot(bx-ax,by-ay),tx=(bx-ax)/len,ty=(by-ay)/len,nx=-ty,ny=tx;
+    ctx.save();ctx.strokeStyle='#0284c7';ctx.lineWidth=0.3/scl;
+    for(var k=2;k<len;k+=2){
+      var px2=ax+tx*k,py2=ay+ty*k;
+      ctx.beginPath();ctx.moveTo(px2,py2);ctx.lineTo(px2+nx*0.8/scl,py2+ny*0.8/scl);ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+// Tree
+function _tpDrawTree(ctx,p,scl,prop){
+  if(!p)return;
+  var d=parseFloat(prop&&prop.d||4),h=parseFloat(prop&&prop.h||10);
+  var cr=d/2,sr=Math.max(0.4/scl,0.3);
+  ctx.save();
+  ctx.fillStyle='#15803d';ctx.beginPath();ctx.arc(p.x,p.y,sr,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#15803d';ctx.fillStyle='rgba(21,128,61,.1)';ctx.lineWidth=0.5/scl;
+  ctx.beginPath();ctx.arc(p.x,p.y,cr,0,Math.PI*2);ctx.fill();ctx.stroke();
+  _tpLabel(ctx,p.x,p.y+cr+1.5/scl,h+'м',5,'#15803d',false,scl);
+  ctx.restore();
+}
+// Shrub
+function _tpDrawShrub(ctx,p,scl){
+  if(!p)return;
+  var r=1.2/scl;
+  ctx.save();ctx.strokeStyle='#15803d';ctx.fillStyle='rgba(21,128,61,.15)';ctx.lineWidth=0.5/scl;
+  [[-r,0],[0,r*0.7],[r,0]].forEach(function(o){
+    ctx.beginPath();ctx.arc(p.x+o[0],p.y+o[1],r*0.8,0,Math.PI*2);ctx.fill();ctx.stroke();
+  });
+  ctx.restore();
+}
+// Lawn contour
+function _tpDrawLawn(ctx,pts,scl){
+  if(pts.length<3)return;
+  _tpPoly(ctx,pts,scl,'rgba(21,128,61,.1)','#15803d',0.3,[4,2]);
+}
+// Road
+function _tpDrawRoad(ctx,pts,scl,capital,w){
+  if(pts.length<2)return;
+  var hw=parseFloat(w||6)/2,col=capital?'#374151':'#92400e';
+  var outer=_tpOffsetPoly(pts,hw),inner=_tpOffsetPoly(pts,-hw);
+  ctx.save();
+  if(capital){
+    ctx.beginPath();
+    outer.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});
+    for(var k=inner.length-1;k>=0;k--)ctx.lineTo(inner[k].x,inner[k].y);
+    ctx.closePath();ctx.fillStyle='rgba(200,200,200,.35)';ctx.fill();
+  }
+  ctx.strokeStyle=col;ctx.lineWidth=0.6/scl;
+  [outer,inner].forEach(function(e){
+    ctx.beginPath();e.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();
+  });
+  if(!capital){ctx.lineWidth=0.3/scl;ctx.setLineDash([5/scl,3/scl]);
+    ctx.beginPath();pts.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();ctx.setLineDash([]);}
+  ctx.restore();
+}
+// Geodetic point (triangulation)
+function _tpDrawGeoPt(ctx,p,scl,prop){
+  if(!p)return;
+  var r=3/scl;
+  ctx.save();ctx.strokeStyle='#dc2626';ctx.fillStyle='#dc2626';ctx.lineWidth=0.7/scl;
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y+r);
+  ctx.lineTo(p.x+r*0.866,p.y-r*0.5);
+  ctx.lineTo(p.x-r*0.866,p.y-r*0.5);
+  ctx.closePath();ctx.stroke();
+  ctx.beginPath();ctx.arc(p.x,p.y,0.7/scl,0,Math.PI*2);ctx.fill();
+  if(prop&&prop.n)_tpLabel(ctx,p.x,p.y+r+1.5/scl,prop.n,6,'#dc2626',true,scl);
+  ctx.restore();
+}
+// Benchmark (репер)
+function _tpDrawReper(ctx,p,scl,prop){
+  if(!p)return;
+  var r=2/scl;
+  ctx.save();ctx.strokeStyle='#dc2626';ctx.lineWidth=0.7/scl;ctx.fillStyle='rgba(220,38,38,.15)';
+  ctx.fillRect(p.x-r,p.y-r*0.5,r*2,r);ctx.strokeRect(p.x-r,p.y-r*0.5,r*2,r);
+  ctx.beginPath();ctx.moveTo(p.x-r*1.5,p.y+r*0.5);ctx.lineTo(p.x+r*1.5,p.y+r*0.5);ctx.stroke();
+  if(prop&&prop.h)_tpLabel(ctx,p.x,p.y-r*1.5,'Rp '+prop.h,5,'#dc2626',false,scl);
+  ctx.restore();
+}
+// Boundary
+function _tpDrawBoundary(ctx,pts,scl,type){
+  if(pts.length<2)return;
+  var col=type==='red'?'#dc2626':'#1e293b';
+  _tpLine(ctx,pts,scl,col,type==='red'?0.7:0.5,type==='red'?[6,3]:[3,3]);
+  if(type==='plot'){
+    ctx.save();ctx.fillStyle=col;
+    pts.forEach(function(p){ctx.beginPath();ctx.arc(p.x,p.y,0.8/scl,0,Math.PI*2);ctx.fill();});
+    ctx.restore();
+  }
+}
+
+// ── _drawSymbols: render all placed topo signs (world transform active) ────
+function _drawSymbols(ctx,scl,oX,oY,pr){
+  cadSymbols.forEach(function(sym){
+    try{
+      var def=_TP[sym.type];
+      if(!def||!def.draw)return;
+      ctx.save();
+      def.draw(ctx,sym.pts,scl,sym.props||{});
+      ctx.restore();
+    }catch(e){}
+  });
+}
+
+// ── Preview in draw() (world transform active) ─────────────────────────────
+function _snpDrawPreview(ctx,scl){
+  if(!_tpActive||!_tpType||_tpPts.length===0)return;
+  var def=_TP[_tpType]; if(!def)return;
+  var pts=_tpPts.slice();
+  if(_tpMouse&&def.clicks!=='one')pts.push({x:_tpMouse.x,y:_tpMouse.y});
+  ctx.save();ctx.globalAlpha=0.6;
+  if(pts.length>=1)try{def.draw(ctx,pts,scl,_tpProp);}catch(e){}
+  ctx.globalAlpha=1;
+  _tpPts.forEach(function(p,i){
+    ctx.fillStyle=i===0?'#16a34a':'#2563eb';
+    ctx.beginPath();ctx.arc(p.x,p.y,4/scl,0,Math.PI*2);ctx.fill();
+  });
+  if(_tpMouse&&_tpPts.length>0&&def.clicks!=='one'){
+    ctx.setLineDash([4/scl,3/scl]);ctx.strokeStyle='#94a3b8';ctx.lineWidth=0.5/scl;
+    ctx.beginPath();var lp=_tpPts[_tpPts.length-1];
+    ctx.moveTo(lp.x,lp.y);ctx.lineTo(_tpMouse.x,_tpMouse.y);
+    ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+// ── Click handler ─────────────────────────────────────────────────────────
+function _tpHandleClick(wx,wy){
+  if(!_tpActive||!_tpType)return false;
+  var def=_TP[_tpType];
+  var th=12/scale,best=null,bd=Infinity;
+  if(cadSnapPoints)cadSnapPoints.forEach(function(p){
+    var d=Math.hypot(p.x-wx,p.y-wy);if(d<th&&d<bd){bd=d;best=p;}
+  });
+  if(best){wx=best.x;wy=best.y;}
+  var now=Date.now();
+  if((def.clicks==='line'||def.clicks==='poly')&&_tpPts.length>=2&&now-_tpLastT<400){
+    snpFinish();_tpLastT=0;return true;
+  }
+  _tpLastT=now;
+  _tpPts.push({x:wx,y:wy});
+  var cnt=document.getElementById('snp-pts-count');
+  if(cnt)cnt.textContent=_tpPts.length+' pt';
+  if(def.clicks==='one')snpFinish();
+  requestDraw();return true;
+}
+
 
 function _drawTPSymbols(ctx,scl,oX,oY,pr){
   cadSymbols.forEach(function(sym){
