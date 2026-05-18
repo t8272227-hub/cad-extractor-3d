@@ -615,8 +615,8 @@ if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-current
 // Update HUD
 if(true){
   var _hc=cp||cm;
-  document.getElementById('hud-x').textContent=_hc.x.toFixed(3);
-  document.getElementById('hud-y').textContent=_hc.y.toFixed(3);
+  var _ex=document.getElementById('hud-x');if(_ex)_ex.textContent=_hc.x.toFixed(3);
+  var _ey=document.getElementById('hud-y');if(_ey)_ey.textContent=_hc.y.toFixed(3);
   var _hz=document.getElementById('hud-z');
   var _hz_val=null;
   if(cp&&typeof cp.z!=='undefined'&&cp.z!==null)_hz_val=cp.z;
@@ -812,7 +812,22 @@ window.addEventListener('keydown',(e)=>{if(currentMode==='dxf'){if(e.key==='Esca
 window.addEventListener('keyup',(e)=>{if(e.key==='Shift'){if(currentMode==='dxf')requestDraw();else requestManualDraw();}});
 window.addEventListener('contextmenu',(e)=>{if(currentMode==='manual'&&manCurrentTool==='polygon'){e.preventDefault();finishPolygon();}});
 window.addEventListener('resize',()=>{if(currentMode==='dxf')resizeCanvas();else resizeManualCanvas();});
-window.onload=()=>{_northInit();_symInit();setupTouchEvents('cad-canvas',true);setupTouchEvents('manual-canvas',false);updateTable();updateDimsTable();updateManualTable();updateManualLinesTable();switchMode('dxf');setTool('point');setManTool('pan');saveManState();};
+window.onload=()=>{
+  var _s=function(fn){try{fn();}catch(e){console.warn('[onload]',e.message);}};
+  _s(function(){_northInit&&_northInit();});
+  _s(function(){_symInit&&_symInit();});
+  _s(function(){setupTouchEvents('cad-canvas',true);});
+  _s(function(){setupTouchEvents('manual-canvas',false);});
+  _s(function(){updateTable();});
+  _s(function(){updateDimsTable();});
+  _s(function(){updateManualTable();});
+  _s(function(){updateManualLinesTable();});
+  _s(function(){switchMode('dxf');});   // CRITICAL — must run
+  _s(function(){setTool('point');});
+  _s(function(){setManTool('pan');});   // safe even if elements missing
+  _s(function(){saveManState&&saveManState();});
+  console.log('[onload] init complete, mode='+currentMode);
+};
 // === RESTORED MISSING FUNCTIONS ===
 
 // -- Undo / Redo -------------------------------------------------------------
