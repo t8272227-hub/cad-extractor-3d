@@ -155,14 +155,7 @@ function onThreeResize(){const c=document.getElementById('three-container');if(!
 function update3DMaterial(){if(!threeWireframe)return;const w=document.getElementById('three-wireframe').checked;threeWireframe.material.opacity=w?0.8:0.15;threeWireframe.material.color.setHex(w?0x000000:0xffffff);}
 
 // DXF Specific functions
-function toggleDxfZPanel(){
-  var p=document.getElementById('dxf-z-panel');
-  if(!p)return;
-  p.classList.toggle('hidden');
-  if(!p.classList.contains('hidden')){
-    _updateZPointSelect();
-  }
-}
+function toggleDxfZPanel(){const p=document.getElementById('dxf-z-panel'),b=document.getElementById('btn-show-dxf-z-panel');isDxfZPanelOpen=!isDxfZPanelOpen;if(isDxfZPanelOpen){p.classList.remove('hidden');p.classList.add('flex');b.classList.add('hidden');b.classList.remove('flex');}else{p.classList.add('hidden');p.classList.remove('flex');b.classList.remove('hidden');b.classList.add('flex');}}
 function toggleDxfContoursConfig(){const p=document.getElementById('dxf-contours-panel');if(p.classList.contains('hidden')){p.classList.remove('hidden');p.style.display='flex';}else{p.classList.add('hidden');p.style.display='none';}}
 function toggleDxfLayersPanel(){const p=document.getElementById('dxf-layers-panel');if(p.classList.contains('hidden')){p.classList.remove('hidden');p.classList.add('flex');}else{p.classList.add('hidden');p.classList.remove('flex');}}
 
@@ -345,12 +338,14 @@ function requestDraw(){if(!isDrawingScheduled){isDrawingScheduled=true;requestAn
 }
 function setTool(t){
   currentTool=t;currentDimStart=null;
+  // Highlight toolbar row 2 active button
   document.querySelectorAll('#toolbar-row2 button[id^="tb2-"]').forEach(function(b){
     b.style.background='transparent';b.style.borderColor='transparent';b.style.color='#94a3b8';
   });
   var _m={'point':'tb2-point','interpolate':'tb2-interp','dimension':'tb2-dim'};
   var _b=document.getElementById(_m[t]||'');
   if(_b){_b.style.background='rgba(37,99,235,.3)';_b.style.borderColor='#2563eb';_b.style.color='#93c5fd';}
+  // Safe: only access elements that exist
   var cv=document.getElementById('cad-canvas');
   if(cv)cv.style.cursor=t==='area'?'cell':'crosshair';
   var sb=document.getElementById('hud-status');
@@ -406,58 +401,8 @@ function applyZToPoint(){
   showMessage('Z-высота','P'+pid+': Z = '+zFinal.toFixed(3)+' м ('+typ+')','success');
 }
 function addPoint(x,y,fz=undefined,ft=undefined){if(!Number.isFinite(x)||!Number.isFinite(y))return;let z=null,t='-';if(fz!==undefined){z=fz;t=ft||'Интерп.';}points.push({id:points.length>0?Math.max(...points.map(p=>p.id))+1:1,x,y,z,type:t});updateTable();requestDraw();}
-function addInterpolatedPoint(tx,ty){
-  // Collect Z sources: manually added points + all DXF snap vertices with Z
-  var zp=[];
-  // 1. Manually added survey points with Z
-  var arr=currentMode==='dxf'?points:manualPoints;
-  arr.forEach(function(p){
-    if(p.z!==null&&Number.isFinite(p.z)) zp.push({x:p.x,y:p.y,z:p.z});
-  });
-  // 2. DXF snap points (vertices from loaded file) with Z
-  if(cadSnapPoints&&cadSnapPoints.length){
-    cadSnapPoints.forEach(function(p){
-      if(p.z!=null&&Number.isFinite(p.z)){
-        // Avoid adding near-duplicates
-        var dup=zp.some(function(q){return (q.x-p.x)**2+(q.y-p.y)**2<0.0001;});
-        if(!dup) zp.push({x:p.x,y:p.y,z:p.z});
-      }
-    });
-  }
-
-  if(zp.length<3){
-    showMessage('Ошибка',
-      'Нужно минимум 3 точки с Z-отметками.\nДобавлено с Z: '+zp.length+
-      '\nЗадайте Z через панель «Задать Z-высоту»','warning');
-    return;
-  }
-
-  // Exact match check
-  var exact=zp.find(function(p){return (p.x-tx)**2+(p.y-ty)**2<0.0001;});
-  if(exact){ addPoint(tx,ty,exact.z,'Интерп.'); return; }
-
-  // Inverse Distance Weighting (IDW, power=2)
-  var sw=0, swz=0;
-  for(var i=0;i<zp.length;i++){
-    var p=zp[i], d2=(p.x-tx)**2+(p.y-ty)**2;
-    if(d2<0.000001){addPoint(tx,ty,p.z,'Интерп.');return;}
-    var w=1.0/d2; sw+=w; swz+=p.z*w;
-  }
-  if(sw===0){showMessage('Ошибка','Не удалось вычислить Z','error');return;}
-
-  var zInterp=swz/sw;
-  addPoint(tx,ty,zInterp,'Интерп.');
-  showMessage('Интерполяция',
-    'Z = '+zInterp.toFixed(3)+' м  (IDW из '+zp.length+' точек)','success');
-}
-function interpolateMissingZ(){const tp=currentMode==='dxf'?points:manualPoints;
-  // Build Z source: survey points + DXF vertices
-  const zp=[];
-  tp.filter(p=>p.z!==null&&Number.isFinite(p.z)).forEach(p=>zp.push({x:p.x,y:p.y,z:p.z}));
-  if(cadSnapPoints)cadSnapPoints.forEach(function(p){
-    if(p.z!=null&&Number.isFinite(p.z)&&!zp.some(q=>(q.x-p.x)**2+(q.y-p.y)**2<0.0001))
-      zp.push({x:p.x,y:p.y,z:p.z});
-  });if(zp.length<3){showMessage('Внимание','Задайте Z минимум 3 точкам.','warning');return;}let c=0;tp.forEach(t=>{if(t.z===null||!Number.isFinite(t.z)){let sw=0,swz=0;for(let i=0;i<zp.length;i++){const p=zp[i],d2=(p.x-t.x)**2+(p.y-t.y)**2;if(d2<0.0001){t.z=p.z;t.type=p.type;break;}const w=1/d2;sw+=w;swz+=p.z*w;}if(sw>0&&t.z===null){t.z=swz/sw;t.type='Интерп.';c++;}}});if(c>0){if(currentMode==='dxf'){updateTable();requestDraw();}else{saveManState();updateManualTable();requestManualDraw();}showMessage('Готово',`Интерполировано: ${c}`,'success');}else showMessage('Внимание','Все с высотами.','warning');}
+function addInterpolatedPoint(tx,ty){const zp=points.filter(p=>p.z!==null&&Number.isFinite(p.z));if(zp.length<3){showMessage('Ошибка','Минимум 3 точки с Z','warning');return;}let sw=0,swz=0;for(let i=0;i<zp.length;i++){const p=zp[i],d2=(p.x-tx)**2+(p.y-ty)**2;if(d2<0.0001){addPoint(tx,ty,p.z,p.type);return;}const w=1/d2;sw+=w;swz+=p.z*w;}addPoint(tx,ty,swz/sw,'Интерп.');}
+function interpolateMissingZ(){const tp=currentMode==='dxf'?points:manualPoints,zp=tp.filter(p=>p.z!==null&&Number.isFinite(p.z));if(zp.length<3){showMessage('Внимание','Задайте Z минимум 3 точкам.','warning');return;}let c=0;tp.forEach(t=>{if(t.z===null||!Number.isFinite(t.z)){let sw=0,swz=0;for(let i=0;i<zp.length;i++){const p=zp[i],d2=(p.x-t.x)**2+(p.y-t.y)**2;if(d2<0.0001){t.z=p.z;t.type=p.type;break;}const w=1/d2;sw+=w;swz+=p.z*w;}if(sw>0&&t.z===null){t.z=swz/sw;t.type='Интерп.';c++;}}});if(c>0){if(currentMode==='dxf'){updateTable();requestDraw();}else{saveManState();updateManualTable();requestManualDraw();}showMessage('Готово',`Интерполировано: ${c}`,'success');}else showMessage('Внимание','Все с высотами.','warning');}
 function deletePoint(id){points=points.filter(p=>p.id!==id);points.forEach((p,i)=>p.id=i+1);updateTable();requestDraw();}
 function clearPoints(){points=[];clearDxfContours();updateTable();requestDraw();}
 function clearArea(){exportArea=null;setTool('point');requestDraw();}
@@ -473,10 +418,6 @@ function sendPointsToManual(){if(points.length===0){showMessage("Нет точе
 function resizeCanvas(){const c=document.getElementById('canvas-container'),cv=document.getElementById('cad-canvas');if(c&&cv){cv.width=c.clientWidth;cv.height=c.clientHeight;if(dxfData)draw();}}
 function processCADData(){dxfElements=[];dxfLayers={};if(!dxfData||!dxfData.entities)return;function tr(e,tf,d){if(d>15||!e)return;for(let i=0;i<e.length;i++){let en=e[i];if(!en)continue;const ln=en.layer||'0';dxfLayers[ln]=true;if(en.type==='INSERT'&&dxfData.blocks&&dxfData.blocks[en.name]){let bl=dxfData.blocks[en.name];const bx=en.position?(en.position.x||0):0,by=en.position?(en.position.y||0):0,bz=en.position&&en.position.z!==undefined?en.position.z:null;let nx=bx*tf.sx,ny=by*tf.sy;if(tf.rot!==0){const r=tf.rot*Math.PI/180,c=Math.cos(r),s=Math.sin(r),tx=nx*c-ny*s,ty=nx*s+ny*c;nx=tx;ny=ty;}dxfElements.push({type:'POINT',p:{x:nx+tf.x,y:ny+tf.y,z:bz},layer:ln});tr(bl.entities,{x:nx+tf.x,y:ny+tf.y,sx:tf.sx*(en.scale?(en.scale.x||1):1),sy:tf.sy*(en.scale?(en.scale.y||1):1),rot:tf.rot+(en.rotation||0)},d+1);}else{const wp=(p)=>{if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.y))return null;let nx=p.x*tf.sx,ny=p.y*tf.sy;if(tf.rot!==0){const r=tf.rot*Math.PI/180,c=Math.cos(r),s=Math.sin(r),tx=nx*c-ny*s,ty=nx*s+ny*c;nx=tx;ny=ty;}return{x:nx+tf.x,y:ny+tf.y,z:p.z!==undefined?p.z:null};};try{if(en.type==='LINE'&&en.vertices&&en.vertices.length>=2){let p1=wp(en.vertices[0]),p2=wp(en.vertices[1]);if(p1&&p2)dxfElements.push({type:'POLYLINE',pts:[p1,p2],closed:false,layer:ln});}else if((en.type==='LWPOLYLINE'||en.type==='POLYLINE'||en.type==='SPLINE')&&en.vertices){let pts=[];en.vertices.forEach(v=>{let p=wp(v);if(p)pts.push(p);});if(pts.length>0)dxfElements.push({type:'POLYLINE',pts,closed:!!en.closed,layer:ln});}else if(en.type==='SPLINE'&&en.controlPoints){let pts=[];en.controlPoints.forEach(v=>{let p=wp(v);if(p)pts.push(p);});if(pts.length>0)dxfElements.push({type:'POLYLINE',pts,closed:!!en.closed,layer:ln});}else if(en.type==='CIRCLE'&&en.center&&Number.isFinite(en.radius)){let c=wp(en.center),r=en.radius*Math.abs(tf.sx);if(c&&Number.isFinite(r))dxfElements.push({type:'CIRCLE',c,r:Math.abs(r),layer:ln});}else if(en.type==='ARC'&&en.center&&Number.isFinite(en.radius)){let c=wp(en.center),r=en.radius*Math.abs(tf.sx);if(c&&Number.isFinite(r)&&Number.isFinite(en.startAngle)&&Number.isFinite(en.endAngle))dxfElements.push({type:'ARC',c,r:Math.abs(r),sa:en.startAngle+(tf.rot*Math.PI/180),ea:en.endAngle+(tf.rot*Math.PI/180),layer:ln});}else if(en.type==='POINT'&&en.position){let p=wp(en.position);if(p)dxfElements.push({type:'POINT',p,layer:ln});}else if(en.type==='TEXT'||en.type==='MTEXT'){if(en.startPoint&&en.text){let p=wp(en.startPoint);if(p)dxfElements.push({type:'TEXT',text:en.text,x:p.x,y:p.y,h:(en.textHeight||1)*Math.abs(tf.sy),rot:(en.rotation||0)*Math.PI/180+(tf.rot*Math.PI/180),layer:ln});}}}catch(err){}}}}tr(dxfData.entities,{x:0,y:0,sx:1,sy:1,rot:0},0);buildDxfLayersPanel();rebuildCachedPath();_autoImportDxfZ();
   if(typeof _updateZPointSelect==='function')setTimeout(_updateZPointSelect,200);
-
-  // Show Z panel button when DXF is loaded
-  var _zbtn=document.getElementById('btn-show-dxf-z-panel');
-  if(_zbtn)_zbtn.classList.remove('hidden');
 }
 function fitViewToDXF(){
 if(!dxfData||!cachedPath)return;
@@ -494,12 +435,6 @@ function screenToCad(x,y){if(northAngle!==0){var _cv=document.getElementById('ca
 function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=isExportingPDF?4:1;if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';return;}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid&&cadMaxX>cadMinX){var _rw=cadMaxX-cadMinX;var _mag=Math.pow(10,Math.floor(Math.log10(_rw/8)));var _gs=[1,2,5].reduce(function(p,v){return Math.abs(_rw/8-v*_mag)<Math.abs(_rw/8-p*_mag)?v:p;})*_mag;cx.save();cx.strokeStyle="rgba(100,140,220,0.18)";cx.lineWidth=0.4/scale;for(var _xi=Math.floor(cadMinX/_gs)*_gs;_xi<=cadMaxX+_gs;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,cadMinY-_gs);cx.lineTo(_xi,cadMaxY+_gs);cx.stroke();}for(var _yi=Math.floor(cadMinY/_gs)*_gs;_yi<=cadMaxY+_gs;_yi+=_gs){cx.beginPath();cx.moveTo(cadMinX-_gs,_yi);cx.lineTo(cadMaxX+_gs,_yi);cx.stroke();}cx.restore();}if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}
   // Draw symbols in world space
   _drawSymbols(cx,scale,cadOriginX,cadOriginY,pr);
-  // CAD Tools: optional overlay (safe)
-  try{
-    if(typeof drawGrid==='function')drawGrid(cx,scale,panX,panY,cadOriginX,cadOriginY);
-    if(typeof drawCadTexts==='function')drawCadTexts(cx,scale);
-    if(typeof drawMeasurePreview==='function')drawMeasurePreview(cx,scale);
-  }catch(e){}
   // Live symbol preview
   if(typeof _snpActive!=='undefined'&&_snpActive)_snpDrawPreview(cx,scale);
   cx.restore();cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.fillStyle='#334155';cx.beginPath();cadPoints.forEach(p=>{const sp=cadToScreen(p.x,p.y);cx.moveTo(sp.x+1.2*pr,sp.y);cx.arc(sp.x,sp.y,1.2*pr,0,Math.PI*2);});cx.fill();if(earthworksData&&earthworksData.polygon){cx.beginPath();earthworksData.polygon.forEach((p,i)=>{const sp=cadToScreen(p.x,p.y);if(i===0)cx.moveTo(sp.x,sp.y);else cx.lineTo(sp.x,sp.y);});cx.closePath();cx.fillStyle='rgba(249, 115, 22, 0.15)';cx.fill();cx.strokeStyle='#f97316';cx.lineWidth=0.8*pr;cx.setLineDash([4*pr,4*pr]);cx.stroke();cx.setLineDash([]);}if(dxfShowContours&&dxfCachedContours.length>0){cx.lineWidth=1.2*pr;cx.globalAlpha=typeof dxfContourOpacity!=='undefined'?dxfContourOpacity:0.55;cx.strokeStyle=dxfContourColor||'#78716c';cx.beginPath();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length<2)return;const s0=cadToScreen(pt[0].x,pt[0].y);cx.moveTo(s0.x,s0.y);if(pt.length===2){const s1=cadToScreen(pt[1].x,pt[1].y);cx.lineTo(s1.x,s1.y);}else{for(let i=1;i<pt.length-1;i++){const sc=cadToScreen(pt[i].x,pt[i].y),sn=cadToScreen(pt[i+1].x,pt[i+1].y),mx=(sc.x+sn.x)/2,my=(sc.y+sn.y)/2;cx.quadraticCurveTo(sc.x,sc.y,mx,my);}const sl=cadToScreen(pt[pt.length-1].x,pt[pt.length-1].y);cx.lineTo(sl.x,sl.y);}});cx.stroke();dxfCachedContours.forEach(c=>{const pt=c.points;if(pt.length>=2){const mid=Math.floor(pt.length/2),p1=pt[mid-1]||pt[0],p2=pt[mid]||pt[1],s1=cadToScreen(p1.x,p1.y),s2=cadToScreen(p2.x,p2.y);let a=Math.atan2(s2.y-s1.y,s2.x-s1.x);if(a>Math.PI/2||a<-Math.PI/2)a+=Math.PI;cx.save();cx.translate((s1.x+s2.x)/2,(s1.y+s2.y)/2);cx.rotate(a);cx.textAlign='center';cx.textBaseline='middle';const t=c.z.toFixed(2);cx.font=`bold ${8*pr}px sans-serif`;cx.lineWidth=1.5*pr;cx.strokeStyle='#ffffff';cx.strokeText(t,0,0);cx.fillStyle='#78350f';cx.fillText(t,0,0);cx.restore();}});}const padX=100/scale,padY=100/scale,mx=cadOriginX-panX/scale-padX,Mx=cadOriginX+(cv.width-panX)/scale+padX,my=cadOriginY+(panY-cv.height)/scale-padY,My=cadOriginY+panY/scale+padY;for(let i=0;i<cadTexts.length;i++){const t=cadTexts[i];if(t.x<mx||t.x>Mx||t.y<my||t.y>My)continue;if(points.some(p=>`P${p.id}`===t.text.trim()||p.id.toString()===t.text.trim()))continue;let sh=t.h*scale;
@@ -572,13 +507,7 @@ if(contourPts.length>0){
 // Leader callouts
 if(!isExportingPDF)_drawLeaders(cx,pr);
 if(!isExportingPDF&&currentSnapPoint&&(currentTool==='point'||currentTool==='dimension'||currentTool==='interpolate')){const sp=cadToScreen(currentSnapPoint.x,currentSnapPoint.y),sz=8*pr;var _stp=currentSnapType||'node';
-if(_stp==='cursor'){
-  // Interpolate cursor crosshair
-  cx.strokeStyle='#6366f1';cx.lineWidth=1.5*pr;
-  cx.beginPath();cx.moveTo(sp.x-sz*0.7,sp.y);cx.lineTo(sp.x+sz*0.7,sp.y);
-  cx.moveTo(sp.x,sp.y-sz*0.7);cx.lineTo(sp.x,sp.y+sz*0.7);cx.stroke();
-  cx.beginPath();cx.arc(sp.x,sp.y,sz*0.45,0,Math.PI*2);cx.stroke();
-}else if(_stp==='node'){
+if(_stp==='node'){
   cx.fillStyle='rgba(16,185,129,0.25)';cx.fillRect(sp.x-sz/2,sp.y-sz/2,sz,sz);
   cx.strokeStyle='#10b981';cx.lineWidth=2*pr;cx.strokeRect(sp.x-sz/2,sp.y-sz/2,sz,sz);
 } else if(_stp==='line'){
@@ -684,9 +613,7 @@ if(snapModes.lines||snapModes.midpoints){
 }
 if(cp)currentSnapType=cp._snapType||'node';
 else currentSnapType='';
-if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-currentDimStart.x,dy=cm.y-currentDimStart.y;if(Math.abs(dx)>Math.abs(dy))cm.y=currentDimStart.y;else cm.x=currentDimStart.x;}currentMouseCAD=cm;let nr=false;// For interpolate: fall back to cursor position if no snap found
-if(!cp&&currentTool==='interpolate')cp={x:cm.x,y:cm.y,_snapType:'cursor'};
-if(cp!==currentSnapPoint){currentSnapPoint=cp;nr=true;}
+if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-currentDimStart.x,dy=cm.y-currentDimStart.y;if(Math.abs(dx)>Math.abs(dy))cm.y=currentDimStart.y;else cm.x=currentDimStart.x;}currentMouseCAD=cm;let nr=false;if(cp!==currentSnapPoint){currentSnapPoint=cp;nr=true;}
 // Update HUD
 if(true){
   var _hc=cp||cm;
@@ -730,13 +657,7 @@ window.addEventListener('mouseup',(e)=>{
     contourPts.push({x:_cad2.x,y:_cad2.y});
     updateContourPanel();requestDraw();return;
   }
-  if(isDragging){isDragging=false;if(!dragMoved&&e.target===dxfCanvasEv&&e.button===0&&currentTool!=='area'){if(currentTool==='interpolate'){
-  const _pos=currentSnapPoint||screenToCad(sx,sy);
-  addInterpolatedPoint(_pos.x,_pos.y);return;
-}
-if(!currentSnapPoint)return;
-const t=currentSnapPoint;
-if(currentTool==='point')addPoint(t.x,t.y);else if(currentTool==='dimension'){if(!currentDimStart)currentDimStart=t;else{if(currentDimStart.x!==t.x||currentDimStart.y!==t.y)addDimension(currentDimStart,t);currentDimStart=null;}}requestDraw();}}else if(isDrawingArea){isDrawingArea=false;if(exportArea&&Math.abs(exportArea.x1-exportArea.x2)<0.1)exportArea=null;requestDraw();}});
+  if(isDragging){isDragging=false;if(!dragMoved&&e.target===dxfCanvasEv&&e.button===0&&currentTool!=='area'){if(!currentSnapPoint)return;const t=currentSnapPoint;if(currentTool==='point')addPoint(t.x,t.y);else if(currentTool==='interpolate')addInterpolatedPoint(t.x,t.y);else if(currentTool==='dimension'){if(!currentDimStart)currentDimStart=t;else{if(currentDimStart.x!==t.x||currentDimStart.y!==t.y)addDimension(currentDimStart,t);currentDimStart=null;}}requestDraw();}}else if(isDrawingArea){isDrawingArea=false;if(exportArea&&Math.abs(exportArea.x1-exportArea.x2)<0.1)exportArea=null;requestDraw();}});
 dxfCanvasEv.addEventListener('mouseleave',()=>{isDragging=false;isDrawingArea=false;currentMouseCAD=null;currentSnapPoint=null;requestDraw();
   
   });
@@ -4080,427 +4001,102 @@ function _updateHudScale(){
   el.textContent=m>0?'1:'+m.toFixed(3):'—';
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════
-// BASE POINT REPLACEMENT — shift all points when one reference changes
-// ═══════════════════════════════════════════════════════════════════════════
-
-function openRebasePanel(){
-  var panel=document.getElementById('rebase-panel');
-  if(!panel)return;
-  // Populate select with DXF-mode: survey points + cadSnapPoints (first 200)
-  var sel=document.getElementById('rebase-point-sel');
-  if(sel){
-    sel.innerHTML='<option value="">— Выберите точку —</option>';
-    // Survey points
-    var arr=currentMode==='dxf'?points:manualPoints;
-    arr.forEach(function(p){
-      var o=document.createElement('option');
-      o.value='pt:'+p.id;
-      o.textContent='P'+p.id+' ('+p.x.toFixed(3)+', '+p.y.toFixed(3)+
-        (p.z!=null?', Z='+p.z.toFixed(3):'')+')';
-      sel.appendChild(o);
-    });
-    // DXF snap points (unique, with Z shown)
-    if(currentMode==='dxf'&&cadSnapPoints&&cadSnapPoints.length){
-      var optGrp=document.createElement('optgroup');
-      optGrp.label='Вершины DXF';
-      var added=0;
-      cadSnapPoints.forEach(function(p,idx){
-        if(added>300)return;
-        var o=document.createElement('option');
-        o.value='snap:'+idx;
-        o.textContent='V'+idx+' ('+p.x.toFixed(3)+', '+p.y.toFixed(3)+
-          (p.z!=null?', Z='+p.z.toFixed(3):'')+')';
-        optGrp.appendChild(o); added++;
-      });
-      sel.appendChild(optGrp);
-    }
-  }
-  rebaseSetInputMode('select');
-  panel.style.display='flex';
-}
-
-function closeRebasePanel(){
-  var panel=document.getElementById('rebase-panel');
-  if(panel)panel.style.display='none';
-}
-
-function rebaseOnSelect(){
-  var sel=document.getElementById('rebase-point-sel');
-  var val=sel.value; if(!val)return;
-  var p=null;
-  if(val.startsWith('pt:')){
-    var pid=parseInt(val.slice(3));
-    var arr=currentMode==='dxf'?points:manualPoints;
-    p=arr.find(function(pt){return pt.id===pid;});
-  } else if(val.startsWith('snap:')){
-    var sidx=parseInt(val.slice(5));
-    p=cadSnapPoints&&cadSnapPoints[sidx];
-  }
-  if(!p)return;
-  document.getElementById('rebase-old-x').textContent=p.x.toFixed(4);
-  document.getElementById('rebase-old-y').textContent=p.y.toFixed(4);
-  document.getElementById('rebase-old-z').textContent=p.z!=null?p.z.toFixed(4):'—';
-  // Pre-fill new coords
-  document.getElementById('rebase-new-x').value=p.x.toFixed(4);
-  document.getElementById('rebase-new-y').value=p.y.toFixed(4);
-  if(p.z!=null)document.getElementById('rebase-new-z').value=p.z.toFixed(4);
-}
-
-function applyRebase(){
-  var newX=parseFloat((document.getElementById('rebase-new-x').value||'').replace(',','.'));
-  var newY=parseFloat((document.getElementById('rebase-new-y').value||'').replace(',','.'));
-  var newZraw=(document.getElementById('rebase-new-z').value||'').trim().replace(',','.');
-  var newZ=newZraw!==''?parseFloat(newZraw):null;
-
-  if(!Number.isFinite(newX)||!Number.isFinite(newY)){
-    showMessage('Ошибка','Введите новые координаты X и Y','error');return;
-  }
-
-  // Get reference (old) coords
-  var oldX,oldY,oldZ=null;
-  var selMode=document.getElementById('rb-input-manual').style.display==='block'?'manual':'select';
-
-  if(selMode==='select'){
-    var sel=document.getElementById('rebase-point-sel');
-    var val=sel&&sel.value;
-    if(!val){showMessage('Внимание','Выберите базовую точку','warning');return;}
-    var p=null;
-    if(val.startsWith('pt:')){
-      var pid=parseInt(val.slice(3));
-      var arr=currentMode==='dxf'?points:manualPoints;
-      p=arr.find(function(pt){return pt.id===pid;});
-    } else if(val.startsWith('snap:')){
-      var sidx=parseInt(val.slice(5));
-      p=cadSnapPoints&&cadSnapPoints[sidx];
-    }
-    if(!p){showMessage('Ошибка','Точка не найдена','error');return;}
-    oldX=p.x; oldY=p.y; oldZ=p.z;
-  } else {
-    oldX=parseFloat((document.getElementById('rebase-src-x').value||'').replace(',','.'));
-    oldY=parseFloat((document.getElementById('rebase-src-y').value||'').replace(',','.'));
-    var oldZraw=(document.getElementById('rebase-src-z').value||'').trim().replace(',','.');
-    oldZ=oldZraw!==''?parseFloat(oldZraw):null;
-    if(!Number.isFinite(oldX)||!Number.isFinite(oldY)){
-      showMessage('Ошибка','Введите текущие координаты базовой точки','error');return;
-    }
-  }
-
-  var dx=newX-oldX;
-  var dy=newY-oldY;
-  var dz=(newZ!=null&&oldZ!=null)?newZ-oldZ:null;
-
-  if(Math.abs(dx)<0.0001&&Math.abs(dy)<0.0001&&(dz===null||Math.abs(dz)<0.0001)){
-    showMessage('Внимание','Смещение равно нулю — изменений нет','warning');return;
-  }
-
-  // Apply to survey points
-  var arr=currentMode==='dxf'?points:manualPoints;
-  arr.forEach(function(p){
-    p.x+=dx; p.y+=dy;
-    if(dz!==null&&p.z!=null)p.z+=dz;
-  });
-
-  // Apply to ALL DXF elements and snap points
-  if(currentMode==='dxf'){
-    if(dxfElements)dxfElements.forEach(function(el){
-      if(el.p){el.p.x+=dx;el.p.y+=dy;if(dz!==null&&el.p.z!=null)el.p.z+=dz;}
-      if(el.pts)el.pts.forEach(function(v){v.x+=dx;v.y+=dy;if(dz!==null&&v.z!=null)v.z+=dz;});
-      if(el.center){el.center.x+=dx;el.center.y+=dy;}
-    });
-    if(cadSnapPoints)cadSnapPoints.forEach(function(s){
-      s.x+=dx;s.y+=dy;if(dz!==null&&s.z!=null)s.z+=dz;
-    });
-    // Update world bounds
-    cadMinX+=dx;cadMaxX+=dx;cadMinY+=dy;cadMaxY+=dy;
-    // Shift pan to keep view
-    panX-=dx*scale; panY+=dy*scale;
-  }
-
-  var msg='ΔX='+dx.toFixed(4)+', ΔY='+dy.toFixed(4)+(dz!=null?', ΔZ='+dz.toFixed(4):'');
-  showMessage('Пересчёт координат',msg,'success');
-
-  if(currentMode==='dxf'){
-    rebuildCachedPath();updateTable();requestDraw();
-  } else {
-    saveManState();updateManualTable();requestManualDraw();
-  }
-  closeRebasePanel();
+function _toggleStatusBar(){
+  var sb=document.getElementById('bottom-status-bar');
+  var r2=document.getElementById('sb-row2');
+  var btn=sb&&sb.querySelector('button[onclick="_toggleStatusBar()"]');
+  if(!sb)return;
+  var exp=sb.classList.contains('sb-expanded');
+  if(exp){sb.style.height='18px';sb.classList.remove('sb-expanded');if(r2)r2.style.display='none';if(btn)btn.textContent='▲';}
+  else{sb.style.height='36px';sb.classList.add('sb-expanded');if(r2)r2.style.display='flex';if(btn)btn.textContent='▼';}
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════
-// DXF EXPORT — export current state back to DXF
-// ═══════════════════════════════════════════════════════════════════════════
+// ── Export functions (restored) ──────────────────────────────────────────────
 function exportToDXF(){
-  var arr=currentMode==='dxf'?points:manualPoints;
-  if(arr.length===0&&(!dxfElements||dxfElements.length===0)){
-    showMessage('Нет данных','Загрузите чертёж или добавьте точки','warning');return;
-  }
-
-  var lines=[];
-  // ── HEADER ──────────────────────────────────────────────────────────────
-  lines.push('0','SECTION','2','HEADER');
-  lines.push('9','$ACADVER','1','AC1015');
-  lines.push('9','$INSUNITS','70','6'); // meters
-  lines.push('0','ENDSEC');
-
-  // ── LAYERS ──────────────────────────────────────────────────────────────
-  lines.push('0','SECTION','2','TABLES');
-  lines.push('0','TABLE','2','LAYER','70','10');
-  var layerNames=['0','Points','Labels','Lines','Dimensions','Contours'];
-  // Add DXF layers
-  if(dxfLayers)Object.keys(dxfLayers).forEach(function(ln){
-    if(layerNames.indexOf(ln)<0)layerNames.push(ln);
+  var arr=points||[];
+  var dims=dimensions||[];
+  function _f(v){return Number.isFinite(v)?v.toFixed(6):'0.000000';}
+  var lines=['0','SECTION','2','ENTITIES'];
+  arr.forEach(function(p){
+    lines.push('0','POINT','8','POINTS','10',_f(p.x),'20',_f(p.y),'30',_f(p.z||0));
   });
-  layerNames.forEach(function(ln){
-    lines.push('0','LAYER','2',ln,'70','0','62','7','6','CONTINUOUS');
-  });
-  lines.push('0','ENDTAB','0','ENDSEC');
-
-  // ── ENTITIES ────────────────────────────────────────────────────────────
-  lines.push('0','SECTION','2','ENTITIES');
-
-  // 1. DXF drawing elements (lines, arcs, polylines from original file)
-  if(currentMode==='dxf'&&dxfElements){
+  if(typeof dxfElements!=='undefined'&&dxfElements){
     dxfElements.forEach(function(el){
-      var ln=el.layer||'0';
       if(el.type==='LINE'&&el.pts&&el.pts.length>=2){
-        lines.push('0','LINE','8',ln,
+        lines.push('0','LINE','8',el.layer||'0',
           '10',_f(el.pts[0].x),'20',_f(el.pts[0].y),'30',_f(el.pts[0].z||0),
           '11',_f(el.pts[1].x),'21',_f(el.pts[1].y),'31',_f(el.pts[1].z||0));
-      } else if(el.type==='LWPOLYLINE'&&el.pts){
-        lines.push('0','LWPOLYLINE','8',ln,'90',el.pts.length,'70','0');
-        el.pts.forEach(function(p){lines.push('10',_f(p.x),'20',_f(p.y));});
-      } else if(el.type==='CIRCLE'&&el.center){
-        lines.push('0','CIRCLE','8',ln,
-          '10',_f(el.center.x),'20',_f(el.center.y),'30','0',
-          '40',_f(el.radius||1));
-      } else if(el.type==='ARC'&&el.center){
-        lines.push('0','ARC','8',ln,
-          '10',_f(el.center.x),'20',_f(el.center.y),'30','0',
-          '40',_f(el.radius||1),
-          '50',_f(el.startAngle||0),'51',_f(el.endAngle||360));
-      } else if(el.type==='TEXT'&&el.p){
-        lines.push('0','TEXT','8',ln,
-          '10',_f(el.p.x),'20',_f(el.p.y),'30',_f(el.p.z||0),
-          '40',_f(el.height||1),'1',el.text||'');
-      } else if(el.type==='POINT'&&el.p){
-        lines.push('0','POINT','8',ln,
-          '10',_f(el.p.x),'20',_f(el.p.y),'30',_f(el.p.z||0));
       }
     });
   }
-
-  // 2. Survey points
-  arr.forEach(function(p){
-    var z=p.z!=null?p.z:0;
-    lines.push('0','POINT','8','Points',
-      '10',_f(p.x),'20',_f(p.y),'30',_f(z));
-    // Label
-    lines.push('0','TEXT','8','Labels',
-      '10',_f(p.x+0.1),'20',_f(p.y+0.1),'30',_f(z),
-      '40','0.5','1','P'+p.id+(p.z!=null?' Z='+_f(z):''));
-  });
-
-  // 3. Dimensions
-  if(currentMode==='dxf'){
-    dimensions.forEach(function(dim){
-      lines.push('0','LINE','8','Dimensions',
-        '10',_f(dim.p1.x),'20',_f(dim.p1.y),'30','0',
-        '11',_f(dim.p2.x),'21',_f(dim.p2.y),'31','0');
-    });
-  }
-
-  // 4. Contour/fill areas
-  if(savedContourPts&&savedContourPts.length>2){
-    lines.push('0','LWPOLYLINE','8','Contours',
-      '90',savedContourPts.length,'70','1'); // closed
-    savedContourPts.forEach(function(p){lines.push('10',_f(p.x),'20',_f(p.y));});
-  }
-
   lines.push('0','ENDSEC','0','EOF');
-
-  var content=lines.join('\n');
-  _downloadText(content,'drawing.dxf','application/dxf');
-  showMessage('DXF','Файл drawing.dxf скачан','success');
-}
-
-function _f(v){return Number.isFinite(v)?v.toFixed(6):'0.000000';}
-
-
-// ═══════════════════════════════════════════════════════════════════════════
-// XYZ EXPORT — tab-separated, dot decimal separator
-// ═══════════════════════════════════════════════════════════════════════════
-function exportToXYZ(includeHeader, nameCol){
-  var arr=currentMode==='dxf'?points:manualPoints;
-  if(arr.length===0){showMessage('Нет точек','Добавьте точки','warning');return;}
-
-  var lines=[];
-  if(includeHeader) lines.push(['Name','X','Y','Z'].join('\t'));
-  arr.forEach(function(p){
-    var x=p.x.toFixed(4);
-    var y=p.y.toFixed(4);
-    var z=p.z!=null?p.z.toFixed(4):'0.0000';
-    // Ensure dot separator (replace comma if locale uses it)
-    x=x.replace(',','.');y=y.replace(',','.');z=z.replace(',','.');
-    if(nameCol){
-      lines.push(['P'+p.id,x,y,z].join('\t'));
-    } else {
-      lines.push([x,y,z].join('\t'));
-    }
-  });
-  var content=lines.join('\r\n');
-  _downloadText(content,'points.xyz','text/plain');
-  showMessage('XYZ','Файл points.xyz скачан ('+arr.length+' точек)','success');
-}
-
-// ── Also improved DXF-mode TXT export ──────────────────────────────────────
-function exportDxfPointsToTXT(){
-  exportToXYZ(true, true);
-}
-
-// ── Shared download helper ─────────────────────────────────────────────────
-function _downloadText(content, filename, mime){
-  var bom='\uFEFF'; // UTF-8 BOM for Excel compatibility
-  var blob=new Blob([bom+content],{type:mime+';charset=utf-8;'});
-  var url=URL.createObjectURL(blob);
+  var blob=new Blob([lines.join('\n')],{type:'application/dxf'});
   var a=document.createElement('a');
-  a.href=url; a.download=filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  a.href=URL.createObjectURL(blob);
+  a.download='export_'+(new Date()).toISOString().slice(0,10)+'.dxf';
+  a.click();
+  showMessage('Экспорт DXF','Файл загружен','success');
 }
-
 
 function openXYZExportDialog(){
-  document.getElementById('xyz-export-dialog').style.display='flex';
+  var d=document.getElementById('xyz-export-dialog');
+  if(d){d.style.display=d.style.display==='none'||!d.style.display?'flex':'none';}
+  else{
+    // Fallback: direct export
+    runXYZExport();
+  }
 }
+
 function runXYZExport(){
-  var header=document.getElementById('xyz-header').checked;
-  var nameCol=document.getElementById('xyz-namecol').checked;
-  var dec=document.getElementById('xyz-4dec').checked?4:3;
   var arr=currentMode==='dxf'?points:manualPoints;
-  if(arr.length===0){showMessage('Нет точек','Добавьте точки','warning');return;}
+  if(!arr||!arr.length){showMessage('Ошибка','Нет точек','warning');return;}
   var lines=[];
-  if(header){
-    var h=nameCol?['Name','X','Y','Z']:['X','Y','Z'];
-    lines.push(h.join('\t'));
-  }
   arr.forEach(function(p){
-    var x=p.x.toFixed(dec).replace(',','.');
-    var y=p.y.toFixed(dec).replace(',','.');
-    var z=p.z!=null?p.z.toFixed(dec).replace(',','.'):'0.'+'0'.repeat(dec);
-    var row=nameCol?['P'+p.id,x,y,z]:[x,y,z];
-    lines.push(row.join('\t'));
+    var x=p.x.toFixed(4).replace(',','.');
+    var y=p.y.toFixed(4).replace(',','.');
+    var z=p.z!=null?p.z.toFixed(4).replace(',','.'):'0.0000';
+    lines.push(x+'\t'+y+'\t'+z);
   });
-  _downloadText(lines.join('\r\n'),'points.xyz','text/plain');
-  document.getElementById('xyz-export-dialog').style.display='none';
-  showMessage('XYZ','Скачано '+arr.length+' точек','success');
+  var blob=new Blob([lines.join('\n')],{type:'text/plain'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='points_xyz_'+(new Date()).toISOString().slice(0,10)+'.txt';
+  a.click();
+  showMessage('XYZ экспорт',arr.length+' точек экспортировано','success');
 }
 
-
-function rebaseSetInputMode(mode){
-  var bSel=document.getElementById('rb-mode-select');
-  var bMan=document.getElementById('rb-mode-manual');
-  var dSel=document.getElementById('rb-input-select');
-  var dMan=document.getElementById('rb-input-manual');
-  if(!bSel)return;
-  if(mode==='select'){
-    bSel.style.borderColor='#2563eb';bSel.style.background='rgba(37,99,235,.15)';bSel.style.color='#93c5fd';
-    bMan.style.borderColor='transparent';bMan.style.background='#2d3e6a';bMan.style.color='#94a3b8';
-    dSel.style.display='block';dMan.style.display='none';
-  } else {
-    bMan.style.borderColor='#2563eb';bMan.style.background='rgba(37,99,235,.15)';bMan.style.color='#93c5fd';
-    bSel.style.borderColor='transparent';bSel.style.background='#2d3e6a';bSel.style.color='#94a3b8';
-    dSel.style.display='none';dMan.style.display='block';
-  }
+function openRebasePanel(){
+  var p=document.getElementById('rebase-panel');
+  if(p){p.style.display='flex';}
+  else showMessage('Info','Панель пересчёта координат недоступна','info');
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// BOTTOM STATUS BAR — created via JS to avoid HTML conflicts
-// ═══════════════════════════════════════════════════════════════════════════════
-(function createBottomBar(){
-  // Remove any stale elements
-  ['bottom-status-bar','snap-popup'].forEach(function(id){
-    var old=document.getElementById(id);
-    if(old)old.remove();
-  });
-
-  // ── BOTTOM BAR ──────────────────────────────────────────────────────────────
-  var bar=document.createElement('div');
-  bar.id='bottom-status-bar';
-  bar.innerHTML=
-    '<div style="display:flex;align-items:center;padding:0 12px;'+
-    'border-right:1px solid #1e3a5f;height:100%;gap:0;">'+
-      '<span style="color:#475569;margin-right:5px;font-size:10px;">X</span>'+
-      '<b id="hud-x" style="color:#60a5fa;min-width:72px;">—</b>'+
-      '<span style="color:#475569;margin:0 5px;font-size:10px;">Y</span>'+
-      '<b id="hud-y" style="color:#60a5fa;min-width:72px;">—</b>'+
-      '<span style="color:#475569;margin:0 5px;font-size:10px;">Z</span>'+
-      '<b id="hud-z" style="color:#34d399;min-width:46px;">—</b>'+
-    '</div>'+
-    '<div id="snap-toggle-area" style="display:flex;align-items:center;gap:6px;'+
-    'padding:0 12px;border-right:1px solid #1e3a5f;height:100%;cursor:pointer;">'+
-      '<span id="hud-snap" style="color:#f59e0b;width:12px;text-align:center;">⊕</span>'+
-      '<span style="color:#64748b;">Привязка:</span>'+
-      '<b id="hud-snap-mode" style="color:#e2e8f0;">Узлы</b>'+
-    '</div>'+
-    '<div style="padding:0 12px;border-right:1px solid #1e3a5f;height:100%;'+
-    'display:flex;align-items:center;">'+
-      '<span style="color:#64748b;margin-right:4px;">Масштаб:</span>'+
-      '<b id="hud-scale" style="color:#e2e8f0;">—</b>'+
-    '</div>'+
-    '<div style="flex:1;padding:0 12px;overflow:hidden;display:flex;align-items:center;">'+
-      '<span id="hud-status" style="color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>'+
-    '</div>';
-  document.body.appendChild(bar);
-
-  // ── SNAP POPUP ──────────────────────────────────────────────────────────────
-  var popup=document.createElement('div');
-  popup.id='snap-popup';
-  popup.innerHTML=
-    '<div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;'+
-    'letter-spacing:.5px;margin-bottom:8px;">🧲 Режим привязки</div>'+
-    '<div style="display:flex;flex-direction:column;gap:7px;">'+
-      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'+
-        '<input type="checkbox" id="snap-nodes" checked onchange="updateSnapModes()" '+
-        'style="accent-color:#10b981;width:14px;height:14px;">'+
-        '<span>Узлы <span style="color:#64748b;font-size:10px;">(вершины)</span></span>'+
-      '</label>'+
-      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'+
-        '<input type="checkbox" id="snap-lines" checked onchange="updateSnapModes()" '+
-        'style="accent-color:#3b82f6;width:14px;height:14px;">'+
-        '<span>На линии <span style="color:#64748b;font-size:10px;">(ближайшая)</span></span>'+
-      '</label>'+
-      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'+
-        '<input type="checkbox" id="snap-midpoints" onchange="updateSnapModes()" '+
-        'style="accent-color:#a855f7;width:14px;height:14px;">'+
-        '<span>Середина <span style="color:#64748b;font-size:10px;">(отрезка)</span></span>'+
-      '</label>'+
-    '</div>';
-  document.body.appendChild(popup);
-
-  // Toggle snap popup
-  document.getElementById('snap-toggle-area').addEventListener('click',function(){
-    var p=document.getElementById('snap-popup');
-    p.style.display=p.style.display==='none'||!p.style.display?'block':'none';
-  });
-  document.addEventListener('click',function(e){
-    if(!e.target.closest('#snap-toggle-area')&&!e.target.closest('#snap-popup')){
-      var p=document.getElementById('snap-popup');
-      if(p)p.style.display='none';
-    }
-  });
-
-  console.log('[CAD] Bottom bar created ✓');
-})();
-
-// ── Patch toggleSnapPanel to use new popup ────────────────────────────────────
-function toggleSnapPanel(){
-  var p=document.getElementById('snap-popup');
+function applyRebase(){
+  var newX=parseFloat((document.getElementById('rebase-new-x')||{value:''}).value.replace(',','.'));
+  var newY=parseFloat((document.getElementById('rebase-new-y')||{value:''}).value.replace(',','.'));
+  if(!Number.isFinite(newX)||!Number.isFinite(newY)){showMessage('Ошибка','Введите X и Y','error');return;}
+  var sel=document.getElementById('rebase-point-sel');
+  if(!sel||!sel.value){showMessage('Внимание','Выберите точку','warning');return;}
+  var pid=parseInt(sel.value);
+  var arr=currentMode==='dxf'?points:manualPoints;
+  var p=arr.find(function(pt){return pt.id===pid;});
   if(!p)return;
-  p.style.display=p.style.display==='block'?'none':'block';
+  var dx=newX-p.x,dy=newY-p.y;
+  arr.forEach(function(pt){pt.x+=dx;pt.y+=dy;});
+  if(typeof dxfElements!=='undefined'&&dxfElements){
+    dxfElements.forEach(function(el){
+      if(el.pts)el.pts.forEach(function(v){v.x+=dx;v.y+=dy;});
+      if(el.p){el.p.x+=dx;el.p.y+=dy;}
+      if(el.center){el.center.x+=dx;el.center.y+=dy;}
+    });
+  }
+  if(typeof cadSnapPoints!=='undefined'&&cadSnapPoints){
+    cadSnapPoints.forEach(function(s){s.x+=dx;s.y+=dy;});
+  }
+  if(typeof rebuildCachedPath==='function')rebuildCachedPath();
+  updateTable();requestDraw();
+  showMessage('Пересчёт','ΔX='+dx.toFixed(4)+' ΔY='+dy.toFixed(4),'success');
+  var panel=document.getElementById('rebase-panel');
+  if(panel)panel.style.display='none';
 }
