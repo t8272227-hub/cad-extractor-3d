@@ -1302,6 +1302,18 @@ window.addEventListener('load', function() {
     });
   }
 
+  // Ensure DXF mode is active (in case onload crashed before switchMode)
+  setTimeout(function(){
+    if(typeof currentMode !== 'undefined' && currentMode !== 'dxf' && currentMode !== 'manual'){
+      if(typeof switchMode === 'function') switchMode('dxf');
+    }
+    // Force HUD scale display
+    if(typeof scale !== 'undefined'){
+      var _es=document.getElementById('hud-scale');
+      if(_es) _es.textContent='1:'+scale.toFixed(3);
+    }
+  }, 500);
+
   console.log('[PATCH] Runtime fixes applied ✓');
 }, false);
 </script>
