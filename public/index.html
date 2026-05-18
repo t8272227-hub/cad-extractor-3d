@@ -101,13 +101,12 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
   }
 }
 
-/* ── Refactor additions ──────────────────────────────────────────────── */
 #toolbar-row2{scrollbar-width:none;}
 #toolbar-row2::-webkit-scrollbar{display:none;}
 #toolbar-row2 button:hover{background:rgba(255,255,255,.08)!important;border-color:#334155!important;color:#e2e8f0!important;}
 #toolbar-row2 button.active{background:rgba(37,99,235,.25)!important;border-color:#2563eb!important;color:#93c5fd!important;}
-.sb-expanded{height:36px!important;}
-#bottom-status-bar:not(.sb-expanded){height:18px!important;}
+.sb-exp{height:36px!important;}
+#bottom-status-bar:not(.sb-exp){height:18px!important;}
 #mode-dxf,#mode-manual{min-height:0;}
 </style><style>::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#f1f1f1;border-radius:10px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}::-webkit-scrollbar-thumb:hover{background:#94a3b8}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}.scrollbar-hide::-webkit-scrollbar{display:none}.page-break{page-break-before:always}input[type="number"]::-webkit-outer-spin-button,input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}input[type="number"]{-moz-appearance:textfield}/* canvas – see custom block above */
 /* ── Print / PDF overlay ─────────────────────────────────────────────────── */
@@ -260,31 +259,26 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 
   </div>
 </header>
-<div id="toolbar-row2" style="height:32px;flex-shrink:0;background:#1e293b;border-bottom:1px solid #0f172a;display:flex;align-items:center;padding:0 6px;gap:1px;font-size:11px;color:#94a3b8;overflow-x:auto;scrollbar-width:none;">
-  <button id="tb2-point" onclick="setTool('point')" style="background:rgba(37,99,235,.3);border:1px solid #2563eb;color:#93c5fd;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i>Точка</button>
-  <button id="tb2-interp" onclick="setTool('interpolate')" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-mountain"></i>Интерп.</button>
-  <button id="tb2-dim" onclick="setTool('dimension')" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-ruler-horizontal"></i>Размер</button>
+<div id="toolbar-row2" style="height:32px;flex-shrink:0;background:#1e293b;border-bottom:1px solid #0f172a;display:flex;align-items:center;padding:0 6px;gap:1px;font-size:11px;overflow-x:auto;scrollbar-width:none;">
+  <button id="tb2-point" onclick="setTool('point')" title="Точка" style="background:rgba(37,99,235,.3);border:1px solid #2563eb;color:#93c5fd;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i>Точка</button>
+  <button id="tb2-interp" onclick="setTool('interpolate')" title="Интерполяция Z" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-mountain"></i>Интерп.</button>
+  <button id="tb2-dim" onclick="setTool('dimension')" title="Размерная линия" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-ruler-horizontal"></i>Размер</button>
   <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button id="tb2-ortho" onclick="if(typeof toggleOrthoMode==='function')toggleOrthoMode()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-arrows-left-right-to-line"></i>Ortho</button>
-  <button id="tb2-grid" onclick="if(typeof toggleGrid==='function')toggleGrid()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-border-all"></i>Сетка</button>
-  <button onclick="openNorthPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Стрелка Севера / Азимут"><i class="fa-solid fa-compass"></i>Север</button>
-  <button onclick="if(typeof activateTextTool==='function')activateTextTool()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-font"></i>Текст</button>
-  <button onclick="if(typeof toggleMeasure==='function')toggleMeasure()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-ruler"></i>Дист.</button>
+  <button id="tb2-ortho" onclick="toggleOrthoMode()" title="ORTHO F8" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-arrows-left-right-to-line"></i>Ortho</button>
+  <button id="tb2-grid" onclick="toggleGrid()" title="Сетка F7" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-border-all"></i>Сетка</button>
   <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="startContour()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-draw-polygon"></i>Контур</button>
-  <button onclick="openSymDrawPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-signs-post"></i>Знаки</button>
-  <button onclick="openSymTable()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-table-list"></i>Ведомость</button>
+  <button onclick="startContour()" title="Контур" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-draw-polygon"></i>Контур</button>
+  <button onclick="openSymDrawPanel()" title="Знаки" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-signs-post"></i>Знаки</button>
+  <button onclick="openSymTable()" title="Ведомость" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-table-list"></i>Ведомость</button>
   <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="toggleDxfZPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-layer-group"></i>Z-высота</button>
-  <button onclick="toggleDxfLayersPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-layer-group"></i>Слои</button>
-  <button onclick="startPdfFrame()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-crop-simple"></i>Рамка</button>
+  <button onclick="toggleDxfZPanel()" title="Z-высота" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-layer-group"></i>Z</button>
+  <button onclick="toggleDxfLayersPanel()" title="Слои DXF" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-layer-group"></i>Слои</button>
+  <button onclick="startPdfFrame()" title="PDF рамка" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-crop-simple"></i>Рамка</button>
   <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="if(typeof openGostPdfPanel==='function')openGostPdfPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="PDF по ГОСТ 21.101"><i class="fa-solid fa-file-pdf"></i>ГОСТ PDF</button>
-  <button onclick="if(typeof exportPointsToWord==='function')exportPointsToWord()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Экспорт в Word"><i class="fa-solid fa-file-word"></i>Word</button>
-  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="if(typeof openDiagPanel==='function')openDiagPanel()" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-stethoscope"></i>Диагн.</button>
-  <button onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';if(v)setTimeout(function(){var inp=document.getElementById('cad-cmd-input');if(inp)inp.focus();},50);})()" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-terminal"></i>Консоль</button>
+  <button onclick="if(typeof openDiagPanel==='function')openDiagPanel()" title="Диагностика F12" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-stethoscope"></i>Диагн.</button>
+  <button onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';})()" title="Консоль :" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-terminal"></i>Консоль</button>
 </div>
+
 <div id="custom-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-[100] hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300" id="modal-content"><div class="flex items-center gap-3 mb-3"><i id="modal-icon" class="fa-solid fa-circle-exclamation text-xl md:text-2xl text-red-500"></i><h3 id="modal-title" class="text-base md:text-lg font-bold text-slate-800">Сообщение</h3></div><div id="modal-text" class="text-xs md:text-sm text-slate-600 whitespace-pre-wrap mb-4 md:mb-5 leading-relaxed"></div><div class="flex justify-end"><button onclick="hideMessage()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Понятно</button></div></div></div>
 <div id="confirm-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-[100] hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300" id="confirm-modal-content"><div class="flex items-center gap-3 mb-3"><i class="fa-solid fa-circle-question text-xl md:text-2xl text-blue-500"></i><h3 id="confirm-modal-title" class="text-base md:text-lg font-bold text-slate-800">Вопрос</h3></div><div id="confirm-modal-text" class="text-xs md:text-sm text-slate-600 whitespace-pre-wrap mb-4 md:mb-5 leading-relaxed"></div><div class="flex justify-end gap-2 md:gap-3"><button id="confirm-modal-btn-no" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Отмена</button><button id="confirm-modal-btn-yes" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Да</button></div></div></div>
 <div id="pdf-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col" id="pdf-modal-content"><div class="flex items-center justify-between mb-3 md:mb-4"><h2 class="font-bold text-slate-800 flex items-center gap-2 text-sm md:text-base"><i class="fa-solid fa-file-pdf text-red-500"></i> Настройки PDF отчета</h2><button onclick="closePdfSettings()" class="text-slate-400 hover:text-slate-700 transition p-1"><i class="fa-solid fa-xmark text-lg md:text-xl"></i></button></div><div class="flex flex-col gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Организация</label><input type="text" id="pdf-org" placeholder="ООО «ГеоПроект»" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Наименование объекта</label><input type="text" id="pdf-project-name" placeholder="Исполнительная съёмка котлована" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Наименование чертежа</label><input type="text" id="pdf-drawing-name" placeholder="Исполнительная схема" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Разработал (ФИО)</label><input type="text" id="pdf-developer" placeholder="Иванов И.И." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Геодезист (ФИО)</label><input type="text" id="pdf-geodesist" placeholder="Петров П.П." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Проверил (ФИО)</label><input type="text" id="pdf-checker" placeholder="Сидоров С.С." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Масштаб</label><input type="text" id="pdf-scale" placeholder="1:500" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Логотип (PNG/JPG)</label><input type="file" id="pdf-logo-input" accept="image/png, image/jpeg, image/jpg" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700"></div></div><div class="flex justify-end gap-2 md:gap-3 mt-5 border-t border-slate-100 pt-4"><button onclick="closePdfSettings()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Отмена</button><button onclick="executeExportPDF()" id="pdf-modal-generate-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium flex items-center gap-1.5"><i class="fa-solid fa-download"></i> Сгенерировать</button></div></div></div>
@@ -625,7 +619,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 <div id="dxf-layers-panel" class="absolute left-14 md:left-20 top-2 bg-white rounded-xl shadow-xl border border-slate-200 z-30 hidden flex-col" style="width:400px;max-height:88vh;min-width:260px;"><div class="po-drag-handle flex justify-between items-center border-b border-slate-100 px-3 py-2 flex-shrink-0" style="cursor:move;"><h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide"><i class="fa-solid fa-layer-group text-indigo-500 mr-1.5"></i>Параметры слоёв</h3><div class="flex items-center gap-2"><button onclick="toggleAllLayers(true)" class="text-[10px] text-indigo-500 hover:text-indigo-700 font-medium px-1">Все</button><span class="text-slate-300 text-xs">|</span><button onclick="toggleAllLayers(false)" class="text-[10px] text-slate-400 hover:text-slate-600 font-medium px-1">Скрыть</button><button onclick="toggleDxfLayersPanel()" class="ml-2 text-slate-400 hover:text-slate-700 w-6 h-6 flex items-center justify-center text-sm"><i class="fa-solid fa-xmark"></i></button></div></div><div class="px-3 py-1.5 border-b border-slate-100 flex-shrink-0 bg-slate-50"><p class="text-[10px] text-slate-500"><i class="fa-solid fa-file-pdf text-emerald-500 mr-1"></i>= включить слой в PDF. Описание слоя → кликните <i class="fa-solid fa-chevron-down text-[9px]"></i></p></div><div id="dxf-layers-list" class="flex flex-col overflow-y-auto" style="max-height:calc(88vh - 90px);"><div class="flex border-b border-slate-100 bg-slate-50 flex-shrink-0"><button id="lyr-tab-1" onclick="setLayerTab(1)" class="flex-1 py-1.5 text-[10px] font-semibold text-blue-600 border-b-2 border-blue-500 bg-white">📐 Основной DXF</button><button id="lyr-tab-2" onclick="setLayerTab(2)" class="flex-1 py-1.5 text-[10px] font-semibold text-slate-400 border-b-2 border-transparent">🔶 Вложенный DXF</button></div><div id="lyr-panel-1" class="flex flex-col"><div class="italic text-center py-4 text-slate-400 text-xs">Загрузите DXF...</div></div><div id="lyr-panel-2" class="hidden flex-col"><div id="lyr-dxf2-empty" class="italic text-center py-4 text-slate-400 text-xs">Вложенный DXF не загружен</div><div id="lyr-dxf2-controls" class="hidden p-3 flex flex-col gap-2"><label class="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer"><input type="checkbox" id="lyr-dxf2-visible" checked onchange="setSecondDxfVisible(this.checked)" class="accent-orange-500"><span>Показать вложенный DXF</span></label><label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer ml-4"><input type="checkbox" id="lyr-dxf2-lines" checked onchange="setSecondDxfLinesVis(this.checked)" class="accent-orange-500"><span>Линии и контуры</span></label><label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer ml-4"><input type="checkbox" id="lyr-dxf2-points" checked onchange="setSecondDxfPointsVis(this.checked)" class="accent-orange-500"><span>Точки (POINT-сущности)</span></label><button onclick="importDxf2Z()" class="mt-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-medium px-3 py-1.5 rounded-lg border border-indigo-200 text-left">📥 Импортировать Z-высоты во вкладку точек</button><button onclick="clearSecondDxf()" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-left">🗑 Убрать вложенный DXF</button></div></div></div></div>
 <div id="dxf-contours-panel" class="absolute left-14 md:left-20 top-1/2 -translate-y-1/2 bg-white p-3 md:p-4 rounded-xl shadow-lg border border-slate-200 z-20 w-40 md:w-48 hidden flex-col gap-2 md:gap-3 max-h-[60vh] overflow-y-auto"><h3 class="text-[10px] md:text-xs font-bold text-slate-700 uppercase border-b border-slate-100 pb-1.5 md:pb-2">Горизонтали</h3><div><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-1">Шаг сечения (м)</label><input type="number" id="dxf-contour-step" value="0.5" step="0.1" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"></div><button onclick="generateDxfContours()" id="btn-build-dxf-contours" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm mt-1">Построить</button><div class="flex items-center justify-between mt-0.5 md:mt-1"><label class="text-[9px] md:text-[11px] font-semibold text-slate-600 cursor-pointer flex items-center gap-1 md:gap-1.5"><input type="checkbox" id="dxf-contour-visible" checked onchange="toggleDxfContourVis()" class="w-3 h-3 md:w-3.5 md:h-3.5 rounded text-emerald-600"> Видимость</label><button onclick="clearDxfContours()" class="text-red-400 hover:text-red-600 text-[9px] md:text-[11px] transition font-bold"><i class="fa-solid fa-trash"></i></button></div></div>
 <button onclick="toggleDxfZPanel()" id="btn-show-dxf-z-panel" class="absolute right-2 md:right-4 top-2 md:top-4 bg-white/95 w-8 h-8 md:w-10 md:h-10 items-center justify-center rounded-lg shadow-md border border-slate-200 text-blue-600 hover:bg-slate-50 transition z-20 hidden" title="Задать Z-высоту"><i class="fa-solid fa-layer-group text-base md:text-lg"></i></button>
-<div id="dxf-z-panel" class="hidden absolute right-2 md:right-4 top-2 md:top-4 bg-white/95 p-2.5 md:p-4 rounded-xl shadow-lg border border-slate-200 z-20 w-48 md:w-64 flex flex-col gap-2 md:gap-3 max-h-[80vh] overflow-y-auto scrollbar-hide"><div class="flex justify-between items-center border-b border-slate-100 pb-1.5 md:pb-2"><h3 class="text-[10px] md:text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1 md:gap-1.5"><i class="fa-solid fa-layer-group text-blue-500"></i> Задать Z-высоту</h3><button onclick="toggleDxfZPanel()" class="text-slate-400 hover:text-slate-700 transition p-1" title="Свернуть"><i class="fa-solid fa-xmark text-sm md:text-lg"></i></button></div><div><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Выбрать точку</label><select id="edit-z-point-select" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"><option value="" disabled selected>Выберите точку...</option></select></div><div class="flex gap-1.5 md:gap-2"><div class="flex-1"><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Значение Z</label><input type="number" id="edit-z-value" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0.00"></div><div class="w-16 md:w-20"><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Тип</label><select id="edit-z-type" onchange="onZTypeChange()" class="w-full border border-slate-300 rounded px-1 md:px-2 py-1 md:py-1.5 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"><option value="Абс.">Абс.</option><option value="Отн.">Отн.</option><option value="Призма">Призма</option><option value="Поверхность">Поверхность</option></select></div></div><div id="z-vekha-fields" style="display:none;flex-direction:column;gap:4px;"><div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:2px;border-top:1px solid #f1f5f9;padding-top:6px;">Параметры вешки</div><div class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Высота вешки</label><input type="number" id="z-vekha-h" step="0.001" value="1.800" placeholder="1.800" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Поправка</label><input type="number" id="z-vekha-corr" step="0.001" value="0.000" placeholder="0.000" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div id="z-extra-h-row" class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Доп. высота</label><input type="number" id="z-extra-h" step="0.001" value="0.000" placeholder="0.000" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div class="flex items-center gap-1.5 bg-indigo-50 rounded px-2 py-1.5 mt-1"><span class="text-[9px] font-semibold text-indigo-600 flex-1">Z итого:</span><span id="z-vekha-result" class="font-bold text-indigo-700 font-mono text-xs">—</span></div></div><button onclick="applyZToPoint()" id="btn-apply-z" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm flex items-center justify-center gap-1 md:gap-1.5 mt-0.5 md:mt-1"><i class="fa-solid fa-check"></i> Подтвердить</button><div class="h-px w-full bg-slate-200 my-0.5 md:my-1"></div><button onclick="interpolateMissingZ()" class="w-full bg-amber-500 hover:bg-amber-400 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm flex items-center justify-center gap-1 md:gap-1.5"><i class="fa-solid fa-wand-magic-sparkles"></i> Интерполировать все</button></div>
+<div id="dxf-z-panel" class="absolute right-2 md:right-4 top-2 md:top-4 bg-white/95 p-2.5 md:p-4 rounded-xl shadow-lg border border-slate-200 z-20 w-48 md:w-64 flex flex-col gap-2 md:gap-3 max-h-[80vh] overflow-y-auto scrollbar-hide"><div class="flex justify-between items-center border-b border-slate-100 pb-1.5 md:pb-2"><h3 class="text-[10px] md:text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1 md:gap-1.5"><i class="fa-solid fa-layer-group text-blue-500"></i> Задать Z-высоту</h3><button onclick="toggleDxfZPanel()" class="text-slate-400 hover:text-slate-700 transition p-1" title="Свернуть"><i class="fa-solid fa-xmark text-sm md:text-lg"></i></button></div><div><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Выбрать точку</label><select id="edit-z-point-select" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"><option value="" disabled selected>Выберите точку...</option></select></div><div class="flex gap-1.5 md:gap-2"><div class="flex-1"><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Значение Z</label><input type="number" id="edit-z-value" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0.00"></div><div class="w-16 md:w-20"><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Тип</label><select id="edit-z-type" onchange="onZTypeChange()" class="w-full border border-slate-300 rounded px-1 md:px-2 py-1 md:py-1.5 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"><option value="Абс.">Абс.</option><option value="Отн.">Отн.</option><option value="Призма">Призма</option><option value="Поверхность">Поверхность</option></select></div></div><div id="z-vekha-fields" style="display:none;flex-direction:column;gap:4px;"><div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:2px;border-top:1px solid #f1f5f9;padding-top:6px;">Параметры вешки</div><div class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Высота вешки</label><input type="number" id="z-vekha-h" step="0.001" value="1.800" placeholder="1.800" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Поправка</label><input type="number" id="z-vekha-corr" step="0.001" value="0.000" placeholder="0.000" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div id="z-extra-h-row" class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Доп. высота</label><input type="number" id="z-extra-h" step="0.001" value="0.000" placeholder="0.000" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div class="flex items-center gap-1.5 bg-indigo-50 rounded px-2 py-1.5 mt-1"><span class="text-[9px] font-semibold text-indigo-600 flex-1">Z итого:</span><span id="z-vekha-result" class="font-bold text-indigo-700 font-mono text-xs">—</span></div></div><button onclick="applyZToPoint()" id="btn-apply-z" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm flex items-center justify-center gap-1 md:gap-1.5 mt-0.5 md:mt-1"><i class="fa-solid fa-check"></i> Подтвердить</button><div class="h-px w-full bg-slate-200 my-0.5 md:my-1"></div><button onclick="interpolateMissingZ()" class="w-full bg-amber-500 hover:bg-amber-400 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm flex items-center justify-center gap-1 md:gap-1.5"><i class="fa-solid fa-wand-magic-sparkles"></i> Интерполировать все</button></div>
 <div class="flex-1 relative bg-white w-full h-full" id="canvas-container"><div class="absolute top-2 md:top-4 left-14 md:left-24 bg-white/90 p-2 md:p-3 rounded-lg shadow-sm border border-slate-200 text-[9px] md:text-xs text-slate-600 pointer-events-none z-10 hidden sm:block" id="tool-hint"><p><i class="fa-solid fa-mouse-pointer w-3 md:w-4"></i> Клик ЛКМ по узлу — отметить точку</p><p><i class="fa-solid fa-hand w-3 md:w-4"></i> Панорамирование / Pinch-Zoom</p></div><canvas id="cad-canvas" class="cursor-crosshair w-full h-full block"></canvas></div>
 </main>
 
@@ -835,11 +829,8 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 
 
 <!-- ═══ NORTH ARROW — position:fixed, no layout impact ═════════════════════ -->
-<div id="nw" style="position:fixed;bottom:40px;right:14px;z-index:200;display:flex;flex-direction:column;align-items:center;gap:3px;pointer-events:auto;">
-  <div id="nw-svg" style="cursor:pointer;opacity:0.9;"
-       onclick="openNorthPanel()"
-       title="Стрелка Севера — нажмите для настройки"></div>
-</div>
+<div id="nw" style="position:fixed;bottom:14px;right:14px;z-index:200;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:auto;">
+  <div id="nw-svg" style="filter:drop-shadow(0 2px 6px rgba(0,0,0,.25));cursor:pointer;" onclick="document.getElementById('nw-panel').classList.toggle('hidden')" title="Стрелка Севера — нажмите для настройки"></div>
   <div style="background:rgba(255,255,255,.96);border-radius:8px;padding:3px 8px;box-shadow:0 1px 5px rgba(0,0,0,.15);border:1px solid #e2e8f0;display:flex;align-items:center;gap:4px;">
     <span style="font-size:9px;color:#64748b;font-weight:700;">Az</span>
     <input type="number" id="nw-deg" min="-360" max="360" step="0.1" value="0"
@@ -852,93 +843,11 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 </div>
 
 <!-- ═══ NORTH SETTINGS PANEL — position:fixed ═══════════════════════════════ -->
-<div id="nw-panel" style="position:fixed;right:14px;bottom:110px;z-index:9999;
-  background:#1a2744;color:#f1f5f9;border-radius:12px;
-  box-shadow:0 8px 32px rgba(0,0,0,.5);border:1px solid #2d3e6a;
-  width:280px;overflow:hidden;display:none;flex-direction:column;
-  font-family:Arial,sans-serif;font-size:12px;">
-
-  <div style="background:#0f1d38;padding:10px 14px;border-bottom:1px solid #2d3e6a;
-    display:flex;align-items:center;justify-content:space-between;">
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span style="font-size:16px;">🧭</span>
-      <span style="font-weight:700;font-size:13px;">Стрелка Севера</span>
-    </div>
-    <button onclick="document.getElementById('nw-panel').style.display='none'"
-      style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;">✕</button>
+<div id="nw-panel" class="hidden" style="position:fixed;bottom:120px;right:14px;z-index:201;background:white;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.18);border:1px solid #e2e8f0;width:240px;overflow:hidden;">
+  <div style="background:#f8fafc;padding:10px 12px 8px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-size:11px;font-weight:700;color:#334155;">🧭 Стрелка Севера</span>
+    <button onclick="document.getElementById('nw-panel').classList.add('hidden')" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:14px;">✕</button>
   </div>
-
-  <div style="padding:14px;display:flex;flex-direction:column;gap:12px;">
-
-    <!-- Azimuth input -->
-    <div>
-      <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;
-        letter-spacing:.5px;margin-bottom:6px;">Азимут Севера (°)</div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <input type="number" id="nw-deg" min="-360" max="360" step="0.5" value="0"
-          style="width:70px;background:#2d3e6a;border:1px solid #3d5080;border-radius:6px;
-          color:#60a5fa;padding:5px 8px;font-size:14px;font-weight:700;text-align:center;outline:none;"
-          oninput="_northApply()" title="Азимут Севера от вертикали (°)">
-        <span style="color:#475569;font-size:11px;">° от вертикали</span>
-        <button onclick="northAngle=0;document.getElementById('nw-deg').value=0;_northApply();"
-          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;border-radius:6px;
-          padding:4px 8px;cursor:pointer;font-size:11px;" title="Сбросить">↺ 0°</button>
-      </div>
-    </div>
-
-    <!-- Slider -->
-    <div>
-      <input type="range" id="nw-range" min="-360" max="360" step="0.5" value="0"
-        style="width:100%;accent-color:#3b82f6;"
-        oninput="document.getElementById('nw-deg').value=this.value;_northApply()">
-      <div style="display:flex;justify-content:space-between;font-size:9px;color:#334155;margin-top:2px;">
-        <span>-360°</span><span>-180°</span><span>0°</span><span>+180°</span><span>+360°</span>
-      </div>
-    </div>
-
-    <!-- Quick presets -->
-    <div>
-      <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;
-        letter-spacing:.5px;margin-bottom:6px;">Быстрые пресеты</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
-        <button onclick="_nwPreset(0)"
-          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;
-          border-radius:6px;padding:5px;cursor:pointer;font-size:11px;">0° (вертикаль)</button>
-        <button onclick="_nwPreset(45)"
-          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;
-          border-radius:6px;padding:5px;cursor:pointer;font-size:11px;">45° СВ</button>
-        <button onclick="_nwPreset(-45)"
-          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;
-          border-radius:6px;padding:5px;cursor:pointer;font-size:11px;">-45° СЗ</button>
-        <button onclick="_nwPreset(90)"
-          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;
-          border-radius:6px;padding:5px;cursor:pointer;font-size:11px;">90° В</button>
-      </div>
-    </div>
-
-    <!-- Pick from two points -->
-    <div>
-      <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;
-        letter-spacing:.5px;margin-bottom:6px;">Задать по двум точкам на чертеже</div>
-      <button onclick="_northStartPick()"
-        style="width:100%;background:#2563eb;border:none;color:#fff;border-radius:6px;
-        padding:7px;cursor:pointer;font-size:11px;font-weight:700;">
-        🎯 Указать направление на чертеже
-      </button>
-      <div id="nw-hint" style="display:none;font-size:10px;color:#1d4ed8;background:#eff6ff;
-        border:1px solid #bfdbfe;border-radius:6px;padding:5px 8px;margin-top:4px;"></div>
-    </div>
-
-    <!-- Show/hide toggle -->
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;">
-      <input type="checkbox" id="nw-show" checked
-        onchange="document.getElementById('nw').style.display=this.checked?'flex':'none'"
-        style="accent-color:#3b82f6;width:14px;height:14px;">
-      <span>Показывать стрелку Севера</span>
-    </label>
-
-  </div>
-</div>
   <div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px;">
     <div>
       <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:4px;">Азимут Севера (°) — 0°=вверх, по часовой</div>
@@ -1257,85 +1166,73 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 </div>
 
 <!-- ═══ BOTTOM STATUS BAR ══════════════════════════════════════════════════ -->
-<div id="bottom-bar" style="
-  position:fixed; bottom:0; left:0; right:0; height:32px;
-  background:#0f172a; border-top:1px solid #1e3a5f;
-  display:flex; align-items:center; z-index:500;
-  font-family:monospace; font-size:11px; color:#94a3b8;
-  user-select:none; pointer-events:none;">
 
-  <!-- Left: coords -->
-  
-
-  <!-- Snap indicator + toggle -->
-  <div style="display:flex;align-items:center;gap:6px;padding:0 12px;border-right:1px solid #1e3a5f;height:100%;pointer-events:auto;cursor:pointer;"
-       onclick="toggleSnapPanel()" title="Режим привязки">
-    
-    <span style="color:#64748b;font-size:10px;">Привязка:</span>
-    
-  </div>
-
-  <!-- Zoom level -->
-  <div style="padding:0 12px;border-right:1px solid #1e3a5f;height:100%;display:flex;align-items:center;">
-    <span style="color:#64748b;font-size:10px;margin-right:4px;">Масштаб:</span>
-    <b id="hud-scale" style="color:#e2e8f0;font-size:10px;">—</b>
-  </div>
-
-  <!-- Right: status message -->
-  <div style="flex:1;padding:0 12px;overflow:hidden;">
-    <span id="hud-status" style="color:#475569;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
-  </div>
-</div>
 
 <!-- Snap panel — pops up above bottom bar -->
-<div id="snap-panel" style="
-  position:fixed; bottom:36px; left:80px;
-  background:#fff; border-radius:10px 10px 0 0;
-  box-shadow:0 -4px 20px rgba(0,0,0,.12);
-  border:1px solid #e2e8f0; border-bottom:none;
-  z-index:499; padding:12px 14px 10px; display:none;">
-  <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
-    🧲 Режим привязки
-  </div>
-  
-</div>
 
 
-<div id="bottom-status-bar" class="sb-expanded" style="flex-shrink:0;width:100%;background:#0f172a;border-top:1px solid #1e3a5f;font-family:'Courier New',monospace;font-size:10px;color:#64748b;overflow:hidden;height:36px;">
-  <div style="height:18px;display:flex;align-items:center;border-bottom:1px solid #1e3a5f;">
-    <div style="display:flex;align-items:center;padding:0 8px;border-right:1px solid #1e3a5f;height:100%;min-width:230px;">
-      <span style="color:#334155;margin-right:3px;font-size:9px;font-weight:bold;">X</span><b id="hud-x" style="color:#60a5fa;min-width:68px;">—</b>
-      <span style="color:#334155;margin:0 3px;font-size:9px;font-weight:bold;">Y</span><b id="hud-y" style="color:#60a5fa;min-width:68px;">—</b>
-      <span style="color:#334155;margin:0 3px;font-size:9px;font-weight:bold;">Z</span><b id="hud-z" style="color:#34d399;min-width:44px;">—</b>
+
+<!-- STATUS BAR -->
+<div id="bottom-status-bar" class="sb-exp" style="flex-shrink:0;width:100%;
+  background:#0f172a;border-top:1px solid #1e3a5f;overflow:hidden;height:36px;
+  font-family:'Courier New',monospace;font-size:9px;color:#64748b;">
+
+  <!-- Row 1: coords + snap + scale + north + collapse -->
+  <div style="height:18px;display:flex;align-items:center;border-bottom:1px solid #0d2137;">
+    <div style="display:flex;align-items:center;padding:0 8px;border-right:1px solid #1e3a5f;height:100%;flex-shrink:0;">
+      <span style="color:#334155;font-weight:bold;margin-right:2px;">X</span><b id="hud-x" style="color:#60a5fa;min-width:66px;">—</b>
+      <span style="color:#334155;font-weight:bold;margin:0 2px;">Y</span><b id="hud-y" style="color:#60a5fa;min-width:66px;">—</b>
+      <span style="color:#334155;font-weight:bold;margin:0 2px;">Z</span><b id="hud-z" style="color:#34d399;min-width:42px;">—</b>
     </div>
-    <div onclick="toggleSnapPanel()" style="display:flex;align-items:center;gap:4px;padding:0 8px;border-right:1px solid #1e3a5f;height:100%;cursor:pointer;min-width:116px;">
-      <span id="hud-snap" style="color:#f59e0b;width:10px;text-align:center;">⊕</span>
-      <span style="color:#475569;font-size:9px;">Привязка:</span>
-      <b id="hud-snap-mode" style="color:#cbd5e1;font-size:9px;">Узлы</b>
+    <div onclick="toggleSnapPanel()" style="display:flex;align-items:center;gap:3px;padding:0 6px;border-right:1px solid #1e3a5f;height:100%;cursor:pointer;flex-shrink:0;">
+      <span id="hud-snap" style="color:#f59e0b;">⊕</span>
+      <b id="hud-snap-mode" style="color:#cbd5e1;">Узлы</b>
     </div>
-    <div style="padding:0 8px;border-right:1px solid #1e3a5f;height:100%;display:flex;align-items:center;gap:3px;">
-      <span style="color:#475569;font-size:9px;">М:</span><b id="hud-scale" style="color:#cbd5e1;font-size:9px;">—</b>
+    <div style="padding:0 6px;border-right:1px solid #1e3a5f;height:100%;display:flex;align-items:center;flex-shrink:0;">
+      <span style="color:#334155;">М:</span><b id="hud-scale" style="color:#cbd5e1;">—</b>
+    </div>
+    <div style="padding:0 6px;border-right:1px solid #1e3a5f;height:100%;display:flex;align-items:center;gap:3px;flex-shrink:0;">
+      <span style="color:#334155;">🧭</span>
+      <input id="hud-north-input" type="number" min="-360" max="360" step="1" value="0"
+        style="width:36px;background:transparent;border:none;border-bottom:1px solid #1e3a5f;
+        color:#60a5fa;font-size:9px;font-family:'Courier New',monospace;text-align:center;
+        outline:none;padding:0;" oninput="_northFromStatusBar(this.value)" title="Азимут Севера °">
+      <span style="color:#334155;">°</span>
     </div>
     <div style="flex:1;padding:0 8px;overflow:hidden;display:flex;align-items:center;">
-      <span id="hud-status" style="color:#334155;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+      <span id="hud-status" style="color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
     </div>
-    <button onclick="_toggleStatusBar()" style="background:none;border:none;color:#334155;cursor:pointer;padding:0 6px;height:100%;font-size:9px;" title="Свернуть">▼</button>
+    <button data-toggle-sb onclick="_toggleStatusBar()" style="background:none;border:none;color:#334155;cursor:pointer;padding:0 6px;height:100%;font-size:9px;border-left:1px solid #1e3a5f;flex-shrink:0;" title="Свернуть">▼</button>
   </div>
+
+  <!-- Row 2: indicators + mode + points count -->
   <div id="sb-row2" style="height:18px;display:flex;align-items:center;padding:0 8px;gap:5px;">
-    <span id="sb-ortho" style="display:none;background:#1e3a5f;color:#60a5fa;font-size:8px;padding:1px 4px;border-radius:2px;font-weight:bold;">ORTHO</span>
-    <span id="sb-grid"  style="display:none;background:#1e3a5f;color:#34d399;font-size:8px;padding:1px 4px;border-radius:2px;font-weight:bold;">GRID</span>
-    <span id="sb-mode-label" style="color:#1e3a5f;font-size:9px;">—</span>
-    <span style="flex:1"></span>
-    <span id="sb-pts-count" style="color:#334155;font-size:9px;"></span>
+    <span id="sb-ortho" style="display:none;background:#1e3a5f;color:#60a5fa;font-size:8px;padding:0 4px;border-radius:2px;font-weight:bold;line-height:14px;">ORTHO</span>
+    <span id="sb-grid"  style="display:none;background:#1e3a5f;color:#34d399;font-size:8px;padding:0 4px;border-radius:2px;font-weight:bold;line-height:14px;">GRID</span>
+    <span id="sb-mode-label" style="color:#1e3a5f;font-size:8px;">DXF</span>
+    <span style="flex:1;"></span>
+    <span id="sb-pts-count" style="color:#334155;font-size:8px;"></span>
   </div>
 </div>
 
-<div id="snap-popup" style="position:fixed;bottom:36px;left:80px;background:#1e293b;border-radius:10px 10px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.4);border:1px solid #334155;border-bottom:none;z-index:600;padding:10px 12px 8px;display:none;color:#f1f5f9;font-size:12px;">
-  <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">🧲 Привязка</div>
+<!-- Snap popup -->
+<div id="snap-popup" style="position:fixed;bottom:36px;left:80px;background:#1e293b;
+  border-radius:10px 10px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.4);
+  border:1px solid #334155;border-bottom:none;z-index:600;
+  padding:10px 12px 8px;display:none;color:#f1f5f9;font-size:12px;">
+  <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;
+    letter-spacing:.5px;margin-bottom:6px;">🧲 Привязка</div>
   <div style="display:flex;flex-direction:column;gap:5px;">
-    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="snap-nodes" checked onchange="updateSnapModes()" style="accent-color:#10b981;width:13px;height:13px;"><span>Узлы</span></label>
-    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="snap-lines" checked onchange="updateSnapModes()" style="accent-color:#3b82f6;width:13px;height:13px;"><span>На линии</span></label>
-    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="snap-midpoints" onchange="updateSnapModes()" style="accent-color:#a855f7;width:13px;height:13px;"><span>Середина</span></label>
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <input type="checkbox" id="snap-nodes" checked onchange="updateSnapModes()"
+        style="accent-color:#10b981;width:13px;height:13px;"><span>Узлы</span></label>
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <input type="checkbox" id="snap-lines" checked onchange="updateSnapModes()"
+        style="accent-color:#3b82f6;width:13px;height:13px;"><span>На линии</span></label>
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;">
+      <input type="checkbox" id="snap-midpoints" onchange="updateSnapModes()"
+        style="accent-color:#a855f7;width:13px;height:13px;"><span>Середина</span></label>
   </div>
 </div>
+
 </body></html>
