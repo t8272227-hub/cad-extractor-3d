@@ -387,6 +387,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     <button onclick="toggleDxfLayersPanel()" title="Слои" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-layer-group"></i>Слои</button>
     <button onclick="startPdfFrame()" title="PDF рамка" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-crop-simple"></i>Рамка</button>
     <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
+    <button onclick="if(typeof openDiagPanel==='function')openDiagPanel()" title="Диагностика компонентов" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-stethoscope"></i>Диагн.</button>
     <button onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';if(v){var inp=document.getElementById('cad-cmd-input');if(inp)inp.focus();}})()" title="Консоль (:)" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-terminal"></i>Консоль</button>
   </div>
 </div>
@@ -754,6 +755,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 <script src="/js/cad-tools.js"></script>
 <script src="/js/ai-report.js"></script>
 <script src="/js/cad-console.js"></script>
+<script src="/js/diagnostics.js"></script>
 <div id="print-overlay"></div>
 <!-- ── Georeferencing Modal ─────────────────────────────────────────── -->
 <div id="georef-modal" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[110] hidden opacity-0 transition-opacity duration-200">
