@@ -4473,3 +4473,28 @@ async function exportPointsToWord(){
     showMessage('Ошибка','Не удалось создать DOCX: '+e.message,'error');
   }
 }
+
+
+function openNorthPanel(){
+  var p=document.getElementById('nw-panel');
+  if(!p)return;
+  var v=p.style.display==='none'||!p.style.display;
+  p.style.display=v?'flex':'none';
+  if(v){
+    // Sync current angle to inputs
+    var deg=document.getElementById('nw-deg');
+    var rng=document.getElementById('nw-range');
+    if(deg)deg.value=northAngle;
+    if(rng)rng.value=northAngle;
+  }
+}
+
+function _nwPreset(deg){
+  northAngle=deg;
+  var d=document.getElementById('nw-deg');
+  var r=document.getElementById('nw-range');
+  if(d)d.value=deg;
+  if(r)r.value=deg;
+  _northApply();
+  showMessage('Север','Азимут Севера: '+deg+'°','info');
+}
