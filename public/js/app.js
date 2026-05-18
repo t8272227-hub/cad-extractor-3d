@@ -728,7 +728,32 @@ function manToScreen(x,y){return{x:manPanX+(x-manOriginX)*manScale,y:manPanY-(y-
 function screenToMan(x,y){return{x:manOriginX+(x-manPanX)/manScale,y:manOriginY+(manPanY-y)/manScale};}
 
 function finishPolygon(){if(manPolyPoints.length>2){let a=0,p=0;for(let i=0;i<manPolyPoints.length;i++){let j=(i+1)%manPolyPoints.length;a+=(manPolyPoints[i].x*manPolyPoints[j].y)-(manPolyPoints[j].x*manPolyPoints[i].y);p+=Math.hypot(manPolyPoints[j].x-manPolyPoints[i].x,manPolyPoints[j].y-manPolyPoints[i].y);}a=Math.abs(a/2);customBoundaryPoly=[...manPolyPoints];showMessage("Измерение",`Площадь: ${a.toFixed(2)} кв.м\nПериметр: ${p.toFixed(2)} м\nКонтур сохранен.`,"success");}else if(manPolyPoints.length>0)showMessage("Внимание","Минимум 3 точки.","warning");manPolyPoints=[];requestManualDraw();}
-function setManTool(t){manCurrentTool=t;manLineStartPoint=null;manPolyPoints=[];document.getElementById('man-tool-pan').className=t==='pan'?'p-2 md:p-2.5 rounded-lg bg-blue-100 text-blue-600 shadow-inner transition w-8 md:w-10':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-8 md:w-10';document.getElementById('man-tool-line').className=t==='line'?'p-2 md:p-2.5 rounded-lg bg-indigo-100 text-indigo-600 shadow-inner transition w-8 md:w-10':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-8 md:w-10';document.getElementById('man-tool-polygon').className=t==='polygon'?'p-2 md:p-2.5 rounded-lg bg-amber-100 text-amber-600 shadow-inner transition w-8 md:w-10':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-8 md:w-10';const h=document.getElementById('man-tool-hint'),fb=document.getElementById('man-tool-finish-poly');if(fb)fb.classList.add('hidden');if(t==='pan'){h.innerHTML='<p><i class="fa-solid fa-hand w-3 md:w-4"></i> Панорамирование</p>';document.getElementById('manual-canvas').style.cursor='grab';}else if(t==='polygon'){h.innerHTML='<p><i class="fa-solid fa-draw-polygon w-3 md:w-4 text-amber-500"></i> Клик — узлы полигона</p>';document.getElementById('manual-canvas').style.cursor='crosshair';if(fb)fb.classList.remove('hidden');}else{h.innerHTML='<p><i class="fa-solid fa-pen-nib w-3 md:w-4 text-indigo-500"></i> Линия (Орто: Shift)</p>';document.getElementById('manual-canvas').style.cursor='crosshair';}requestManualDraw();}
+function setManTool(t){
+  manCurrentTool=t;manLineStartPoint=null;manPolyPoints=[];
+  // Safe highlight — elements may not exist if sidebar was removed
+  function _sg(id,active){var el=document.getElementById(id);if(!el)return;
+    el.className=active?'p-2 md:p-2.5 rounded-lg bg-blue-100 text-blue-600 shadow-inner transition w-8 md:w-10'
+      :'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-8 md:w-10';}
+  _sg('man-tool-pan',t==='pan');
+  _sg('man-tool-line',t==='line');
+  _sg('man-tool-polygon',t==='polygon');
+  var h=document.getElementById('man-tool-hint');
+  var fb=document.getElementById('man-tool-finish-poly');
+  if(fb)fb.classList.add('hidden');
+  var cv=document.getElementById('manual-canvas');
+  if(t==='pan'){
+    if(h)h.innerHTML='<p><i class="fa-solid fa-hand w-3 md:w-4"></i> Панорамирование</p>';
+    if(cv)cv.style.cursor='grab';
+  } else if(t==='polygon'){
+    if(h)h.innerHTML='<p><i class="fa-solid fa-draw-polygon w-3 md:w-4 text-amber-500"></i> Клик — узлы полигона</p>';
+    if(cv)cv.style.cursor='crosshair';
+    if(fb)fb.classList.remove('hidden');
+  } else {
+    if(h)h.innerHTML='<p><i class="fa-solid fa-pen-nib w-3 md:w-4 text-indigo-500"></i> Линия (Орто: Shift)</p>';
+    if(cv)cv.style.cursor='crosshair';
+  }
+  requestManualDraw();
+}
 function switchManTab(t){const tp=document.getElementById('tab-man-points'),tl=document.getElementById('tab-man-lines'),cp=document.getElementById('man-points-container'),cl=document.getElementById('man-lines-container');if(t==='points'){tp.className='flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition';tl.className='flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-bold text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition';cp.classList.remove('hidden');cl.classList.add('hidden');}else{tl.className='flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition';tp.className='flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-bold text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition';cl.classList.remove('hidden');cp.classList.add('hidden');}}
 function updateManualTable(){const tb=document.getElementById('manual-points-tbody');if(manualPoints.length===0){tb.innerHTML=`<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400 italic">Добавьте точки.</td></tr>`;updateZDropdown();return;}let h='';manualPoints.forEach(p=>{const z=p.z!==null?p.z.toFixed(3):'-';h+=`<tr class="hover:bg-blue-50 border-b border-slate-100 bg-white"><td class="px-2 md:px-4 py-1.5 md:py-3 font-bold text-[10px] md:text-sm">P${p.id}</td><td class="px-1 md:px-2 py-1.5 md:py-3 font-mono text-[9px] md:text-xs text-blue-600">X:${p.x.toFixed(3)}<br><span class="text-emerald-600">Y:${p.y.toFixed(3)}</span></td><td class="px-1 md:px-2 py-1.5 md:py-3 font-mono text-[9px] md:text-xs font-semibold">${z}</td><td class="px-1 md:px-2 py-1.5 md:py-3 text-right"><button onclick="editManualPoint(${p.id})" class="text-blue-400 hover:text-blue-600 mr-1"><i class="fa-solid fa-pen"></i></button><button onclick="deleteManualPoint(${p.id})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-xmark"></i></button></td></tr>`;});tb.innerHTML=h;updateZDropdown();}
 function updateManualLinesTable(){const tb=document.getElementById('manual-lines-tbody');if(manualLines.length===0){tb.innerHTML=`<tr><td colspan="3" class="px-4 py-8 text-center text-slate-400 italic">Нет линий.</td></tr>`;return;}let h='';manualLines.forEach(l=>{const d=Math.hypot(l.p2.x-l.p1.x,l.p2.y-l.p1.y).toFixed(3);h+=`<tr class="hover:bg-blue-50 border-b border-slate-100 bg-white"><td class="px-2 md:px-4 py-1.5 md:py-3 font-bold text-[10px] md:text-xs">P${l.p1.id}-P${l.p2.id}</td><td class="px-1 md:px-2 py-1.5 md:py-3 font-mono text-[9px] md:text-xs">${d}</td><td class="px-1 md:px-2 py-1.5 md:py-3 text-right"><button onclick="deleteManualLine(${l.id})" class="text-red-400 hover:text-red-600"><i class="fa-solid fa-xmark"></i></button></td></tr>`;});tb.innerHTML=h;}
@@ -801,7 +826,12 @@ function setupTouchEvents(canvasId,isDxf){var cv=document.getElementById(canvasI
 // -- Background Image --------------------------------------------------------
 function toggleBgImagePanel(){var p=document.getElementById('bg-image-panel');if(p.classList.contains('hidden')){p.classList.remove('hidden');p.style.display='flex';}else{p.classList.add('hidden');p.style.display='none';}}
 function clearBgImage(){bgImageProps={img:null,x:0,y:0,scale:1,opacity:0.5,visible:true};var b=document.getElementById('btn-bg-settings');if(b)b.classList.add('hidden');var bi=document.getElementById('bg-img-input');if(bi)bi.value='';toggleBgImagePanel();requestManualDraw();}
-document.getElementById('bg-img-input').addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;var reader=new FileReader();reader.onload=function(ev){var img=new Image();img.onload=function(){bgImageProps.img=img;var b=document.getElementById('btn-bg-settings');if(b)b.classList.remove('hidden');requestManualDraw();};img.src=ev.target.result;};reader.readAsDataURL(f);e.target.value='';});
+(function(){var _bgi=document.getElementById('bg-img-input');if(!_bgi)return;
+_bgi.addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;
+var reader=new FileReader();reader.onload=function(ev){var img=new Image();
+img.onload=function(){bgImageProps.img=img;var b=document.getElementById('btn-bg-settings');
+if(b)b.classList.remove('hidden');requestManualDraw();};img.src=ev.target.result;};
+reader.readAsDataURL(f);e.target.value='';});})();
 
 // -- Manual Panel Toggle -----------------------------------------------------
 function toggleManualPanel(){var p=document.getElementById('manual-left-panel'),b=document.getElementById('btn-toggle-man-panel');isManPanelOpen=!isManPanelOpen;if(isManPanelOpen){p.classList.remove('hidden');if(b)b.innerHTML='<i class="fa-solid fa-bars"></i>';}else{p.classList.add('hidden');if(b)b.innerHTML='<i class="fa-solid fa-chevron-right"></i>';}setTimeout(function(){resizeManualCanvas();},50);}
