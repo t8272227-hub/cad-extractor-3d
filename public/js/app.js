@@ -383,7 +383,26 @@ function applyZToPoint(){
   showMessage('Z-высота','P'+pid+': Z = '+zFinal.toFixed(3)+' м ('+typ+')','success');
 }
 function addPoint(x,y,fz=undefined,ft=undefined){if(!Number.isFinite(x)||!Number.isFinite(y))return;let z=null,t='-';if(fz!==undefined){z=fz;t=ft||'Интерп.';}points.push({id:points.length>0?Math.max(...points.map(p=>p.id))+1:1,x,y,z,type:t});updateTable();requestDraw();}
-function addInterpolatedPoint(tx,ty){const zp=points.filter(p=>p.z!==null&&Number.isFinite(p.z));if(zp.length<3){showMessage('Ошибка','Минимум 3 точки с Z','warning');return;}let sw=0,swz=0;for(let i=0;i<zp.length;i++){const p=zp[i],d2=(p.x-tx)**2+(p.y-ty)**2;if(d2<0.0001){addPoint(tx,ty,p.z,p.type);return;}const w=1/d2;sw+=w;swz+=p.z*w;}addPoint(tx,ty,swz/sw,'Интерп.');}
+function addInterpolatedPoint(tx,ty){
+  // Use all points with Z (both from DXF snap and manually added)
+  const zp=points.filter(p=>p.z!==null&&Number.isFinite(p.z));
+  if(zp.length<3){
+    showMessage('Ошибка','Минимум 3 точки с Z для интерполяции','warning');return;
+  }
+  // Exact match
+  const exact=zp.find(p=>(p.x-tx)**2+(p.y-ty)**2<0.0001);
+  if(exact){addPoint(tx,ty,exact.z,exact.type);return;}
+  // Inverse distance weighting (IDW, power=2)
+  let sw=0,swz=0;
+  for(let i=0;i<zp.length;i++){
+    const p=zp[i],d2=(p.x-tx)**2+(p.y-ty)**2;
+    const w=1/d2; sw+=w; swz+=p.z*w;
+  }
+  if(sw===0){showMessage('Ошибка','Нет точек с Z поблизости','error');return;}
+  const zInterp=swz/sw;
+  addPoint(tx,ty,zInterp,'Интерп.');
+  showMessage('Интерполяция','Z = '+zInterp.toFixed(3)+' м (IDW)','success');
+}
 function interpolateMissingZ(){const tp=currentMode==='dxf'?points:manualPoints,zp=tp.filter(p=>p.z!==null&&Number.isFinite(p.z));if(zp.length<3){showMessage('Внимание','Задайте Z минимум 3 точкам.','warning');return;}let c=0;tp.forEach(t=>{if(t.z===null||!Number.isFinite(t.z)){let sw=0,swz=0;for(let i=0;i<zp.length;i++){const p=zp[i],d2=(p.x-t.x)**2+(p.y-t.y)**2;if(d2<0.0001){t.z=p.z;t.type=p.type;break;}const w=1/d2;sw+=w;swz+=p.z*w;}if(sw>0&&t.z===null){t.z=swz/sw;t.type='Интерп.';c++;}}});if(c>0){if(currentMode==='dxf'){updateTable();requestDraw();}else{saveManState();updateManualTable();requestManualDraw();}showMessage('Готово',`Интерполировано: ${c}`,'success');}else showMessage('Внимание','Все с высотами.','warning');}
 function deletePoint(id){points=points.filter(p=>p.id!==id);points.forEach((p,i)=>p.id=i+1);updateTable();requestDraw();}
 function clearPoints(){points=[];clearDxfContours();updateTable();requestDraw();}
@@ -489,7 +508,13 @@ if(contourPts.length>0){
 // Leader callouts
 if(!isExportingPDF)_drawLeaders(cx,pr);
 if(!isExportingPDF&&currentSnapPoint&&(currentTool==='point'||currentTool==='dimension'||currentTool==='interpolate')){const sp=cadToScreen(currentSnapPoint.x,currentSnapPoint.y),sz=8*pr;var _stp=currentSnapType||'node';
-if(_stp==='node'){
+if(_stp==='cursor'){
+  // Interpolate cursor crosshair
+  cx.strokeStyle='#6366f1';cx.lineWidth=1.5*pr;
+  cx.beginPath();cx.moveTo(sp.x-sz*0.7,sp.y);cx.lineTo(sp.x+sz*0.7,sp.y);
+  cx.moveTo(sp.x,sp.y-sz*0.7);cx.lineTo(sp.x,sp.y+sz*0.7);cx.stroke();
+  cx.beginPath();cx.arc(sp.x,sp.y,sz*0.45,0,Math.PI*2);cx.stroke();
+}else if(_stp==='node'){
   cx.fillStyle='rgba(16,185,129,0.25)';cx.fillRect(sp.x-sz/2,sp.y-sz/2,sz,sz);
   cx.strokeStyle='#10b981';cx.lineWidth=2*pr;cx.strokeRect(sp.x-sz/2,sp.y-sz/2,sz,sz);
 } else if(_stp==='line'){
@@ -595,7 +620,9 @@ if(snapModes.lines||snapModes.midpoints){
 }
 if(cp)currentSnapType=cp._snapType||'node';
 else currentSnapType='';
-if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-currentDimStart.x,dy=cm.y-currentDimStart.y;if(Math.abs(dx)>Math.abs(dy))cm.y=currentDimStart.y;else cm.x=currentDimStart.x;}currentMouseCAD=cm;let nr=false;if(cp!==currentSnapPoint){currentSnapPoint=cp;nr=true;}
+if(currentTool==='dimension'&&currentDimStart&&e.shiftKey){const dx=cm.x-currentDimStart.x,dy=cm.y-currentDimStart.y;if(Math.abs(dx)>Math.abs(dy))cm.y=currentDimStart.y;else cm.x=currentDimStart.x;}currentMouseCAD=cm;let nr=false;// For interpolate: fall back to cursor position if no snap found
+if(!cp&&currentTool==='interpolate')cp={x:cm.x,y:cm.y,_snapType:'cursor'};
+if(cp!==currentSnapPoint){currentSnapPoint=cp;nr=true;}
 // Update HUD
 if(true){
   var _hc=cp||cm;
@@ -639,7 +666,13 @@ window.addEventListener('mouseup',(e)=>{
     contourPts.push({x:_cad2.x,y:_cad2.y});
     updateContourPanel();requestDraw();return;
   }
-  if(isDragging){isDragging=false;if(!dragMoved&&e.target===dxfCanvasEv&&e.button===0&&currentTool!=='area'){if(!currentSnapPoint)return;const t=currentSnapPoint;if(currentTool==='point')addPoint(t.x,t.y);else if(currentTool==='interpolate')addInterpolatedPoint(t.x,t.y);else if(currentTool==='dimension'){if(!currentDimStart)currentDimStart=t;else{if(currentDimStart.x!==t.x||currentDimStart.y!==t.y)addDimension(currentDimStart,t);currentDimStart=null;}}requestDraw();}}else if(isDrawingArea){isDrawingArea=false;if(exportArea&&Math.abs(exportArea.x1-exportArea.x2)<0.1)exportArea=null;requestDraw();}});
+  if(isDragging){isDragging=false;if(!dragMoved&&e.target===dxfCanvasEv&&e.button===0&&currentTool!=='area'){if(currentTool==='interpolate'){
+  const _pos=currentSnapPoint||screenToCad(sx,sy);
+  addInterpolatedPoint(_pos.x,_pos.y);return;
+}
+if(!currentSnapPoint)return;
+const t=currentSnapPoint;
+if(currentTool==='point')addPoint(t.x,t.y);else if(currentTool==='dimension'){if(!currentDimStart)currentDimStart=t;else{if(currentDimStart.x!==t.x||currentDimStart.y!==t.y)addDimension(currentDimStart,t);currentDimStart=null;}}requestDraw();}}else if(isDrawingArea){isDrawingArea=false;if(exportArea&&Math.abs(exportArea.x1-exportArea.x2)<0.1)exportArea=null;requestDraw();}});
 dxfCanvasEv.addEventListener('mouseleave',()=>{isDragging=false;isDrawingArea=false;currentMouseCAD=null;currentSnapPoint=null;requestDraw();
   
   });
