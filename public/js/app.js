@@ -443,7 +443,25 @@ draw();
 }
 function cadToScreen(x,y){return{x:panX+(x-cadOriginX)*scale,y:panY-(y-cadOriginY)*scale};}
 function screenToCad(x,y){if(northAngle!==0){var _cv=document.getElementById('cad-canvas'),_cx=_cv.width/2,_cy=_cv.height/2;var _a=northAngle*Math.PI/180,_dx=x-_cx,_dy=y-_cy;x=_cx+_dx*Math.cos(_a)-_dy*Math.sin(_a);y=_cy+_dx*Math.sin(_a)+_dy*Math.cos(_a);}return{x:cadOriginX+(x-panX)/scale,y:cadOriginY+(panY-y)/scale};}
-function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=isExportingPDF?4:1;if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';return;}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid){
+function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext('2d'),pr=isExportingPDF?4:1;if(cx.resetTransform)cx.resetTransform();else cx.setTransform(1,0,0,1,0,0);cx.fillStyle='#ffffff';cx.fillRect(0,0,cv.width,cv.height);if(!dxfData||!cachedPath){
+  // Draw placeholder when no DXF
+  cx.strokeStyle='#f1f5f9';cx.lineWidth=1*pr;
+  for(let x=0;x<cv.width;x+=50*pr){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,cv.height);cx.stroke();}
+  for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}
+  cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';
+  cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';
+  // Draw grid overlay even without DXF if enabled
+  if(showGrid){
+    var _sc=scale||1,_px=panX||cv.width/2,_py=panY||cv.height/2;
+    cx.save();cx.translate(_px,_py);cx.scale(_sc,-_sc);
+    var _gs=100,_r=cv.width/_sc*2;
+    cx.strokeStyle='rgba(80,120,200,0.35)';cx.lineWidth=0.6/_sc;
+    for(var _xi=Math.floor(-_r/_gs)*_gs;_xi<=_r;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,-_r);cx.lineTo(_xi,_r);cx.stroke();}
+    for(var _yi=Math.floor(-_r/_gs)*_gs;_yi<=_r;_yi+=_gs){cx.beginPath();cx.moveTo(-_r,_yi);cx.lineTo(_r,_yi);cx.stroke();}
+    cx.restore();
+  }
+  return;
+}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid){
   cx.save();
   // Use DXF bounds if loaded, else use canvas world bounds
   var _hasData=cadMaxX>cadMinX;
@@ -4101,14 +4119,27 @@ function _updateHudScale(){
 }
 
 function toggleGrid(){
-  if(typeof cadTools!=='undefined') cadTools.gridVisible=!cadTools.gridVisible;
-  showGrid=typeof cadTools!=='undefined'?cadTools.gridVisible:!showGrid;
+  // Toggle state
+  showGrid = !showGrid;
+  if(typeof cadTools!=='undefined') cadTools.gridVisible = showGrid;
+
+  // Update button
   var btn=document.getElementById('tb2-grid');
-  if(btn){btn.style.background=showGrid?'rgba(37,99,235,.3)':'transparent';
-    btn.style.borderColor=showGrid?'#2563eb':'transparent';
-    btn.style.color=showGrid?'#93c5fd':'#94a3b8';}
-  var sb=document.getElementById('sb-grid');if(sb)sb.style.display=showGrid?'inline':'none';
-  requestDraw();
+  if(btn){
+    btn.style.background    = showGrid?'rgba(37,99,235,.3)':'transparent';
+    btn.style.borderColor   = showGrid?'#2563eb':'transparent';
+    btn.style.color         = showGrid?'#93c5fd':'#94a3b8';
+    btn.style.fontWeight    = showGrid?'bold':'normal';
+  }
+  // Update status bar indicator
+  var sb=document.getElementById('sb-grid');
+  if(sb) sb.style.display = showGrid?'inline':'none';
+
+  // Force immediate synchronous redraw so grid appears/disappears instantly
+  isDrawingScheduled = false;
+  draw();
+
+  showMessage('Grid', showGrid?'Сетка включена ✓':'Сетка выключена', 'info');
 }
 function toggleOrthoMode(){
   if(typeof cadTools!=='undefined'){cadTools.orthoMode=!cadTools.orthoMode;cadTools.polarEnabled=false;}
