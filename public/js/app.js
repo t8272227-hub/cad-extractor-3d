@@ -343,13 +343,23 @@ function generateDxfContours(){const st=parseFloat(document.getElementById('dxf-
 function requestDraw(){if(!isDrawingScheduled){isDrawingScheduled=true;requestAnimationFrame(()=>{draw();isDrawingScheduled=false;});}
   if(typeof _updateHudScale==='function')_updateHudScale();
 }
-function setTool(t){currentTool=t;currentDimStart=null;document.getElementById('tool-point').className=t==='point'?'p-2 md:p-2.5 rounded-lg bg-blue-100 text-blue-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';document.getElementById('tool-interpolate').className=t==='interpolate'?'p-2 md:p-2.5 rounded-lg bg-indigo-100 text-indigo-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';document.getElementById('tool-dimension').className=t==='dimension'?'p-2 md:p-2.5 rounded-lg bg-purple-100 text-purple-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';var _ta=document.getElementById('tool-area');if(_ta)_ta.className=t==='area'?'p-2 md:p-2.5 rounded-lg bg-amber-100 text-amber-600 shadow-inner transition w-full':'p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full';const h=document.getElementById('tool-hint');if(t==='point'){h.innerHTML='<p><i class="fa-solid fa-mouse-pointer w-3 md:w-4"></i> Клик ЛКМ по узлу — отметить</p><p><i class="fa-solid fa-hand w-3 md:w-4"></i> Панорамирование</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else if(t==='interpolate'){h.innerHTML='<p><i class="fa-solid fa-mountain w-3 md:w-4 text-indigo-500"></i> Вычислить Z</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else if(t==='dimension'){h.innerHTML='<p><i class="fa-solid fa-ruler-horizontal w-3 md:w-4 text-purple-500"></i> Рулетка (Shift=Орто)</p>';document.getElementById('cad-canvas').style.cursor='crosshair';}else{h.innerHTML='<p><i class="fa-solid fa-crop-simple w-3 md:w-4 text-amber-500"></i> Рамка для PDF</p>';document.getElementById('cad-canvas').style.cursor='cell';}requestDraw();
-  // Toolbar row 2 active state
-  var _tbMap={'point':'tb2-point','interpolate':'tb2-interp','dimension':'tb2-dim'};
-  document.querySelectorAll('#toolbar-row2 button').forEach(function(b){b.classList.remove('active');});
-  var _aid=_tbMap[t];
-  if(_aid){var _ab=document.getElementById(_aid);if(_ab)_ab.classList.add('active');}
+function setTool(t){
+  currentTool=t;currentDimStart=null;
+  document.querySelectorAll('#toolbar-row2 button[id^="tb2-"]').forEach(function(b){
+    b.style.background='transparent';b.style.borderColor='transparent';b.style.color='#94a3b8';
+  });
+  var _m={'point':'tb2-point','interpolate':'tb2-interp','dimension':'tb2-dim'};
+  var _b=document.getElementById(_m[t]||'');
+  if(_b){_b.style.background='rgba(37,99,235,.3)';_b.style.borderColor='#2563eb';_b.style.color='#93c5fd';}
+  var cv=document.getElementById('cad-canvas');
+  if(cv)cv.style.cursor=t==='area'?'cell':'crosshair';
+  var sb=document.getElementById('hud-status');
+  var hints={point:'📍 ЛКМ по узлу DXF',interpolate:'🏔 Кликните — интерполяция Z',
+    dimension:'📏 Кликните начало',area:'✂ Выделите область PDF'};
+  if(sb)sb.textContent=hints[t]||'';
+  requestDraw();
 }
+
 function updateZDropdown(){const s=document.getElementById('edit-z-point-select');if(!s)return;const v=s.value;s.innerHTML='<option value="" disabled selected>Выберите точку...</option>';const tp=currentMode==='dxf'?points:manualPoints;if(tp.length===0){s.disabled=true;document.getElementById('edit-z-value').disabled=true;document.getElementById('edit-z-type').disabled=true;document.getElementById('btn-apply-z').disabled=true;return;}else{s.disabled=false;document.getElementById('edit-z-value').disabled=false;document.getElementById('edit-z-type').disabled=false;document.getElementById('btn-apply-z').disabled=false;}tp.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=`P${p.id} ${p.z!==null?'(Z: '+p.z.toFixed(3)+')':'(Z: нет)'}`;s.appendChild(o);});if(v&&tp.find(p=>p.id==v))s.value=v;}
 document.getElementById('edit-z-point-select')?.addEventListener('change',function(e){const i=parseInt(e.target.value),tp=currentMode==='dxf'?points:manualPoints,p=tp.find(pt=>pt.id===i);if(p){document.getElementById('edit-z-value').value=p.z!==null?p.z:'';document.getElementById('edit-z-type').value=(p.type==='Отн.'||p.type==='Абс.')?p.type:'Абс.';}});
 function applyZToPoint(){

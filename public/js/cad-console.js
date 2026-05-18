@@ -377,8 +377,9 @@ function _createCadConsole(){
 
   var panel=document.createElement('div');
   panel.id='cad-console-panel';
+  panel.style.display='none'; // hidden by default
   panel.style.cssText=
-    'position:fixed;bottom:32px;left:0;right:0;height:130px;'+
+    'position:fixed;bottom:22px;left:0;right:0;height:130px;'+
     'background:#0f172a;border-top:1px solid #1e3a5f;'+
     'display:flex;flex-direction:column;z-index:9998;'+
     'font-family:"Courier New",monospace;font-size:11px;'+
@@ -487,7 +488,7 @@ var _origCreateBottomBar=window.createBottomBar;
 function _patchBottomBar(){
   try{
     var bar=document.getElementById('bottom-status-bar');
-    if(bar) bar.style.bottom='130px';
+    if(bar) bar.style.bottom='0'; // no console by default
     var snap=document.getElementById('snap-popup');
     if(snap) snap.style.bottom='162px';
   }catch(e){}

@@ -107,7 +107,7 @@ function drawGrid(ctx, sc, panX, panY, oX, oY){
 }
 
 // ── TEXT TOOL ────────────────────────────────────────────────────────────────
-var cadTexts = []; // [{x,y,text,height,angle,color}]
+// cadTexts uses app.js global
 
 function activateTextTool(){
   cadTools.textMode = true;
