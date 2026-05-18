@@ -21,10 +21,18 @@ var cadTools = {
 // ── ORTHO MODE (F8) ──────────────────────────────────────────────────────────
 function toggleOrthoMode(){
   cadTools.orthoMode = !cadTools.orthoMode;
-  cadTools.polarEnabled = false; // mutual exclusion
+  cadTools.polarEnabled = false;
+  var btn=document.getElementById('tb2-ortho');
+  if(btn){
+    btn.style.background = cadTools.orthoMode?'rgba(37,99,235,.3)':'transparent';
+    btn.style.borderColor= cadTools.orthoMode?'#2563eb':'transparent';
+    btn.style.color      = cadTools.orthoMode?'#93c5fd':'#94a3b8';
+  }
+  var sb=document.getElementById('sb-ortho');
+  if(sb)sb.style.display=cadTools.orthoMode?'inline':'none';
   _updateToolStatus();
   requestDraw();
-  showMessage('Ortho', cadTools.orthoMode ? 'Режим ORTHO включён (90°)' : 'ORTHO выключен', 'info');
+  showMessage('Ortho',cadTools.orthoMode?'ORTHO включён (90°)':'ORTHO выключен','info');
 }
 
 function applyOrthoConstraint(fromX, fromY, toX, toY){
@@ -56,7 +64,17 @@ function applyPolarConstraint(fromX, fromY, toX, toY){
 // ── GRID (F7) ────────────────────────────────────────────────────────────────
 function toggleGrid(){
   cadTools.gridVisible = !cadTools.gridVisible;
+  showGrid = cadTools.gridVisible; // sync with draw() pipeline
+  var btn=document.getElementById('tb2-grid');
+  if(btn){
+    btn.style.background = showGrid?'rgba(37,99,235,.3)':'transparent';
+    btn.style.borderColor= showGrid?'#2563eb':'transparent';
+    btn.style.color      = showGrid?'#93c5fd':'#94a3b8';
+  }
+  var sb=document.getElementById('sb-grid');
+  if(sb)sb.style.display=showGrid?'inline':'none';
   requestDraw();
+  showMessage('Grid','Сетка '+(showGrid?'включена':'выключена'),'info');
 }
 
 function drawGrid(ctx, sc, panX, panY, oX, oY){

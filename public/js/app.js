@@ -530,7 +530,13 @@ if(pdfFrame&&Number.isFinite(pdfFrame.x1)){
   cx.fillStyle='rgba(37,99,235,0.04)';cx.fillRect(_pfx,_pfy,_pfw,_pfh);
   cx.fillStyle='#2563eb';cx.font=(8*pr)+'px sans-serif';
   cx.fillText('📄 PDF',_pfx+3*pr,_pfy+10*pr);
-};}
+}
+  // ── CAD-Tools overlay (grid from cad-tools, text, measure) ──────────────
+  try{
+    if(typeof drawCadTexts==='function')drawCadTexts(cx,scale);
+    if(typeof drawMeasurePreview==='function')drawMeasurePreview(cx,scale);
+  }catch(e){}
+}
 
 const dxfCanvasEv=document.getElementById('cad-canvas');
 dxfCanvasEv.addEventListener('mousedown',(e)=>{
@@ -4099,4 +4105,371 @@ function applyRebase(){
   showMessage('Пересчёт','ΔX='+dx.toFixed(4)+' ΔY='+dy.toFixed(4),'success');
   var panel=document.getElementById('rebase-panel');
   if(panel)panel.style.display='none';
+}
+
+
+// ── Menu diagnostics (checks each toolbar button) ─────────────────────────────
+function runMenuDiagnostics(){
+  var results=[];
+  var tests=[
+    {label:'setTool(point)',     fn:()=>typeof setTool==='function'},
+    {label:'setTool(interpolate)',fn:()=>typeof addInterpolatedPoint==='function'},
+    {label:'setTool(dimension)', fn:()=>typeof setTool==='function'},
+    {label:'toggleOrthoMode()',  fn:()=>typeof toggleOrthoMode==='function'},
+    {label:'toggleGrid()',       fn:()=>typeof toggleGrid==='function'},
+    {label:'activateTextTool()', fn:()=>typeof activateTextTool==='function'},
+    {label:'toggleMeasure()',    fn:()=>typeof toggleMeasure==='function'},
+    {label:'startContour()',     fn:()=>typeof startContour==='function'},
+    {label:'openSymDrawPanel()', fn:()=>typeof openSymDrawPanel==='function'},
+    {label:'openSymTable()',     fn:()=>typeof openSymTable==='function'},
+    {label:'toggleDxfZPanel()',  fn:()=>{var p=document.getElementById('dxf-z-panel');return typeof toggleDxfZPanel==='function'&&!!p;}},
+    {label:'toggleDxfLayersPanel()',fn:()=>typeof toggleDxfLayersPanel==='function'},
+    {label:'startPdfFrame()',    fn:()=>typeof startPdfFrame==='function'},
+    {label:'openPdfSettings()',  fn:()=>typeof openPdfSettings==='function'},
+    {label:'exportToDXF()',      fn:()=>typeof exportToDXF==='function'},
+    {label:'runXYZExport()',     fn:()=>typeof runXYZExport==='function'},
+    {label:'openGeoreferenceModal()',fn:()=>typeof openGeoreferenceModal==='function'},
+    {label:'init3DViewer()',     fn:()=>typeof init3DViewer==='function'},
+    {label:'toggleEarthworksModal()',fn:()=>typeof toggleEarthworksModal==='function'},
+    {label:'applyRebase()',      fn:()=>typeof applyRebase==='function'},
+    {label:'openAIPanel()',      fn:()=>typeof openAIPanel==='function'},
+    {label:'executeCommand()',   fn:()=>typeof executeCommand==='function'},
+    {label:'draw() canvas',      fn:()=>{var cv=document.getElementById('cad-canvas');return cv&&cv.width>0;}},
+    {label:'processCADData()',   fn:()=>typeof processCADData==='function'},
+    {label:'Grid (showGrid var)',fn:()=>typeof showGrid==='boolean'},
+  ];
+  return tests.map(function(t){
+    var ok=false;
+    try{ok=!!t.fn();}catch(e){}
+    return{label:t.label,ok:ok};
+  });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ГОСТ PDF — топографический план с плашкой
+// ══════════════════════════════════════════════════════════════════════════════
+function openGostPdfPanel(){
+  var p=document.getElementById('gost-pdf-panel');
+  if(p){p.style.display=p.style.display==='none'?'flex':'none';return;}
+  // Create panel
+  var panel=document.createElement('div');
+  panel.id='gost-pdf-panel';
+  panel.style.cssText='position:fixed;top:90px;right:16px;width:380px;max-height:80vh;overflow-y:auto;'+
+    'background:#1a2744;color:#f1f5f9;border-radius:12px;border:1px solid #2d3e6a;'+
+    'box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:9998;display:flex;flex-direction:column;'+
+    'font-size:12px;font-family:Arial,sans-serif;';
+  panel.innerHTML=
+    '<div style="background:#0f1d38;padding:12px 16px;border-bottom:1px solid #2d3e6a;'+
+    'display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">'+
+      '<span style="font-weight:700;font-size:13px;">📐 PDF по ГОСТ 21.101-97</span>'+
+      '<button onclick="document.getElementById(\'gost-pdf-panel\').style.display=\'none\'" '+
+      'style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;">✕</button>'+
+    '</div>'+
+    '<div style="padding:14px;display:flex;flex-direction:column;gap:10px;">'+
+      // Form fields
+      _gostField('gost-org',     'Организация',        'ООО «Геодезия»')+
+      _gostField('gost-obj',     'Наименование объекта','Топографический план')+
+      _gostField('gost-addr',    'Адрес объекта',       '')+
+      _gostField('gost-sheet',   'Лист',                '1')+
+      _gostField('gost-total',   'Листов всего',        '1')+
+      _gostField('gost-scale',   'Масштаб',             '1:500')+
+      _gostField('gost-stage',   'Стадия',              'П')+
+      _gostField('gost-num',     'Шифр/№ проекта',      '')+
+      _gostField('gost-exec',    'Разработал',          '')+
+      _gostField('gost-check',   'Проверил',            '')+
+      _gostField('gost-geo',     'Геодезист',           '')+
+      _gostField('gost-date',    'Дата',                new Date().toLocaleDateString('ru-RU'))+
+      _gostField('gost-ck',      'СК / Система координат','МСК')+
+      _gostField('gost-vh',      'Система высот',       'Балтийская')+
+      '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;">'+
+        '<input type="checkbox" id="gost-ai" checked style="accent-color:#2563eb;">'+
+        '<span>🤖 Включить ИИ-анализ</span>'+
+      '</label>'+
+      '<button onclick="generateGostPdf()" style="background:#2563eb;border:none;color:#fff;'+
+      'border-radius:8px;padding:10px;cursor:pointer;font-weight:700;font-size:13px;margin-top:4px;">'+
+      '📄 Сформировать PDF</button>'+
+      '<div id="gost-status" style="font-size:11px;color:#64748b;text-align:center;min-height:16px;"></div>'+
+    '</div>';
+  document.body.appendChild(panel);
+}
+
+function _gostField(id, label, def){
+  return '<div><div style="font-size:10px;color:#64748b;margin-bottom:3px;">'+label+'</div>'+
+    '<input id="'+id+'" type="text" value="'+def+'" '+
+    'style="width:100%;background:#2d3e6a;border:1px solid #3d5080;border-radius:6px;'+
+    'color:#f1f5f9;padding:5px 8px;font-size:12px;box-sizing:border-box;"></div>';
+}
+
+function _gv(id){var el=document.getElementById(id);return el?el.value.trim():'';}
+
+async function generateGostPdf(){
+  var status=document.getElementById('gost-status');
+  if(status)status.textContent='Формирование PDF...';
+
+  var meta={
+    org:_gv('gost-org'), title:_gv('gost-obj'), addr:_gv('gost-addr'),
+    sheet:_gv('gost-sheet'), sheets:_gv('gost-total'), scale:_gv('gost-scale'),
+    stage:_gv('gost-stage'), num:_gv('gost-num'), exec:_gv('gost-exec'),
+    check:_gv('gost-check'), geo:_gv('gost-geo'), date:_gv('gost-date'),
+    ck:_gv('gost-ck'), vh:_gv('gost-vh'),
+    useAI: document.getElementById('gost-ai')&&document.getElementById('gost-ai').checked
+  };
+
+  // Generate canvas snapshot
+  var cv=document.getElementById('cad-canvas');
+  var imgData = cv ? cv.toDataURL('image/png',0.92) : '';
+
+  // Get AI analysis if enabled
+  var aiData = null;
+  if(meta.useAI && typeof buildAIPdfReport==='function'){
+    try{
+      if(status)status.textContent='🤖 ИИ анализирует данные...';
+      aiData = await generateAIReport(meta);
+    }catch(e){ aiData=null; }
+  }
+
+  var pts = currentMode==='dxf'?points:manualPoints;
+  var dims = typeof dimensions!=='undefined'?dimensions:[];
+  var dateStr = meta.date;
+
+  // Build Z statistics
+  var zpts=pts.filter(function(p){return p.z!=null;});
+  var zMin=zpts.length?Math.min.apply(null,zpts.map(function(p){return p.z;})):null;
+  var zMax=zpts.length?Math.max.apply(null,zpts.map(function(p){return p.z;})):null;
+  var zMean=zpts.length?(zpts.reduce(function(s,p){return s+p.z;},0)/zpts.length):null;
+
+  var html='<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8">'+
+  '<style>'+
+  '@page{size:A3 landscape;margin:0}'+
+  '*{box-sizing:border-box;margin:0;padding:0;}'+
+  'body{font-family:Arial,Helvetica,sans-serif;font-size:8pt;background:#fff;width:420mm;height:297mm;}'+
+  '.page{width:420mm;height:297mm;display:flex;flex-direction:column;position:relative;'+
+    'border:1pt solid #000;padding:5mm 5mm 5mm 20mm;}'+
+  '.content{flex:1;display:flex;gap:3mm;overflow:hidden;}'+
+  '.drawing{flex:1;border:0.5pt solid #555;background:#fafafa;overflow:hidden;'+
+    'display:flex;align-items:center;justify-content:center;}'+
+  '.drawing img{max-width:100%;max-height:100%;object-fit:contain;}'+
+  '.right{width:70mm;display:flex;flex-direction:column;gap:2mm;}'+
+  'table{border-collapse:collapse;width:100%;font-size:7pt;}'+
+  'th{background:#1e293b;color:#fff;padding:2px 3px;border:0.3pt solid #334155;text-align:left;}'+
+  'td{padding:2px 3px;border:0.3pt solid #cbd5e1;}'+
+  'tr:nth-child(even) td{background:#f8fafc;}'+
+  '.title-block{border:1pt solid #000;font-size:7pt;}'+
+  '.tb-row{display:flex;border-bottom:0.5pt solid #000;}'+
+  '.tb-row:last-child{border-bottom:none;}'+
+  '.tb-cell{padding:2px 4px;border-right:0.5pt solid #000;display:flex;align-items:center;}'+
+  '.tb-cell:last-child{border-right:none;}'+
+  '.tb-label{color:#666;font-size:6pt;display:block;}'+
+  '.metric{font-size:10pt;font-weight:bold;color:#1e3a5f;}'+
+  'h3{font-size:8pt;font-weight:bold;color:#1e293b;border-bottom:0.5pt solid #94a3b8;'+
+    'padding-bottom:1pt;margin-bottom:2pt;}'+
+  '.ai-box{background:#eff6ff;border:0.5pt solid #bfdbfe;border-radius:2pt;padding:3pt;font-size:6.5pt;}'+
+  '</style></head><body><div class="page">'+
+
+  // Top: org + title
+  '<div style="text-align:center;padding:2mm 0 1mm;border-bottom:0.5pt solid #000;margin-bottom:2mm;">'+
+    '<div style="font-size:9pt;font-weight:bold;">'+meta.org+'</div>'+
+    '<div style="font-size:11pt;font-weight:bold;margin-top:1mm;">'+meta.title+'</div>'+
+    (meta.addr?'<div style="font-size:8pt;color:#475569;">'+meta.addr+'</div>':'')+
+  '</div>'+
+
+  '<div class="content">'+
+
+  // Drawing area
+  '<div class="drawing">'+
+    (imgData?'<img src="'+imgData+'" alt="Чертёж">':'<div style="color:#94a3b8;font-size:10pt;">Нет данных</div>')+
+  '</div>'+
+
+  // Right panel
+  '<div class="right">'+
+
+  // AI analysis
+  (aiData?'<div class="ai-box"><b>🤖 ИИ-анализ</b><br>'+aiData.summary+'<br><b>Точность: '+aiData.accuracy_class+'</b></div>':'') +
+
+  // Key metrics
+  '<div style="background:#f8fafc;border:0.5pt solid #e2e8f0;border-radius:2pt;padding:3pt;">'+
+    '<h3>📊 Показатели</h3>'+
+    '<table><tbody>'+
+    '<tr><td>Точек</td><td><b>'+pts.length+'</b></td></tr>'+
+    '<tr><td>С высотой</td><td><b>'+zpts.length+'</b></td></tr>'+
+    (zMin!=null?'<tr><td>Z мин</td><td><b>'+zMin.toFixed(3)+' м</b></td></tr>':'')+
+    (zMax!=null?'<tr><td>Z макс</td><td><b>'+zMax.toFixed(3)+' м</b></td></tr>':'')+
+    (zMean!=null?'<tr><td>Z средн.</td><td><b>'+zMean.toFixed(3)+' м</b></td></tr>':'')+
+    (zMin!=null&&zMax!=null?'<tr><td>Перепад</td><td><b>'+(zMax-zMin).toFixed(3)+' м</b></td></tr>':'')+
+    '<tr><td>Размеров</td><td><b>'+dims.length+'</b></td></tr>'+
+    (typeof _savedArea!=='undefined'&&_savedArea>0?
+      '<tr><td>Площадь</td><td><b>'+_savedArea.toFixed(3)+' м²</b></td></tr>':'') +
+    (typeof _savedVolume!=='undefined'&&_savedVolume>0?
+      '<tr><td>Объём</td><td><b>'+_savedVolume.toFixed(3)+' м³</b></td></tr>':'')+
+    '</tbody></table>'+
+  '</div>'+
+
+  // Points table
+  (pts.length?'<div style="flex:1;overflow:hidden;">'+
+    '<h3>📍 Ведомость точек</h3>'+
+    '<div style="overflow-y:auto;max-height:80mm;">'+
+    '<table><thead><tr><th>№</th><th>X</th><th>Y</th><th>Z</th></tr></thead><tbody>'+
+    pts.map(function(p){
+      return '<tr><td>P'+p.id+'</td>'+
+        '<td style="font-family:monospace">'+p.x.toFixed(3)+'</td>'+
+        '<td style="font-family:monospace">'+p.y.toFixed(3)+'</td>'+
+        '<td style="font-family:monospace">'+(p.z!=null?p.z.toFixed(3):'—')+'</td></tr>';
+    }).join('')+
+    '</tbody></table></div></div>':'') +
+
+  '</div></div>'+  // end .right, .content
+
+  // GOST Title block
+  '<div class="title-block" style="margin-top:2mm;">'+
+    '<div class="tb-row">'+
+      '<div class="tb-cell" style="flex:3"><span class="tb-label">Наименование</span>'+meta.title+'</div>'+
+      '<div class="tb-cell" style="width:25mm"><span class="tb-label">Шифр</span>'+meta.num+'</div>'+
+      '<div class="tb-cell" style="width:15mm"><span class="tb-label">Стадия</span>'+meta.stage+'</div>'+
+      '<div class="tb-cell" style="width:12mm;text-align:center"><span class="tb-label">Лист</span>'+meta.sheet+'</div>'+
+      '<div class="tb-cell" style="width:12mm;text-align:center"><span class="tb-label">Листов</span>'+meta.sheets+'</div>'+
+    '</div>'+
+    '<div class="tb-row">'+
+      '<div class="tb-cell" style="flex:2"><span class="tb-label">Организация</span>'+meta.org+'</div>'+
+      '<div class="tb-cell" style="flex:2"><span class="tb-label">СК: '+meta.ck+' / ВО: '+meta.vh+'</span></div>'+
+      '<div class="tb-cell" style="flex:1"><span class="tb-label">Масштаб</span>'+meta.scale+'</div>'+
+      '<div class="tb-cell" style="flex:1"><span class="tb-label">Дата</span>'+dateStr+'</div>'+
+    '</div>'+
+    '<div class="tb-row">'+
+      '<div class="tb-cell" style="flex:1"><span class="tb-label">Разработал</span>'+meta.exec+' ___________</div>'+
+      '<div class="tb-cell" style="flex:1"><span class="tb-label">Проверил</span>'+meta.check+' ___________</div>'+
+      '<div class="tb-cell" style="flex:1"><span class="tb-label">Геодезист</span>'+meta.geo+' ___________</div>'+
+      '<div class="tb-cell" style="flex:1"><span class="tb-label">Н.контр.</span>___________</div>'+
+    '</div>'+
+  '</div>'+
+
+  '</div></body></html>';
+
+  // Open in iframe for print
+  var win=window.open('','_blank','width=1200,height=800');
+  if(!win){alert('Разрешите всплывающие окна');return;}
+  win.document.write(html);
+  win.document.close();
+  setTimeout(function(){win.focus();win.print();},800);
+  if(status)status.textContent='✓ PDF готов к печати';
+}
+
+
+// ─── Word/DOCX export with title block ────────────────────────────────────────
+async function exportPointsToWord(){
+  var pts = currentMode==='dxf'?points:manualPoints;
+  var dims= typeof dimensions!=='undefined'?dimensions:[];
+  if(!pts.length){showMessage('Экспорт','Нет точек','warning');return;}
+
+  var dateStr=new Date().toLocaleDateString('ru-RU');
+  var zpts=pts.filter(function(p){return p.z!=null;});
+  var zMin=zpts.length?Math.min.apply(null,zpts.map(function(p){return p.z;})):null;
+  var zMax=zpts.length?Math.max.apply(null,zpts.map(function(p){return p.z;})):null;
+
+  // Build HTML for DOCX via server
+  var htmlDoc='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+  '<style>'+
+    'body{font-family:Arial;font-size:10pt;}'+
+    'h1{font-size:14pt;text-align:center;margin:0 0 4pt;}'+
+    'h2{font-size:11pt;margin:8pt 0 3pt;}'+
+    'table{border-collapse:collapse;width:100%;font-size:9pt;}'+
+    'th{background:#1e293b;color:#fff;padding:3pt 5pt;border:0.5pt solid #334155;}'+
+    'td{padding:2pt 5pt;border:0.5pt solid #cbd5e1;}'+
+    'tr:nth-child(even) td{background:#f8fafc;}'+
+    '.stamp{border:1pt solid #000;margin-top:12pt;font-size:8pt;}'+
+    '.sr{display:flex;border-bottom:0.5pt solid #000;}'+
+    '.sr:last-child{border-bottom:none;}'+
+    '.sc{padding:2pt 4pt;border-right:0.5pt solid #000;flex:1;}'+
+    '.sc:last-child{border-right:none;}'+
+    '.sl{font-size:7pt;color:#666;}'+
+    '.metrics{background:#f8fafc;border:0.5pt solid #e2e8f0;padding:6pt;margin:6pt 0;}'+
+  '</style></head><body>'+
+  '<h1>ВЕДОМОСТЬ ПУНКТОВ СЪЁМОЧНОГО ОБОСНОВАНИЯ</h1>'+
+  '<p style="text-align:center;font-size:9pt;color:#475569;margin-bottom:8pt;">'+
+    'Дата: '+dateStr+' · Точек: '+pts.length+' · Система координат: МСК'+
+  '</p>'+
+
+  '<div class="metrics">'+
+    '<b>Статистика:</b> '+
+    'Точек всего: '+pts.length+' | С высотой: '+zpts.length+
+    (zMin!=null?' | Z мин: '+zMin.toFixed(3)+' м':'')+
+    (zMax!=null?' | Z макс: '+zMax.toFixed(3)+' м':'')+
+    (typeof _savedArea!=='undefined'&&_savedArea>0?' | Площадь: '+_savedArea.toFixed(3)+' м²':'')+
+  '</div>'+
+
+  '<h2>Ведомость координат и высот</h2>'+
+  '<table><thead><tr>'+
+    '<th>№ п/п</th><th>Обозн.</th><th>X, м</th><th>Y, м</th><th>Z, м</th><th>Тип</th>'+
+  '</tr></thead><tbody>'+
+  pts.map(function(p,i){
+    return '<tr>'+
+      '<td style="text-align:center">'+(i+1)+'</td>'+
+      '<td style="text-align:center">P'+p.id+'</td>'+
+      '<td style="font-family:Courier New;text-align:right">'+p.x.toFixed(4)+'</td>'+
+      '<td style="font-family:Courier New;text-align:right">'+p.y.toFixed(4)+'</td>'+
+      '<td style="font-family:Courier New;text-align:right">'+(p.z!=null?p.z.toFixed(4):'—')+'</td>'+
+      '<td style="text-align:center">'+(p.type||'—')+'</td>'+
+      '</tr>';
+  }).join('')+
+  '</tbody></table>'+
+
+  (dims.length?
+    '<h2>Ведомость размеров</h2>'+
+    '<table><thead><tr><th>Отрезок</th><th>Длина, м</th><th>ΔX, м</th><th>ΔY, м</th><th>Азимут, °</th></tr></thead><tbody>'+
+    dims.map(function(d){
+      var l=Math.hypot(d.p2.x-d.p1.x,d.p2.y-d.p1.y);
+      var az=Math.atan2(d.p2.x-d.p1.x,d.p2.y-d.p1.y)*180/Math.PI;
+      if(az<0)az+=360;
+      return '<tr><td>P'+d.p1.id+'–P'+d.p2.id+'</td>'+
+        '<td style="font-family:Courier New;text-align:right">'+l.toFixed(4)+'</td>'+
+        '<td style="font-family:Courier New;text-align:right">'+Math.abs(d.p2.x-d.p1.x).toFixed(4)+'</td>'+
+        '<td style="font-family:Courier New;text-align:right">'+Math.abs(d.p2.y-d.p1.y).toFixed(4)+'</td>'+
+        '<td style="font-family:Courier New;text-align:right">'+az.toFixed(2)+'</td></tr>';
+    }).join('')+
+    '</tbody></table>':'')+
+
+  // Title block (GOST stamp)
+  '<div class="stamp">'+
+    '<div class="sr">'+
+      '<div class="sc" style="flex:4"><span class="sl">Наименование</span>Ведомость пунктов топографической съёмки</div>'+
+      '<div class="sc"><span class="sl">Лист</span>1 / 1</div>'+
+    '</div>'+
+    '<div class="sr">'+
+      '<div class="sc" style="flex:2"><span class="sl">Разработал</span>________________________</div>'+
+      '<div class="sc" style="flex:2"><span class="sl">Проверил</span>________________________</div>'+
+      '<div class="sc"><span class="sl">Дата</span>'+dateStr+'</div>'+
+    '</div>'+
+  '</div>'+
+
+  '</body></html>';
+
+  // Send to server for DOCX conversion
+  showMessage('Word','Формирование документа...','info');
+  try{
+    var resp=await fetch('/api/export-docx',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        title:'Ведомость пунктов',
+        points:pts, dimensions:dims,
+        area:typeof _savedArea!=='undefined'?_savedArea:0,
+        htmlContent:htmlDoc
+      })
+    });
+    if(resp.ok){
+      var blob=await resp.blob();
+      var a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download='points_'+dateStr.replace(/\./g,'-')+'.docx';
+      a.click();
+      showMessage('Word','DOCX сохранён','success');
+    } else {
+      // Fallback: open as HTML
+      var win=window.open('','_blank');
+      if(win){win.document.write(htmlDoc);win.document.close();}
+      showMessage('Word','Открыт в браузере (сохраните как HTML)','info');
+    }
+  }catch(e){
+    showMessage('Ошибка','Не удалось создать DOCX: '+e.message,'error');
+  }
 }

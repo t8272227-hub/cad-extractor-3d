@@ -154,6 +154,15 @@ async function runDiagnostics() {
   _diagCheck('currentMode',    typeof currentMode !== 'undefined',
     undefined, typeof currentMode !== 'undefined' ? currentMode : 'undefined');
 
+  // ─ 0. Menu Button Diagnostics ─────────────────────────────────────────────
+  _diagSection('🔘 КНОПКИ МЕНЮ');
+  if(typeof runMenuDiagnostics==='function'){
+    var menuResults=runMenuDiagnostics();
+    menuResults.forEach(function(r){_diagCheck(r.label,r.ok);});
+  } else {
+    _diagCheck('runMenuDiagnostics()',false);
+  }
+
   // ─ 8. CAD Tools state ────────────────────────────────────────────────────
   _diagSection('🛠️ CAD TOOLS');
   _diagCheck('cadTools object',  typeof cadTools !== 'undefined');
