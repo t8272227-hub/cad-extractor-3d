@@ -267,6 +267,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
   <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
   <button id="tb2-ortho" onclick="if(typeof toggleOrthoMode==='function')toggleOrthoMode()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-arrows-left-right-to-line"></i>Ortho</button>
   <button id="tb2-grid" onclick="if(typeof toggleGrid==='function')toggleGrid()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-border-all"></i>Сетка</button>
+  <button onclick="openNorthPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Стрелка Севера / Азимут"><i class="fa-solid fa-compass"></i>Север</button>
   <button onclick="if(typeof activateTextTool==='function')activateTextTool()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-font"></i>Текст</button>
   <button onclick="if(typeof toggleMeasure==='function')toggleMeasure()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-ruler"></i>Дист.</button>
   <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
@@ -834,8 +835,11 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 
 
 <!-- ═══ NORTH ARROW — position:fixed, no layout impact ═════════════════════ -->
-<div id="nw" style="position:fixed;bottom:14px;right:14px;z-index:200;display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:auto;">
-  <div id="nw-svg" style="filter:drop-shadow(0 2px 6px rgba(0,0,0,.25));cursor:pointer;" onclick="document.getElementById('nw-panel').classList.toggle('hidden')" title="Стрелка Севера — нажмите для настройки"></div>
+<div id="nw" style="position:fixed;bottom:40px;right:14px;z-index:200;display:flex;flex-direction:column;align-items:center;gap:3px;pointer-events:auto;">
+  <div id="nw-svg" style="cursor:pointer;opacity:0.9;"
+       onclick="openNorthPanel()"
+       title="Стрелка Севера — нажмите для настройки"></div>
+</div>
   <div style="background:rgba(255,255,255,.96);border-radius:8px;padding:3px 8px;box-shadow:0 1px 5px rgba(0,0,0,.15);border:1px solid #e2e8f0;display:flex;align-items:center;gap:4px;">
     <span style="font-size:9px;color:#64748b;font-weight:700;">Az</span>
     <input type="number" id="nw-deg" min="-360" max="360" step="0.1" value="0"
@@ -848,11 +852,93 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 </div>
 
 <!-- ═══ NORTH SETTINGS PANEL — position:fixed ═══════════════════════════════ -->
-<div id="nw-panel" class="hidden" style="position:fixed;bottom:120px;right:14px;z-index:201;background:white;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,.18);border:1px solid #e2e8f0;width:240px;overflow:hidden;">
-  <div style="background:#f8fafc;padding:10px 12px 8px;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
-    <span style="font-size:11px;font-weight:700;color:#334155;">🧭 Стрелка Севера</span>
-    <button onclick="document.getElementById('nw-panel').classList.add('hidden')" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:14px;">✕</button>
+<div id="nw-panel" style="position:fixed;right:14px;bottom:110px;z-index:9999;
+  background:#1a2744;color:#f1f5f9;border-radius:12px;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);border:1px solid #2d3e6a;
+  width:280px;overflow:hidden;display:none;flex-direction:column;
+  font-family:Arial,sans-serif;font-size:12px;">
+
+  <div style="background:#0f1d38;padding:10px 14px;border-bottom:1px solid #2d3e6a;
+    display:flex;align-items:center;justify-content:space-between;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:16px;">🧭</span>
+      <span style="font-weight:700;font-size:13px;">Стрелка Севера</span>
+    </div>
+    <button onclick="document.getElementById('nw-panel').style.display='none'"
+      style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;">✕</button>
   </div>
+
+  <div style="padding:14px;display:flex;flex-direction:column;gap:12px;">
+
+    <!-- Azimuth input -->
+    <div>
+      <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;
+        letter-spacing:.5px;margin-bottom:6px;">Азимут Севера (°)</div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="number" id="nw-deg" min="-360" max="360" step="0.5" value="0"
+          style="width:70px;background:#2d3e6a;border:1px solid #3d5080;border-radius:6px;
+          color:#60a5fa;padding:5px 8px;font-size:14px;font-weight:700;text-align:center;outline:none;"
+          oninput="_northApply()" title="Азимут Севера от вертикали (°)">
+        <span style="color:#475569;font-size:11px;">° от вертикали</span>
+        <button onclick="northAngle=0;document.getElementById('nw-deg').value=0;_northApply();"
+          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;border-radius:6px;
+          padding:4px 8px;cursor:pointer;font-size:11px;" title="Сбросить">↺ 0°</button>
+      </div>
+    </div>
+
+    <!-- Slider -->
+    <div>
+      <input type="range" id="nw-range" min="-360" max="360" step="0.5" value="0"
+        style="width:100%;accent-color:#3b82f6;"
+        oninput="document.getElementById('nw-deg').value=this.value;_northApply()">
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:#334155;margin-top:2px;">
+        <span>-360°</span><span>-180°</span><span>0°</span><span>+180°</span><span>+360°</span>
+      </div>
+    </div>
+
+    <!-- Quick presets -->
+    <div>
+      <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;
+        letter-spacing:.5px;margin-bottom:6px;">Быстрые пресеты</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+        <button onclick="_nwPreset(0)"
+          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;
+          border-radius:6px;padding:5px;cursor:pointer;font-size:11px;">0° (вертикаль)</button>
+        <button onclick="_nwPreset(45)"
+          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;
+          border-radius:6px;padding:5px;cursor:pointer;font-size:11px;">45° СВ</button>
+        <button onclick="_nwPreset(-45)"
+          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;
+          border-radius:6px;padding:5px;cursor:pointer;font-size:11px;">-45° СЗ</button>
+        <button onclick="_nwPreset(90)"
+          style="background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;
+          border-radius:6px;padding:5px;cursor:pointer;font-size:11px;">90° В</button>
+      </div>
+    </div>
+
+    <!-- Pick from two points -->
+    <div>
+      <div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;
+        letter-spacing:.5px;margin-bottom:6px;">Задать по двум точкам на чертеже</div>
+      <button onclick="_northStartPick()"
+        style="width:100%;background:#2563eb;border:none;color:#fff;border-radius:6px;
+        padding:7px;cursor:pointer;font-size:11px;font-weight:700;">
+        🎯 Указать направление на чертеже
+      </button>
+      <div id="nw-hint" style="display:none;font-size:10px;color:#1d4ed8;background:#eff6ff;
+        border:1px solid #bfdbfe;border-radius:6px;padding:5px 8px;margin-top:4px;"></div>
+    </div>
+
+    <!-- Show/hide toggle -->
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;">
+      <input type="checkbox" id="nw-show" checked
+        onchange="document.getElementById('nw').style.display=this.checked?'flex':'none'"
+        style="accent-color:#3b82f6;width:14px;height:14px;">
+      <span>Показывать стрелку Севера</span>
+    </label>
+
+  </div>
+</div>
   <div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px;">
     <div>
       <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:4px;">Азимут Севера (°) — 0°=вверх, по часовой</div>
