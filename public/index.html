@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>CAD Extractor & 3D Earthworks</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/dxf-parser@1.1.2/dist/dxf-parser.js"></script><script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script><link rel="preconnect" href="https://cdnjs.cloudflare.com"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"><style>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"><title>CAD Extractor & 3D Earthworks</title><script src="https://cdn.tailwindcss.com"></script><script src="https://cdn.jsdelivr.net/npm/dxf-parser@1.1.2/dist/dxf-parser.js"></script><script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.0/delaunator.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script><script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"><style>
 canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 /* ── Compact header button tooltips ──────────────────────────────────────── */
 .hbtn{position:relative;display:inline-flex;align-items:center;justify-content:center;
@@ -101,49 +101,13 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
   }
 }
 
-
-/* ── Bottom status bar ─────────────────────────────────────────────────────── */
-#bottom-status-bar {
-  position: fixed !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  height: 32px !important;
-  background: #0f172a !important;
-  border-top: 1px solid #1e3a5f !important;
-  display: flex !important;
-  align-items: center !important;
-  z-index: 99999 !important;
-  font-family: 'Courier New', monospace !important;
-  font-size: 11px !important;
-  color: #94a3b8 !important;
-  pointer-events: auto !important;
-}
-#snap-popup {
-  position: fixed !important;
-  bottom: 32px !important;
-  left: 80px !important;
-  background: #1e293b !important;
-  border-radius: 10px 10px 0 0 !important;
-  box-shadow: 0 -4px 20px rgba(0,0,0,.4) !important;
-  border: 1px solid #334155 !important;
-  border-bottom: none !important;
-  z-index: 99998 !important;
-  padding: 12px 14px 10px !important;
-  display: none !important;
-  color: #f1f5f9 !important;
-  font-size: 12px !important;
-}
-
-/* Font Awesome render fix */
-.fa-solid, .fa-regular, .fa-brands { 
-  font-display: block; 
-}
-
+/* ── Refactor additions ──────────────────────────────────────────────── */
 #toolbar-row2{scrollbar-width:none;}
 #toolbar-row2::-webkit-scrollbar{display:none;}
 #toolbar-row2 button:hover{background:rgba(255,255,255,.08)!important;border-color:#334155!important;color:#e2e8f0!important;}
 #toolbar-row2 button.active{background:rgba(37,99,235,.25)!important;border-color:#2563eb!important;color:#93c5fd!important;}
+.sb-expanded{height:36px!important;}
+#bottom-status-bar:not(.sb-expanded){height:18px!important;}
 #mode-dxf,#mode-manual{min-height:0;}
 </style><style>::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:#f1f1f1;border-radius:10px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}::-webkit-scrollbar-thumb:hover{background:#94a3b8}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}.scrollbar-hide::-webkit-scrollbar{display:none}.page-break{page-break-before:always}input[type="number"]::-webkit-outer-spin-button,input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}input[type="number"]{-moz-appearance:textfield}/* canvas – see custom block above */
 /* ── Print / PDF overlay ─────────────────────────────────────────────────── */
@@ -204,55 +168,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
         <i class="fa-solid fa-share-from-square"></i>
       </button>
 
-      <div class="hsep">
       <div class="hsep"></div>
-      <!-- Survey tools -->
-      <button id="tb-tool-point" class="hbtn" onclick="setTool('point')" data-tip="📍 Точка&#10;ЛКМ по узлу DXF" title="Точка">
-        <i class="fa-solid fa-location-dot"></i>
-      </button>
-      <button id="tb-tool-interp" class="hbtn" onclick="setTool('interpolate')" data-tip="🏔 Интерполяция Z&#10;IDW по соседям" title="Интерполяция">
-        <i class="fa-solid fa-mountain"></i>
-      </button>
-      <button id="tb-tool-dim" class="hbtn" onclick="setTool('dimension')" data-tip="📏 Размерная линия" title="Размер">
-        <i class="fa-solid fa-ruler-horizontal"></i>
-      </button>
-      <div class="hsep"></div>
-      <!-- CAD tools -->
-      <button id="tool-ortho" class="hbtn" onclick="if(typeof toggleOrthoMode==='function')toggleOrthoMode()" data-tip="ORTHO F8&#10;90° привязка" title="Ortho">
-        <i class="fa-solid fa-arrows-left-right-to-line"></i>
-      </button>
-      <button id="tool-grid" class="hbtn" onclick="if(typeof toggleGrid==='function')toggleGrid()" data-tip="Сетка F7" title="Сетка">
-        <i class="fa-solid fa-border-all"></i>
-      </button>
-      <button class="hbtn" onclick="if(typeof activateTextTool==='function')activateTextTool()" data-tip="Текст" title="Текст">
-        <i class="fa-solid fa-font"></i>
-      </button>
-      <button class="hbtn" onclick="if(typeof toggleMeasure==='function')toggleMeasure()" data-tip="Измерение" title="Измерение">
-        <i class="fa-solid fa-ruler"></i>
-      </button>
-      <div class="hsep"></div>
-      <!-- Analysis -->
-      <button class="hbtn" onclick="startContour()" data-tip="Контур·Площадь·Объём" title="Контур">
-        <i class="fa-solid fa-draw-polygon"></i>
-      </button>
-      <button class="hbtn" onclick="openSymDrawPanel()" data-tip="Условные знаки" title="Знаки">
-        <i class="fa-solid fa-signs-post"></i>
-      </button>
-      <button class="hbtn" onclick="openSymTable()" data-tip="Ведомость объектов" title="Ведомость">
-        <i class="fa-solid fa-table-list"></i>
-      </button>
-      <button class="hbtn" onclick="startPdfFrame()" data-tip="PDF рамка" title="PDF рамка">
-        <i class="fa-solid fa-crop-simple"></i>
-      </button>
-      <button class="hbtn" onclick="clearPdfFrame()" data-tip="Снять рамку" title="Снять рамку">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-      <div class="hsep"></div>
-      <!-- Console -->
-      <button class="hbtn" onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';if(v){var inp=document.getElementById('cad-cmd-input');if(inp)inp.focus();}})()" data-tip="⌘ Консоль&#10;«:»=активировать" title="Консоль">
-        <i class="fa-solid fa-terminal"></i>
-      </button>
-</div>
 
       <button class="hbtn bg-sky-700 hover:bg-sky-600 text-white"
         onclick="open3DViewer()" data-tip="3D Визуализация">
@@ -268,29 +184,6 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
       <button class="hbtn bg-emerald-700 hover:bg-emerald-600 text-white"
         onclick="openPdfSettings('dxf')" id="export-btn" data-tip="Экспорт PDF">
         <i class="fa-solid fa-file-pdf"></i>
-      </button>
-      <div class="hsep"></div>
-<button class="hbtn" onclick="toggleGrid()" data-tip="Сетка (F7)" title="Сетка координат">
-  <i class="fa-solid fa-border-all" style="color:#94a3b8"></i>
-</button>
-<button class="hbtn" onclick="toggleOrthoMode()" data-tip="Ortho (F8)" title="Режим ORTHO">
-  <i class="fa-solid fa-arrows-left-right-to-line" style="color:#94a3b8"></i>
-</button>
-<button class="hbtn" onclick="activateTextTool()" data-tip="Текст" title="Разместить текст">
-  <i class="fa-solid fa-font" style="color:#94a3b8"></i>
-</button>
-<button class="hbtn" onclick="toggleMeasure()" data-tip="Измерение" title="Быстрое измерение">
-  <i class="fa-solid fa-ruler" style="color:#94a3b8"></i>
-</button>
-<div class="hsep"></div>
-<button onclick="exportToDXF()" data-tip="Экспорт в DXF" class="hbtn bg-green-700 hover:bg-green-600 text-white" title="Экспорт в DXF">
-        <i class="fa-solid fa-file-export"></i>
-      </button>
-      <button onclick="openXYZExportDialog()" data-tip="Экспорт X Y Z (tab)" class="hbtn bg-teal-700 hover:bg-teal-600 text-white" title="Экспорт XYZ">
-        <i class="fa-solid fa-table"></i>
-      </button>
-      <button onclick="openRebasePanel()" data-tip="Пересчёт координат от базовой точки" class="hbtn bg-orange-700 hover:bg-orange-600 text-white" title="Пересчёт координат">
-        <i class="fa-solid fa-location-crosshairs"></i>
       </button>
       <button class="hbtn bg-slate-700 hover:bg-slate-600 text-purple-300 relative"
         onclick="toggleDimsModal()" data-tip="Размерные линии">
@@ -367,41 +260,30 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 
   </div>
 </header>
-<!-- ═══ TOOLBAR ROW 2 ══════════════════════════════════════════════════════ -->
-<div id="toolbar-row2" style="height:32px;flex-shrink:0;background:#1e293b;border-bottom:1px solid #0f172a;display:flex;align-items:center;padding:0 8px;gap:2px;font-size:11px;color:#94a3b8;overflow-x:auto;scrollbar-width:none;">
-  <div id="tb2-dxf" style="display:flex;align-items:center;gap:1px;flex-shrink:0;">
-    <button id="tb2-point" onclick="setTool('point')" title="Точка (P)" style="background:rgba(37,99,235,.3);border:1px solid #2563eb;color:#93c5fd;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-location-dot"></i>Точка</button>
-    <button id="tb2-interp" onclick="setTool('interpolate')" title="Интерполяция Z" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-mountain"></i>Интерп.</button>
-    <button id="tb2-dim" onclick="setTool('dimension')" title="Размерная линия" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-ruler-horizontal"></i>Размер</button>
-    <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-    <button id="tb2-ortho" onclick="if(typeof toggleOrthoMode==='function')toggleOrthoMode()" title="ORTHO (F8)" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-arrows-left-right-to-line"></i>Ortho</button>
-    <button id="tb2-grid" onclick="if(typeof toggleGrid==='function')toggleGrid()" title="Сетка (F7)" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-border-all"></i>Сетка</button>
-    <button onclick="if(typeof activateTextTool==='function')activateTextTool()" title="Текст" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-font"></i>Текст</button>
-    <button onclick="if(typeof toggleMeasure==='function')toggleMeasure()" title="Измерение" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-ruler"></i>Дист.</button>
-    <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-    <button onclick="startContour()" title="Контур/Площадь/Объём" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-draw-polygon"></i>Контур</button>
-    <button onclick="openSymDrawPanel()" title="Условные знаки" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-signs-post"></i>Знаки</button>
-    <button onclick="openSymTable()" title="Ведомость" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-table-list"></i>Ведомость</button>
-    <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-    <button onclick="toggleDxfZPanel()" title="Z-высота" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-layer-group"></i>Z-высота</button>
-    <button onclick="toggleDxfLayersPanel()" title="Слои" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-layer-group"></i>Слои</button>
-    <button onclick="startPdfFrame()" title="PDF рамка" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-crop-simple"></i>Рамка</button>
-    <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-    <button onclick="if(typeof openDiagPanel==='function')openDiagPanel()" title="Диагностика компонентов" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-stethoscope"></i>Диагн.</button>
-    <button onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';if(v){var inp=document.getElementById('cad-cmd-input');if(inp)inp.focus();}})()" title="Консоль (:)" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:3px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;"><i class="fa-solid fa-terminal"></i>Консоль</button>
-  </div>
+<div id="toolbar-row2" style="height:32px;flex-shrink:0;background:#1e293b;border-bottom:1px solid #0f172a;display:flex;align-items:center;padding:0 6px;gap:1px;font-size:11px;color:#94a3b8;overflow-x:auto;scrollbar-width:none;">
+  <button id="tb2-point" onclick="setTool('point')" style="background:rgba(37,99,235,.3);border:1px solid #2563eb;color:#93c5fd;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i>Точка</button>
+  <button id="tb2-interp" onclick="setTool('interpolate')" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-mountain"></i>Интерп.</button>
+  <button id="tb2-dim" onclick="setTool('dimension')" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-ruler-horizontal"></i>Размер</button>
+  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
+  <button id="tb2-ortho" onclick="if(typeof toggleOrthoMode==='function')toggleOrthoMode()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-arrows-left-right-to-line"></i>Ortho</button>
+  <button id="tb2-grid" onclick="if(typeof toggleGrid==='function')toggleGrid()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-border-all"></i>Сетка</button>
+  <button onclick="if(typeof activateTextTool==='function')activateTextTool()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-font"></i>Текст</button>
+  <button onclick="if(typeof toggleMeasure==='function')toggleMeasure()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-ruler"></i>Дист.</button>
+  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
+  <button onclick="startContour()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-draw-polygon"></i>Контур</button>
+  <button onclick="openSymDrawPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-signs-post"></i>Знаки</button>
+  <button onclick="openSymTable()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-table-list"></i>Ведомость</button>
+  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
+  <button onclick="toggleDxfZPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-layer-group"></i>Z-высота</button>
+  <button onclick="toggleDxfLayersPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-layer-group"></i>Слои</button>
+  <button onclick="startPdfFrame()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-crop-simple"></i>Рамка</button>
+  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
+  <button onclick="if(typeof openDiagPanel==='function')openDiagPanel()" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-stethoscope"></i>Диагн.</button>
+  <button onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';if(v)setTimeout(function(){var inp=document.getElementById('cad-cmd-input');if(inp)inp.focus();},50);})()" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-terminal"></i>Консоль</button>
 </div>
-
 <div id="custom-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-[100] hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300" id="modal-content"><div class="flex items-center gap-3 mb-3"><i id="modal-icon" class="fa-solid fa-circle-exclamation text-xl md:text-2xl text-red-500"></i><h3 id="modal-title" class="text-base md:text-lg font-bold text-slate-800">Сообщение</h3></div><div id="modal-text" class="text-xs md:text-sm text-slate-600 whitespace-pre-wrap mb-4 md:mb-5 leading-relaxed"></div><div class="flex justify-end"><button onclick="hideMessage()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Понятно</button></div></div></div>
 <div id="confirm-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-[100] hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300" id="confirm-modal-content"><div class="flex items-center gap-3 mb-3"><i class="fa-solid fa-circle-question text-xl md:text-2xl text-blue-500"></i><h3 id="confirm-modal-title" class="text-base md:text-lg font-bold text-slate-800">Вопрос</h3></div><div id="confirm-modal-text" class="text-xs md:text-sm text-slate-600 whitespace-pre-wrap mb-4 md:mb-5 leading-relaxed"></div><div class="flex justify-end gap-2 md:gap-3"><button id="confirm-modal-btn-no" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Отмена</button><button id="confirm-modal-btn-yes" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Да</button></div></div></div>
-<div id="pdf-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col" id="pdf-modal-content"><div class="flex items-center justify-between mb-3 md:mb-4"><h2 class="font-bold text-slate-800 flex items-center gap-2 text-sm md:text-base"><i class="fa-solid fa-file-pdf text-red-500"></i> Настройки PDF отчета</h2><button onclick="closePdfSettings()" class="text-slate-400 hover:text-slate-700 transition p-1"><i class="fa-solid fa-xmark text-lg md:text-xl"></i></button></div><div class="flex flex-col gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Организация</label><input type="text" id="pdf-org" placeholder="ООО «ГеоПроект»" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Наименование объекта</label><input type="text" id="pdf-project-name" placeholder="Исполнительная съёмка котлована" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Наименование чертежа</label><input type="text" id="pdf-drawing-name" placeholder="Исполнительная схема" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Разработал (ФИО)</label><input type="text" id="pdf-developer" placeholder="Иванов И.И." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Геодезист (ФИО)</label><input type="text" id="pdf-geodesist" placeholder="Петров П.П." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Проверил (ФИО)</label><input type="text" id="pdf-checker" placeholder="Сидоров С.С." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Масштаб</label><input type="text" id="pdf-scale" placeholder="1:500" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Логотип (PNG/JPG)</label><input type="file" id="pdf-logo-input" accept="image/png, image/jpeg, image/jpg" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700"></div></div><div class="flex justify-end gap-2 md:gap-3 mt-5 border-t border-slate-100 pt-4"><button onclick="closePdfSettings()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Отмена</button><label style="display:flex;align-items:center;gap:8px;
-      margin-bottom:10px;font-size:12px;cursor:pointer;
-      background:#eff6ff;border-radius:8px;padding:8px 12px;border:1px solid #bfdbfe;">
-      <input type="checkbox" id="pdf-use-ai" checked style="accent-color:#2563eb;width:15px;height:15px;">
-      <span><b style="color:#1e40af;">🤖 ИИ-анализ</b> — геодезическое резюме в отчёте</span>
-    </label>
-    <button onclick="executeExportPDF()" id="pdf-modal-generate-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium flex items-center gap-1.5"><i class="fa-solid fa-download"></i> Сгенерировать</button>
-<div id="ai-pdf-status" style="font-size:11px;color:#64748b;text-align:center;min-height:16px;margin-top:4px;"></div></div></div></div>
+<div id="pdf-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col" id="pdf-modal-content"><div class="flex items-center justify-between mb-3 md:mb-4"><h2 class="font-bold text-slate-800 flex items-center gap-2 text-sm md:text-base"><i class="fa-solid fa-file-pdf text-red-500"></i> Настройки PDF отчета</h2><button onclick="closePdfSettings()" class="text-slate-400 hover:text-slate-700 transition p-1"><i class="fa-solid fa-xmark text-lg md:text-xl"></i></button></div><div class="flex flex-col gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Организация</label><input type="text" id="pdf-org" placeholder="ООО «ГеоПроект»" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Наименование объекта</label><input type="text" id="pdf-project-name" placeholder="Исполнительная съёмка котлована" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Наименование чертежа</label><input type="text" id="pdf-drawing-name" placeholder="Исполнительная схема" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Разработал (ФИО)</label><input type="text" id="pdf-developer" placeholder="Иванов И.И." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Геодезист (ФИО)</label><input type="text" id="pdf-geodesist" placeholder="Петров П.П." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div></div><div class="grid grid-cols-2 gap-2"><div><label class="block text-xs font-semibold text-slate-600 mb-1">Проверил (ФИО)</label><input type="text" id="pdf-checker" placeholder="Сидоров С.С." class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Масштаб</label><input type="text" id="pdf-scale" placeholder="1:500" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"></div></div><div><label class="block text-xs font-semibold text-slate-600 mb-1">Логотип (PNG/JPG)</label><input type="file" id="pdf-logo-input" accept="image/png, image/jpeg, image/jpg" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700"></div></div><div class="flex justify-end gap-2 md:gap-3 mt-5 border-t border-slate-100 pt-4"><button onclick="closePdfSettings()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Отмена</button><button onclick="executeExportPDF()" id="pdf-modal-generate-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium flex items-center gap-1.5"><i class="fa-solid fa-download"></i> Сгенерировать</button></div></div></div>
 <div id="three-modal" class="fixed inset-0 bg-slate-900/90 items-center justify-center z-[60] hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-slate-800 rounded-xl shadow-2xl w-full max-w-[95%] md:max-w-6xl mx-4 transform scale-95 transition-transform duration-300 flex flex-col h-[90vh]" id="three-modal-content"><div class="p-3 md:p-4 border-b border-slate-700 flex justify-between items-center shrink-0"><h2 class="font-bold text-sky-400 flex items-center gap-2 text-sm md:text-base"><i class="fa-solid fa-cube"></i> 3D Просмотр рельефа</h2><div class="flex gap-3 items-center"><label class="text-slate-300 text-xs flex items-center gap-1 cursor-pointer"><input type="checkbox" id="three-wireframe" onchange="update3DMaterial()" class="rounded"> Сетка</label><button onclick="close3DViewer()" class="text-slate-400 hover:text-white transition p-1"><i class="fa-solid fa-xmark text-lg md:text-xl"></i></button></div></div><div class="flex-1 relative bg-black w-full h-full rounded-b-xl overflow-hidden" id="three-container"><div class="absolute bottom-4 left-4 text-white/50 text-xs pointer-events-none select-none z-10"><i class="fa-solid fa-mouse"></i> ЛКМ: вращение | ПКМ: сдвиг | Колесико: зум</div></div></div></div>
 <div id="help-modal" class="fixed inset-0 bg-slate-900/60 items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300 flex">
 <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 transform scale-95 transition-transform duration-300 flex flex-col" style="max-height:90vh;" id="help-content">
@@ -735,21 +617,18 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 <div id="cadastre-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300 flex flex-col" id="cadastre-modal-content"><div class="flex items-center justify-between mb-3 md:mb-4"><div class="flex items-center gap-2"><h2 class="font-bold text-blue-800 flex items-center gap-2 text-sm md:text-base"><i class="fa-solid fa-map-location-dot"></i> Поиск участка</h2><button onclick="checkCadastreServer()" id="btn-check-server" class="text-slate-400 hover:text-slate-700 transition p-1" title="Проверить серверы"><i class="fa-solid fa-gear"></i></button></div><button onclick="toggleCadastreModal()" class="text-slate-400 hover:text-slate-700 transition p-1"><i class="fa-solid fa-xmark text-lg md:text-xl"></i></button></div><div class="flex flex-col gap-2 md:gap-3"><p class="text-[10px] md:text-xs text-slate-500 leading-tight">Введите кадастровый номер или адрес.</p><div><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-1">Кадастровый номер или Адрес</label><input type="text" id="cadastre-input" placeholder="Напр: 77:01:0001001:1001" class="w-full border border-slate-300 rounded px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"></div><button onclick="searchCadastre()" id="btn-search-cadastre" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs md:text-sm font-bold py-2 md:py-2.5 rounded-lg transition shadow-sm mt-1 flex justify-center items-center gap-2"><i class="fa-solid fa-cloud-arrow-down"></i> Найти и импортировать</button><p id="cadastre-msg" class="text-[10px] md:text-xs text-slate-500 mt-1 hidden text-center"></p></div></div></div>
 
 <main id="mode-dxf" class="flex-1 relative flex overflow-hidden">
-<div class="flex-1 relative bg-white w-full h-full" id="canvas-container"><canvas id="cad-canvas" class="cursor-crosshair w-full h-full block"></canvas></div>
+
+<div id="dxf-layers-panel" class="absolute left-14 md:left-20 top-2 bg-white rounded-xl shadow-xl border border-slate-200 z-30 hidden flex-col" style="width:400px;max-height:88vh;min-width:260px;"><div class="po-drag-handle flex justify-between items-center border-b border-slate-100 px-3 py-2 flex-shrink-0" style="cursor:move;"><h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide"><i class="fa-solid fa-layer-group text-indigo-500 mr-1.5"></i>Параметры слоёв</h3><div class="flex items-center gap-2"><button onclick="toggleAllLayers(true)" class="text-[10px] text-indigo-500 hover:text-indigo-700 font-medium px-1">Все</button><span class="text-slate-300 text-xs">|</span><button onclick="toggleAllLayers(false)" class="text-[10px] text-slate-400 hover:text-slate-600 font-medium px-1">Скрыть</button><button onclick="toggleDxfLayersPanel()" class="ml-2 text-slate-400 hover:text-slate-700 w-6 h-6 flex items-center justify-center text-sm"><i class="fa-solid fa-xmark"></i></button></div></div><div class="px-3 py-1.5 border-b border-slate-100 flex-shrink-0 bg-slate-50"><p class="text-[10px] text-slate-500"><i class="fa-solid fa-file-pdf text-emerald-500 mr-1"></i>= включить слой в PDF. Описание слоя → кликните <i class="fa-solid fa-chevron-down text-[9px]"></i></p></div><div id="dxf-layers-list" class="flex flex-col overflow-y-auto" style="max-height:calc(88vh - 90px);"><div class="flex border-b border-slate-100 bg-slate-50 flex-shrink-0"><button id="lyr-tab-1" onclick="setLayerTab(1)" class="flex-1 py-1.5 text-[10px] font-semibold text-blue-600 border-b-2 border-blue-500 bg-white">📐 Основной DXF</button><button id="lyr-tab-2" onclick="setLayerTab(2)" class="flex-1 py-1.5 text-[10px] font-semibold text-slate-400 border-b-2 border-transparent">🔶 Вложенный DXF</button></div><div id="lyr-panel-1" class="flex flex-col"><div class="italic text-center py-4 text-slate-400 text-xs">Загрузите DXF...</div></div><div id="lyr-panel-2" class="hidden flex-col"><div id="lyr-dxf2-empty" class="italic text-center py-4 text-slate-400 text-xs">Вложенный DXF не загружен</div><div id="lyr-dxf2-controls" class="hidden p-3 flex flex-col gap-2"><label class="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer"><input type="checkbox" id="lyr-dxf2-visible" checked onchange="setSecondDxfVisible(this.checked)" class="accent-orange-500"><span>Показать вложенный DXF</span></label><label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer ml-4"><input type="checkbox" id="lyr-dxf2-lines" checked onchange="setSecondDxfLinesVis(this.checked)" class="accent-orange-500"><span>Линии и контуры</span></label><label class="flex items-center gap-2 text-xs text-slate-600 cursor-pointer ml-4"><input type="checkbox" id="lyr-dxf2-points" checked onchange="setSecondDxfPointsVis(this.checked)" class="accent-orange-500"><span>Точки (POINT-сущности)</span></label><button onclick="importDxf2Z()" class="mt-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-medium px-3 py-1.5 rounded-lg border border-indigo-200 text-left">📥 Импортировать Z-высоты во вкладку точек</button><button onclick="clearSecondDxf()" class="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-medium px-3 py-1.5 rounded-lg border border-red-200 text-left">🗑 Убрать вложенный DXF</button></div></div></div></div>
+<div id="dxf-contours-panel" class="absolute left-14 md:left-20 top-1/2 -translate-y-1/2 bg-white p-3 md:p-4 rounded-xl shadow-lg border border-slate-200 z-20 w-40 md:w-48 hidden flex-col gap-2 md:gap-3 max-h-[60vh] overflow-y-auto"><h3 class="text-[10px] md:text-xs font-bold text-slate-700 uppercase border-b border-slate-100 pb-1.5 md:pb-2">Горизонтали</h3><div><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-1">Шаг сечения (м)</label><input type="number" id="dxf-contour-step" value="0.5" step="0.1" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"></div><button onclick="generateDxfContours()" id="btn-build-dxf-contours" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm mt-1">Построить</button><div class="flex items-center justify-between mt-0.5 md:mt-1"><label class="text-[9px] md:text-[11px] font-semibold text-slate-600 cursor-pointer flex items-center gap-1 md:gap-1.5"><input type="checkbox" id="dxf-contour-visible" checked onchange="toggleDxfContourVis()" class="w-3 h-3 md:w-3.5 md:h-3.5 rounded text-emerald-600"> Видимость</label><button onclick="clearDxfContours()" class="text-red-400 hover:text-red-600 text-[9px] md:text-[11px] transition font-bold"><i class="fa-solid fa-trash"></i></button></div></div>
+<button onclick="toggleDxfZPanel()" id="btn-show-dxf-z-panel" class="absolute right-2 md:right-4 top-2 md:top-4 bg-white/95 w-8 h-8 md:w-10 md:h-10 items-center justify-center rounded-lg shadow-md border border-slate-200 text-blue-600 hover:bg-slate-50 transition z-20 hidden" title="Задать Z-высоту"><i class="fa-solid fa-layer-group text-base md:text-lg"></i></button>
+<div id="dxf-z-panel" class="hidden absolute right-2 md:right-4 top-2 md:top-4 bg-white/95 p-2.5 md:p-4 rounded-xl shadow-lg border border-slate-200 z-20 w-48 md:w-64 flex flex-col gap-2 md:gap-3 max-h-[80vh] overflow-y-auto scrollbar-hide"><div class="flex justify-between items-center border-b border-slate-100 pb-1.5 md:pb-2"><h3 class="text-[10px] md:text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1 md:gap-1.5"><i class="fa-solid fa-layer-group text-blue-500"></i> Задать Z-высоту</h3><button onclick="toggleDxfZPanel()" class="text-slate-400 hover:text-slate-700 transition p-1" title="Свернуть"><i class="fa-solid fa-xmark text-sm md:text-lg"></i></button></div><div><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Выбрать точку</label><select id="edit-z-point-select" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"><option value="" disabled selected>Выберите точку...</option></select></div><div class="flex gap-1.5 md:gap-2"><div class="flex-1"><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Значение Z</label><input type="number" id="edit-z-value" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="0.00"></div><div class="w-16 md:w-20"><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-0.5 md:mb-1">Тип</label><select id="edit-z-type" onchange="onZTypeChange()" class="w-full border border-slate-300 rounded px-1 md:px-2 py-1 md:py-1.5 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"><option value="Абс.">Абс.</option><option value="Отн.">Отн.</option><option value="Призма">Призма</option><option value="Поверхность">Поверхность</option></select></div></div><div id="z-vekha-fields" style="display:none;flex-direction:column;gap:4px;"><div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:2px;border-top:1px solid #f1f5f9;padding-top:6px;">Параметры вешки</div><div class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Высота вешки</label><input type="number" id="z-vekha-h" step="0.001" value="1.800" placeholder="1.800" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Поправка</label><input type="number" id="z-vekha-corr" step="0.001" value="0.000" placeholder="0.000" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div id="z-extra-h-row" class="flex items-center gap-1.5"><label class="text-[9px] md:text-[10px] font-semibold text-slate-500 w-20 flex-shrink-0">Доп. высота</label><input type="number" id="z-extra-h" step="0.001" value="0.000" placeholder="0.000" class="flex-1 border border-slate-300 rounded px-1.5 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-400" oninput="calcVekhaZ()"><span class="text-[9px] text-slate-400">м</span></div><div class="flex items-center gap-1.5 bg-indigo-50 rounded px-2 py-1.5 mt-1"><span class="text-[9px] font-semibold text-indigo-600 flex-1">Z итого:</span><span id="z-vekha-result" class="font-bold text-indigo-700 font-mono text-xs">—</span></div></div><button onclick="applyZToPoint()" id="btn-apply-z" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm flex items-center justify-center gap-1 md:gap-1.5 mt-0.5 md:mt-1"><i class="fa-solid fa-check"></i> Подтвердить</button><div class="h-px w-full bg-slate-200 my-0.5 md:my-1"></div><button onclick="interpolateMissingZ()" class="w-full bg-amber-500 hover:bg-amber-400 text-white text-[10px] md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm flex items-center justify-center gap-1 md:gap-1.5"><i class="fa-solid fa-wand-magic-sparkles"></i> Интерполировать все</button></div>
+<div class="flex-1 relative bg-white w-full h-full" id="canvas-container"><div class="absolute top-2 md:top-4 left-14 md:left-24 bg-white/90 p-2 md:p-3 rounded-lg shadow-sm border border-slate-200 text-[9px] md:text-xs text-slate-600 pointer-events-none z-10 hidden sm:block" id="tool-hint"><p><i class="fa-solid fa-mouse-pointer w-3 md:w-4"></i> Клик ЛКМ по узлу — отметить точку</p><p><i class="fa-solid fa-hand w-3 md:w-4"></i> Панорамирование / Pinch-Zoom</p></div><canvas id="cad-canvas" class="cursor-crosshair w-full h-full block"></canvas></div>
 </main>
 
 <main id="mode-manual" class="flex-1 flex flex-col-reverse md:flex-row overflow-hidden hidden bg-slate-100">
 <div id="manual-left-panel" class="w-full md:w-80 lg:w-96 h-2/5 md:h-full bg-white border-t md:border-r border-slate-200 flex flex-col shadow-xl z-20 md:z-30 relative shrink-0"><div class="p-3 md:p-5 border-b border-slate-200 bg-slate-50 shrink-0"><h2 class="text-xs md:text-sm font-bold text-slate-700 uppercase tracking-wider mb-2 md:mb-4">Добавить точку</h2><div class="space-y-2 md:space-y-3"><div class="flex gap-2"><div class="flex-1"><label class="block text-[10px] md:text-xs font-semibold text-slate-500 mb-0.5 md:mb-1">Коорд. X</label><input type="text" id="input-x" class="w-full border border-slate-300 rounded px-2 md:px-3 py-1 md:py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono" placeholder="0.000"></div><div class="flex-1"><label class="block text-[10px] md:text-xs font-semibold text-slate-500 mb-0.5 md:mb-1">Коорд. Y</label><input type="text" id="input-y" class="w-full border border-slate-300 rounded px-2 md:px-3 py-1 md:py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono" placeholder="0.000"></div><div class="flex-1"><label class="block text-[10px] md:text-xs font-semibold text-slate-500 mb-0.5 md:mb-1">Высота Z</label><input type="text" id="input-z" class="w-full border border-slate-300 rounded px-2 md:px-3 py-1 md:py-2 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono" placeholder="0.000"></div></div><button id="btn-add-manual-point" onclick="addManualPoint()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-1.5 md:py-2 rounded transition mt-1 md:mt-2 shadow-sm text-xs md:text-sm"><i class="fa-solid fa-plus mr-1"></i> Добавить</button></div></div><div class="flex border-b border-slate-200 bg-slate-100 shrink-0"><button id="tab-man-points" onclick="switchManTab('points')" class="flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition">Точки</button><button id="tab-man-lines" onclick="switchManTab('lines')" class="flex-1 py-1.5 md:py-2 text-[10px] md:text-xs font-bold text-slate-500 border-b-2 border-transparent hover:text-slate-700 transition">Линии</button></div><div class="flex-1 overflow-y-auto p-0" id="man-points-container"><table class="w-full text-xs md:text-sm text-left"><thead class="text-[9px] md:text-xs text-slate-500 uppercase bg-slate-100 sticky top-0 shadow-sm z-10"><tr><th class="px-2 md:px-4 py-2 md:py-3">№</th><th class="px-1 md:px-2 py-2 md:py-3">X, Y</th><th class="px-1 md:px-2 py-2 md:py-3">Z</th><th class="px-1 md:px-2 py-2 md:py-3 w-12 md:w-16 text-center">Действия</th></tr></thead><tbody id="manual-points-tbody" class="divide-y divide-slate-100"></tbody></table></div><div class="flex-1 overflow-y-auto p-0 hidden" id="man-lines-container"><table class="w-full text-xs md:text-sm text-left"><thead class="text-[9px] md:text-xs text-slate-500 uppercase bg-slate-100 sticky top-0 shadow-sm z-10"><tr><th class="px-2 md:px-4 py-2 md:py-3">Линия</th><th class="px-1 md:px-2 py-2 md:py-3">Длина, м</th><th class="px-1 md:px-2 py-2 md:py-3 w-10 md:w-16 text-center">Действия</th></tr></thead><tbody id="manual-lines-tbody" class="divide-y divide-slate-100"></tbody></table></div></div>
 <div class="flex-1 relative bg-white w-full h-3/5 md:h-full" id="manual-canvas-container">
-<button onclick="toggleManualPanel()" id="btn-toggle-man-panel" class="absolute top-2 md:top-4 left-2 md:left-4 bg-white/95 w-8 h-8 md:w-10 md:h-10 flex items-center justify-center rounded-lg shadow-md border border-slate-200 text-slate-600 hover:text-blue-600 transition z-20" title="Скрыть панель"><i class="fa-solid fa-bars"></i></button>
-<div <button onclick="toggleContoursConfig()" data-tip="Построить горизонтали
-по точкам Z" id="man-tool-contour" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full" title="Построение горизонталей"><i class="fa-solid fa-map text-base md:text-lg"></i></button><button onclick="togglePointLabels()" data-tip="Показать/скрыть
-подписи точек" id="man-tool-labels" class="ltip p-2 md:p-2.5 rounded-lg bg-blue-100 text-blue-600 shadow-inner transition w-full" title="Подписи точек"><i class="fa-solid fa-eye text-base md:text-lg"></i></button><div class="h-px w-full bg-slate-200 my-0.5 md:my-1"></div><input type="file" id="bg-img-input" accept="image/png, image/jpeg, image/jpg" class="hidden"><button onclick="document.getElementById('bg-img-input').click()" class="p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full" title="Загрузить подложку"><i class="fa-regular fa-image text-base md:text-lg"></i></button><button onclick="toggleBgImagePanel()" id="btn-bg-settings" class="hidden p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-blue-500 transition w-full" title="Настройки подложки"><i class="fa-solid fa-sliders text-base md:text-lg"></i></button><div class="h-px w-full bg-slate-200 my-0.5 md:my-1"></div><button onclick="undoMan()" data-tip="Отменить действие
-(Ctrl+Z)" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full" title="Отменить (Ctrl+Z)"><i class="fa-solid fa-rotate-left text-base md:text-lg"></i></button><button onclick="redoMan()" data-tip="Повторить действие
-(Ctrl+Y)" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full" title="Повторить (Ctrl+Y)"><i class="fa-solid fa-rotate-right text-base md:text-lg"></i></button><div class="h-px w-full bg-slate-200 my-0.5 md:my-1"></div><button type="button" onclick="mirrorManualPoints('x')" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full" data-tip="Зеркально по оси X&#10;(y → −y, относительно центра)"><i class="fa-solid fa-arrows-up-down text-base md:text-lg"></i></button><button type="button" onclick="mirrorManualPoints('y')" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full" data-tip="Зеркально по оси Y&#10;(x → −x, относительно центра)"><i class="fa-solid fa-arrows-left-right text-base md:text-lg"></i></button><div class="h-px w-full bg-slate-200 my-0.5 md:my-1"></div><button type="button" onclick="document.getElementById('man-line-color-input').click()" id="man-color-btn" class="ltip p-2 md:p-2.5 rounded-lg hover:bg-slate-200 text-slate-600 transition w-full relative" data-tip="Цвет линий"><i class="fa-solid fa-palette text-base md:text-lg"></i><span id="man-color-swatch" style="background:#334155;position:absolute;bottom:3px;right:3px;width:7px;height:7px;border-radius:50%;border:1.5px solid #fff;pointer-events:none;display:block;"></span></button><input type="color" id="man-line-color-input" value="#334155" oninput="manLineColor=this.value;document.getElementById('man-color-swatch').style.background=this.value;requestManualDraw();" style="opacity:0;width:0;height:0;position:absolute;pointer-events:none;"></div>
-<div id="bg-image-panel" class="absolute left-14 md:left-20 top-14 md:top-16 bg-white p-3 md:p-4 rounded-xl shadow-lg border border-slate-200 z-20 w-48 md:w-56 hidden flex-col gap-2 max-h-[60vh] overflow-y-auto"><div class="flex justify-between items-center border-b border-slate-100 pb-1.5 md:pb-2"><h3 class="text-[10px] md:text-xs font-bold text-slate-700 uppercase">Настройка подложки</h3><button onclick="toggleBgImagePanel()" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-xmark"></i></button></div><div class="flex justify-between items-center"><label class="text-[9px] md:text-[10px] font-semibold text-slate-600 cursor-pointer flex items-center gap-1.5"><input type="checkbox" id="bg-visible" checked onchange="bgImageProps.visible=this.checked; requestManualDraw();" class="rounded text-blue-600"> Видимость</label></div><div><label class="block text-[9px] md:text-[10px] text-slate-500 mb-1">Прозрачность</label><input type="range" min="0" max="1" step="0.05" value="0.5" oninput="bgImageProps.opacity=parseFloat(this.value); requestManualDraw();" class="w-full"></div><div><label class="block text-[9px] md:text-[10px] text-slate-500 mb-1">Масштаб (множитель)</label><input type="number" id="bg-scale" value="1" step="0.1" oninput="bgImageProps.scale=parseFloat(this.value); requestManualDraw();" class="w-full border border-slate-300 rounded px-1.5 py-1 text-xs focus:ring-1 focus:ring-blue-500"></div><div class="flex gap-2"><div class="flex-1"><label class="block text-[9px] md:text-[10px] text-slate-500 mb-1">Сдвиг X</label><input type="number" id="bg-x" value="0" oninput="bgImageProps.x=parseFloat(this.value); requestManualDraw();" class="w-full border border-slate-300 rounded px-1.5 py-1 text-xs focus:ring-1 focus:ring-blue-500"></div><div class="flex-1"><label class="block text-[9px] md:text-[10px] text-slate-500 mb-1">Сдвиг Y</label><input type="number" id="bg-y" value="0" oninput="bgImageProps.y=parseFloat(this.value); requestManualDraw();" class="w-full border border-slate-300 rounded px-1.5 py-1 text-xs focus:ring-1 focus:ring-blue-500"></div></div><button onclick="clearBgImage()" class="mt-2 text-red-500 hover:bg-red-50 py-1.5 rounded transition text-xs font-bold w-full text-center border border-red-200">Удалить картинку</button></div>
-<div id="contours-panel" class="absolute left-14 md:left-20 top-1/2 -translate-y-1/2 bg-white p-3 md:p-4 rounded-xl shadow-lg border border-slate-200 z-20 w-40 md:w-48 hidden flex-col gap-2 md:gap-3"><h3 class="text-[10px] md:text-xs font-bold text-slate-700 uppercase border-b border-slate-100 pb-1.5 md:pb-2">Горизонтали</h3><div><label class="block text-[9px] md:text-[10px] font-semibold text-slate-500 mb-1">Шаг сечения (м)</label><input type="number" id="contour-step" value="0.5" step="0.1" class="w-full border border-slate-300 rounded px-1.5 md:px-2 py-1 md:py-1.5 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"></div><button onclick="generateContours()" id="btn-build-contours" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs md:text-sm font-medium py-1 md:py-1.5 rounded transition shadow-sm mt-1">Построить</button><div class="flex items-center justify-between mt-0.5 md:mt-1"><label class="text-[9px] md:text-[11px] font-semibold text-slate-600 cursor-pointer flex items-center gap-1 md:gap-1.5"><input type="checkbox" id="man-contour-visible" checked onchange="toggleManContourVis()" class="w-3 h-3 md:w-3.5 md:h-3.5 rounded text-emerald-600"> Вид.</label><button onclick="clearContours()" class="text-red-400 hover:text-red-600 text-[9px] md:text-[11px] transition font-bold"><i class="fa-solid fa-trash"></i></button></div></div>
-<div class="absolute bottom-2 md:bottom-4 right-2 md:right-4 bg-white/90 p-2 md:p-3 rounded-lg shadow-sm border border-slate-200 text-[9px] md:text-xs text-slate-600 pointer-events-none z-10 hidden sm:block" id="man-tool-hint"><p><i class="fa-solid fa-hand w-3 md:w-4"></i> Панорамирование / Pinch-Zoom</p></div><canvas id="manual-canvas" class="cursor-grab active:cursor-grabbing w-full h-full block"></canvas>
+<canvas id="manual-canvas" class="cursor-grab active:cursor-grabbing w-full h-full block"></canvas>
 </div></main>
 <script src="/js/app.js"></script>
 <script src="/js/cad-tools.js"></script>
@@ -1256,29 +1135,113 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
       cursor:pointer;font-size:20px;line-height:1;">✕</button>
   </div>
 
+  <!-- Element pictograms -->
+  <div style="padding:10px 8px;border-bottom:1px solid #2d3e6a;display:grid;
+    grid-template-columns:repeat(5,1fr);gap:5px;" id="snp-grid"></div>
 
-<!-- ═══ STATUS BAR ══════════════════════════════════════════════════════════ -->
-<div id="bottom-status-bar" style="flex-shrink:0;width:100%;height:22px;background:#0f172a;border-top:1px solid #1e3a5f;display:flex;align-items:center;font-family:'Courier New',monospace;font-size:10px;color:#64748b;overflow:hidden;">
-  <div style="display:flex;align-items:center;padding:0 10px;border-right:1px solid #1e3a5f;height:100%;gap:0;min-width:260px;">
-    <span style="color:#334155;margin-right:4px;font-size:9px;font-weight:bold;">X</span><b id="hud-x" style="color:#60a5fa;min-width:72px;">—</b>
-    <span style="color:#334155;margin:0 4px;font-size:9px;font-weight:bold;">Y</span><b id="hud-y" style="color:#60a5fa;min-width:72px;">—</b>
-    <span style="color:#334155;margin:0 4px;font-size:9px;font-weight:bold;">Z</span><b id="hud-z" style="color:#34d399;min-width:46px;">—</b>
+  <!-- Properties -->
+  <div style="flex:1;overflow-y:auto;padding:10px 12px;" id="snp-props-area"></div>
+
+  <!-- Color + Status -->
+  <div style="padding:8px 12px;border-top:1px solid #2d3e6a;display:flex;align-items:center;gap:8px;">
+    <span style="font-size:11px;color:#64748b;">Цвет</span>
+    <input type="color" id="snp-color" value="#1e3a5f"
+      style="width:30px;height:22px;border:none;border-radius:4px;cursor:pointer;">
+    <div id="snp-pts-count" style="margin-left:auto;font-size:11px;color:#94a3b8;"></div>
   </div>
-  <div onclick="toggleSnapPanel()" style="display:flex;align-items:center;gap:5px;padding:0 10px;border-right:1px solid #1e3a5f;height:100%;cursor:pointer;min-width:130px;">
-    <span id="hud-snap" style="color:#f59e0b;width:10px;text-align:center;">⊕</span>
-    <span style="color:#475569;font-size:10px;">Привязка:</span>
-    <b id="hud-snap-mode" style="color:#cbd5e1;font-size:10px;">Узлы</b>
-  </div>
-  <div style="padding:0 10px;border-right:1px solid #1e3a5f;height:100%;display:flex;align-items:center;gap:4px;">
-    <span style="color:#475569;font-size:10px;">Масштаб:</span><b id="hud-scale" style="color:#cbd5e1;font-size:10px;">—</b>
-  </div>
-  <div style="flex:1;padding:0 10px;overflow:hidden;display:flex;align-items:center;">
-    <span id="hud-status" style="color:#334155;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+
+  <!-- Action buttons -->
+  <div style="display:flex;gap:6px;padding:10px 12px;border-top:1px solid #2d3e6a;flex-shrink:0;">
+    <button onclick="snpUndo()" style="flex:1;background:#2d3e6a;border:none;color:#94a3b8;
+      border-radius:8px;padding:8px;cursor:pointer;font-size:11px;">↩ Откат</button>
+    <button onclick="snpFinish()" style="flex:2;background:#2563eb;border:none;color:#fff;
+      border-radius:8px;padding:8px;cursor:pointer;font-size:12px;font-weight:700;"
+      id="snp-finish-btn">✓ Готово (Enter)</button>
   </div>
 </div>
 
-<!-- Snap popup (above status bar) -->
-<div id="snap-popup" style="position:fixed;bottom:22px;left:80px;background:#1e293b;border-radius:10px 10px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.4);border:1px solid #334155;border-bottom:none;z-index:600;padding:10px 12px 8px;display:none;color:#f1f5f9;font-size:12px;">
+
+<!-- ── Cursor coordinates HUD ── -->
+<div pan>
+  <span>Z: </span>
+  
+</div>
+
+<!-- ═══ BOTTOM STATUS BAR ══════════════════════════════════════════════════ -->
+<div id="bottom-bar" style="
+  position:fixed; bottom:0; left:0; right:0; height:32px;
+  background:#0f172a; border-top:1px solid #1e3a5f;
+  display:flex; align-items:center; z-index:500;
+  font-family:monospace; font-size:11px; color:#94a3b8;
+  user-select:none; pointer-events:none;">
+
+  <!-- Left: coords -->
+  
+
+  <!-- Snap indicator + toggle -->
+  <div style="display:flex;align-items:center;gap:6px;padding:0 12px;border-right:1px solid #1e3a5f;height:100%;pointer-events:auto;cursor:pointer;"
+       onclick="toggleSnapPanel()" title="Режим привязки">
+    
+    <span style="color:#64748b;font-size:10px;">Привязка:</span>
+    
+  </div>
+
+  <!-- Zoom level -->
+  <div style="padding:0 12px;border-right:1px solid #1e3a5f;height:100%;display:flex;align-items:center;">
+    <span style="color:#64748b;font-size:10px;margin-right:4px;">Масштаб:</span>
+    <b id="hud-scale" style="color:#e2e8f0;font-size:10px;">—</b>
+  </div>
+
+  <!-- Right: status message -->
+  <div style="flex:1;padding:0 12px;overflow:hidden;">
+    <span id="hud-status" style="color:#475569;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+  </div>
+</div>
+
+<!-- Snap panel — pops up above bottom bar -->
+<div id="snap-panel" style="
+  position:fixed; bottom:36px; left:80px;
+  background:#fff; border-radius:10px 10px 0 0;
+  box-shadow:0 -4px 20px rgba(0,0,0,.12);
+  border:1px solid #e2e8f0; border-bottom:none;
+  z-index:499; padding:12px 14px 10px; display:none;">
+  <div style="font-size:10px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+    🧲 Режим привязки
+  </div>
+  
+</div>
+
+
+<div id="bottom-status-bar" class="sb-expanded" style="flex-shrink:0;width:100%;background:#0f172a;border-top:1px solid #1e3a5f;font-family:'Courier New',monospace;font-size:10px;color:#64748b;overflow:hidden;height:36px;">
+  <div style="height:18px;display:flex;align-items:center;border-bottom:1px solid #1e3a5f;">
+    <div style="display:flex;align-items:center;padding:0 8px;border-right:1px solid #1e3a5f;height:100%;min-width:230px;">
+      <span style="color:#334155;margin-right:3px;font-size:9px;font-weight:bold;">X</span><b id="hud-x" style="color:#60a5fa;min-width:68px;">—</b>
+      <span style="color:#334155;margin:0 3px;font-size:9px;font-weight:bold;">Y</span><b id="hud-y" style="color:#60a5fa;min-width:68px;">—</b>
+      <span style="color:#334155;margin:0 3px;font-size:9px;font-weight:bold;">Z</span><b id="hud-z" style="color:#34d399;min-width:44px;">—</b>
+    </div>
+    <div onclick="toggleSnapPanel()" style="display:flex;align-items:center;gap:4px;padding:0 8px;border-right:1px solid #1e3a5f;height:100%;cursor:pointer;min-width:116px;">
+      <span id="hud-snap" style="color:#f59e0b;width:10px;text-align:center;">⊕</span>
+      <span style="color:#475569;font-size:9px;">Привязка:</span>
+      <b id="hud-snap-mode" style="color:#cbd5e1;font-size:9px;">Узлы</b>
+    </div>
+    <div style="padding:0 8px;border-right:1px solid #1e3a5f;height:100%;display:flex;align-items:center;gap:3px;">
+      <span style="color:#475569;font-size:9px;">М:</span><b id="hud-scale" style="color:#cbd5e1;font-size:9px;">—</b>
+    </div>
+    <div style="flex:1;padding:0 8px;overflow:hidden;display:flex;align-items:center;">
+      <span id="hud-status" style="color:#334155;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+    </div>
+    <button onclick="_toggleStatusBar()" style="background:none;border:none;color:#334155;cursor:pointer;padding:0 6px;height:100%;font-size:9px;" title="Свернуть">▼</button>
+  </div>
+  <div id="sb-row2" style="height:18px;display:flex;align-items:center;padding:0 8px;gap:5px;">
+    <span id="sb-ortho" style="display:none;background:#1e3a5f;color:#60a5fa;font-size:8px;padding:1px 4px;border-radius:2px;font-weight:bold;">ORTHO</span>
+    <span id="sb-grid"  style="display:none;background:#1e3a5f;color:#34d399;font-size:8px;padding:1px 4px;border-radius:2px;font-weight:bold;">GRID</span>
+    <span id="sb-mode-label" style="color:#1e3a5f;font-size:9px;">—</span>
+    <span style="flex:1"></span>
+    <span id="sb-pts-count" style="color:#334155;font-size:9px;"></span>
+  </div>
+</div>
+
+<div id="snap-popup" style="position:fixed;bottom:36px;left:80px;background:#1e293b;border-radius:10px 10px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.4);border:1px solid #334155;border-bottom:none;z-index:600;padding:10px 12px 8px;display:none;color:#f1f5f9;font-size:12px;">
   <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">🧲 Привязка</div>
   <div style="display:flex;flex-direction:column;gap:5px;">
     <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="snap-nodes" checked onchange="updateSnapModes()" style="accent-color:#10b981;width:13px;height:13px;"><span>Узлы</span></label>
@@ -1286,5 +1249,4 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     <label style="display:flex;align-items:center;gap:7px;cursor:pointer;"><input type="checkbox" id="snap-midpoints" onchange="updateSnapModes()" style="accent-color:#a855f7;width:13px;height:13px;"><span>Середина</span></label>
   </div>
 </div>
-
 </body></html>
