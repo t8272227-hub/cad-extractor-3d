@@ -128,168 +128,357 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style></head><body class="bg-slate-100 h-screen flex flex-col font-sans text-slate-800 overflow-hidden">
-<header class="bg-slate-900 text-white px-3 md:px-5 flex items-center justify-between shadow-md z-30 relative shrink-0" style="height:52px;">
+<header class="bg-slate-900 text-white flex items-center justify-between shadow-md z-30 relative shrink-0" style="height:44px;padding:0 14px;">
 
-  <!-- Left: Logo + Mode tabs -->
-  <div class="flex items-center gap-3 shrink-0">
-    <div class="flex items-center gap-2">
-      <i class="fa-solid fa-drafting-compass text-xl text-blue-400"></i>
-      <h1 class="text-sm font-bold whitespace-nowrap hidden md:block">CAD Extractor 3D</h1>
-    </div>
-    <div class="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-      <button onclick="switchMode('dxf')" id="tab-dxf-desktop"
-        class="px-3 py-1.5 rounded-md text-xs font-medium transition-all bg-blue-600 text-white shadow-sm whitespace-nowrap">
-        <i class="fa-solid fa-file-import mr-1.5"></i>Чертёж (DXF)
-      </button>
-      <button onclick="switchMode('manual')" id="tab-manual-desktop"
-        class="px-3 py-1.5 rounded-md text-xs font-medium transition-all text-slate-400 hover:text-white whitespace-nowrap">
-        <i class="fa-solid fa-pen-to-square mr-1.5"></i>Ручной ввод
-      </button>
+  <!-- Logo only -->
+  <div style="display:flex;align-items:center;gap:8px;">
+    <i class="fa-solid fa-drafting-compass" style="color:#60a5fa;font-size:18px;"></i>
+    <span style="font-size:13px;font-weight:700;color:#f1f5f9;letter-spacing:-.2px;">CAD Extractor 3D</span>
+    <!-- Mode indicator (updated by switchMode JS) -->
+    <div id="mode-indicator" style="display:flex;align-items:center;gap:5px;
+      background:#1e3a5f;border:1px solid #2563eb;border-radius:6px;
+      padding:2px 10px;font-size:10px;color:#93c5fd;font-weight:600;margin-left:4px;">
+      <i class="fa-solid fa-file-import" style="font-size:9px;"></i>
+      <span id="mode-indicator-text">Чертёж (DXF)</span>
     </div>
   </div>
 
-  <!-- Right: Action buttons -->
-  <div class="flex items-center gap-1" id="header-controls">
+  <!-- Hidden file inputs (keep for JS) -->
+  <input type="file" id="file-input"        accept=".dxf,.dwg"       style="display:none;">
+  <input type="file" id="manual-dxf-input"  accept=".dxf,.dwg"       style="display:none;">
+  <input type="file" id="manual-txt-input"  accept=".txt,.csv,.sdr"   style="display:none;">
+  <input type="file" id="ht-dxf"            accept=".dxf"            style="display:none;">
+  <!-- Keep tab IDs so JS switchMode can style them (hidden) -->
+  <button id="tab-dxf-desktop"    style="display:none;" onclick="switchMode('dxf')"></button>
+  <button id="tab-manual-desktop" style="display:none;" onclick="switchMode('manual')"></button>
 
-    <!-- DXF mode buttons -->
-    <div id="controls-dxf" class="flex items-center gap-1">
-      <input type="file" id="file-input" accept=".dxf,.dwg" class="hidden">
-      <button class="hbtn bg-blue-600 hover:bg-blue-500 text-white"
-        onclick="document.getElementById('file-input').click()" data-tip="Открыть DXF">
-        <i class="fa-solid fa-folder-open"></i>
-      </button>
-      <button class="hbtn bg-teal-600 hover:bg-teal-500 text-white"
-        onclick="openGeoreferenceModal()" data-tip="Геопривязка">
-        <i class="fa-solid fa-location-crosshairs"></i>
-      </button>
-      <button class="hbtn bg-indigo-600 hover:bg-indigo-500 text-white"
-        onclick="sendPointsToManual()" data-tip="Точки → Ручной режим">
-        <i class="fa-solid fa-share-from-square"></i>
-      </button>
-
-      <div class="hsep"></div>
-
-      <button class="hbtn bg-sky-700 hover:bg-sky-600 text-white"
-        onclick="open3DViewer()" data-tip="3D Визуализация">
-        <i class="fa-solid fa-cube"></i>
-      </button>
-      <button class="hbtn bg-orange-600 hover:bg-orange-500 text-white"
-        onclick="toggleEarthworksModal()" data-tip="Объёмы земляных работ">
-        <i class="fa-solid fa-tractor"></i>
-      </button>
-
-      <div class="hsep"></div>
-
-      <button class="hbtn bg-emerald-700 hover:bg-emerald-600 text-white"
-        onclick="openPdfSettings('dxf')" id="export-btn" data-tip="Экспорт PDF">
-        <i class="fa-solid fa-file-pdf"></i>
-      </button>
-      <button class="hbtn bg-slate-700 hover:bg-slate-600 text-purple-300 relative"
-        onclick="toggleDimsModal()" data-tip="Размерные линии">
-        <i class="fa-solid fa-ruler"></i>
-        <span id="dims-badge" class="hbadge bg-purple-500 text-white hidden">0</span>
-      </button>
-      <button class="hbtn bg-slate-700 hover:bg-slate-600 text-white relative"
-        onclick="togglePointsModal()" data-tip="Таблица точек">
-        <i class="fa-solid fa-list-ul"></i>
-        <span id="points-badge" class="hbadge bg-red-500 text-white hidden">0</span>
-      </button>
+  <!-- Right: info badges + help -->
+  <div style="display:flex;align-items:center;gap:6px;">
+    <div style="display:flex;align-items:center;gap:5px;background:#1e293b;border:1px solid #334155;
+      border-radius:6px;padding:3px 10px;font-size:10px;color:#64748b;cursor:pointer;"
+      onclick="togglePointsModal&&togglePointsModal()" title="Таблица точек">
+      <i class="fa-solid fa-location-dot" style="color:#60a5fa;font-size:10px;"></i>
+      <span>Точек:</span>
+      <b id="points-badge" style="color:#f1f5f9;min-width:16px;">0</b>
     </div>
-
-    <!-- Manual mode buttons -->
-    <div id="controls-manual" class="hidden items-center gap-1">
-      <input type="file" id="manual-dxf-input" accept=".dxf,.dwg" class="hidden">
-      <button class="hbtn bg-indigo-600 hover:bg-indigo-500 text-white"
-        onclick="document.getElementById('manual-dxf-input').click()" data-tip="Загрузить из DXF">
-        <i class="fa-solid fa-file-import"></i>
-      </button>
-      <input type="file" id="manual-txt-input" accept=".txt,.csv,.sdr" class="hidden">
-      <button class="hbtn bg-blue-700 hover:bg-blue-600 text-white"
-        onclick="document.getElementById('manual-txt-input').click()" data-tip="Импорт TXT / CSV / SDR">
-        <i class="fa-solid fa-upload"></i>
-      </button>
-      <button class="hbtn bg-slate-700 hover:bg-slate-600 text-emerald-300"
-        onclick="exportManualToTXT()" data-tip="Экспорт в CSV">
-        <i class="fa-solid fa-download"></i>
-      </button>
-
-      <div class="hsep"></div>
-
-      <button class="hbtn bg-blue-600 hover:bg-blue-500 text-white"
-        onclick="toggleCadastreModal()" data-tip="Кадастровый поиск">
-        <i class="fa-solid fa-magnifying-glass-location"></i>
-      </button>
-
-      <div class="hsep"></div>
-
-      <button class="hbtn bg-sky-700 hover:bg-sky-600 text-white"
-        onclick="open3DViewer()" data-tip="3D Визуализация">
-        <i class="fa-solid fa-cube"></i>
-      </button>
-      <button class="hbtn bg-orange-600 hover:bg-orange-500 text-white"
-        onclick="toggleEarthworksModal()" data-tip="Объёмы земляных работ">
-        <i class="fa-solid fa-tractor"></i>
-      </button>
-
-      <div class="hsep"></div>
-
-      <button class="hbtn bg-blue-700 hover:bg-blue-600 text-white"
-        onclick="exportManualToDXF()" data-tip="Экспорт в DXF">
-        <i class="fa-solid fa-file-export"></i>
-      </button>
-      <button class="hbtn bg-emerald-700 hover:bg-emerald-600 text-white"
-        onclick="openPdfSettings('manual')" id="export-man-btn" data-tip="Экспорт PDF">
-        <i class="fa-solid fa-file-pdf"></i>
-      </button>
-
-      <div class="hsep"></div>
-
-      <button class="hbtn bg-slate-700 hover:bg-red-800 text-red-400 hover:text-red-300"
-        onclick="clearManualPoints()" data-tip="Очистить все точки">
-        <i class="fa-solid fa-trash-can"></i>
-      </button>
+    <div style="display:flex;align-items:center;gap:5px;background:#1e293b;border:1px solid #334155;
+      border-radius:6px;padding:3px 10px;font-size:10px;color:#64748b;cursor:pointer;"
+      onclick="toggleDimsModal&&toggleDimsModal()" title="Ведомость размеров">
+      <i class="fa-solid fa-ruler" style="color:#a5b4fc;font-size:10px;"></i>
+      <span>Размеров:</span>
+      <b id="dims-badge" style="color:#f1f5f9;min-width:16px;">0</b>
     </div>
-
-    <div class="hsep"></div>
-
-    <button class="hbtn bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700"
-      onclick="toggleHelpModal()" data-tip="Справка">
+    <button onclick="toggleHelpModal&&toggleHelpModal()"
+      style="background:#1e293b;border:1px solid #334155;color:#64748b;border-radius:6px;
+      padding:4px 10px;cursor:pointer;font-size:12px;" title="Справка">
       <i class="fa-solid fa-circle-question"></i>
     </button>
-
   </div>
+
 </header>
-<div id="toolbar-row2" style="height:32px;flex-shrink:0;background:#1e293b;border-bottom:1px solid #0f172a;display:flex;align-items:center;padding:0 6px;gap:1px;font-size:11px;overflow-x:auto;scrollbar-width:none;">
-  <button id="tb2-point" onclick="setTool('point')" title="Точка" style="background:rgba(37,99,235,.3);border:1px solid #2563eb;color:#93c5fd;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i>Точка</button>
-  <button id="tb2-interp" onclick="setTool('interpolate')" title="Интерполяция Z" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-mountain"></i>Интерп.</button>
-  <button id="tb2-dim" onclick="setTool('dimension')" title="Размерная линия" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-ruler-horizontal"></i>Размер</button>
-  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button id="tb2-ortho" onclick="toggleOrthoMode()" title="ORTHO F8" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-arrows-left-right-to-line"></i>Ortho</button>
-  <button id="tb2-grid" onclick="toggleGrid()" ondblclick="openGridSettings()" title="Сетка F7 — двойной клик: настройки" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-border-all"></i>Сетка</button>
-  <button onclick="openGridSettings()" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 5px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:2px;white-space:nowrap;flex-shrink:0;" title="Настройки сетки"><i class="fa-solid fa-sliders"></i></button>
-  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="startContour()" title="Контур" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-draw-polygon"></i>Контур</button>
-  <button onclick="openSymDrawPanel()" title="Знаки" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-signs-post"></i>Знаки</button>
-  <button onclick="openSymTable()" title="Ведомость" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-table-list"></i>Ведомость</button>
-  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="toggleDxfZPanel()" title="Z-высота" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-layer-group"></i>Z</button>
-  <button onclick="toggleDxfLayersPanel()" title="Слои DXF" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-layer-group"></i>Слои</button>
-  <button onclick="startPdfFrame()" title="PDF рамка" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-crop-simple"></i>Рамка</button>
-  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="openDxfSearch()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Поиск координат"><i class="fa-solid fa-magnifying-glass-location"></i>Поиск</button>
-  <button onclick="openDxfFillPanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Заливка контуров"><i class="fa-solid fa-fill-drip"></i>Заливка</button>
-  <button onclick="openRebasePanel()" style="background:transparent;border:1px solid transparent;color:#94a3b8;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Пересчёт координат"><i class="fa-solid fa-arrows-rotate"></i>Пересчёт</button>
-  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  
-  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="openAsBuiltPanel()" style="background:transparent;border:1px solid transparent;color:#a5b4fc;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Исполнительные схемы (Проект vs Факт)"><i class="fa-solid fa-arrows-up-down"></i>Исполн.</button>
-  <button onclick="openEarthworksPanel()" style="background:transparent;border:1px solid transparent;color:#6ee7b7;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Земляные работы / картограмма"><i class="fa-solid fa-mountain-sun"></i>Земляные</button>
-  <button onclick="openProfilesPanel()" style="background:transparent;border:1px solid transparent;color:#d8b4fe;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Продольный профиль / сечение"><i class="fa-solid fa-chart-line"></i>Профиль</button>
-  <button onclick="openTacheometerPanel()" style="background:transparent;border:1px solid transparent;color:#fcd34d;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Импорт/экспорт тахеометра"><i class="fa-solid fa-satellite-dish"></i>Тахеометр</button>
-  <button onclick="openVORPanel()" style="background:transparent;border:1px solid transparent;color:#f87171;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;" title="Ведомость объёмов работ"><i class="fa-solid fa-file-invoice"></i>ВОР</button>
-  <div style="width:1px;height:18px;background:#334155;margin:0 3px;flex-shrink:0;"></div>
-  <button onclick="if(typeof openDiagPanel==='function')openDiagPanel()" title="Диагностика F12" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-stethoscope"></i>Диагн.</button>
-  <button onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';})()" title="Консоль :" style="background:transparent;border:1px solid transparent;color:#64748b;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;display:flex;align-items:center;gap:4px;white-space:nowrap;flex-shrink:0;"><i class="fa-solid fa-terminal"></i>Консоль</button>
+
+
+<div id="toolbar-row2" style="height:32px;flex-shrink:0;background:#1e293b;
+  border-bottom:1px solid #0f172a;display:flex;align-items:center;
+  padding:0 4px;gap:1px;font-size:11px;position:relative;z-index:800;">
+
+<style>
+/* ── Dropdown toolbar ───────────────────────────────────────────────── */
+.tbg { position:relative; display:flex; align-items:center; height:32px; }
+
+.tbg-btn {
+  display:flex;align-items:center;gap:5px;padding:0 8px;height:100%;
+  background:transparent;border:none;color:#94a3b8;cursor:pointer;
+  font-size:11px;white-space:nowrap;border-right:1px solid transparent;
+  transition:background .15s,color .15s;
+}
+.tbg-btn:hover, .tbg-btn.open {
+  background:rgba(255,255,255,.07);color:#e2e8f0;
+}
+.tbg-btn i { font-size:12px; }
+.tbg-btn .arrow { font-size:8px; color:#475569; margin-left:1px; transition:transform .15s; }
+.tbg-btn.open .arrow { transform:rotate(180deg); }
+
+.tbg-drop {
+  display:none;
+  position:fixed;           /* fixed — not clipped by parent overflow */
+  min-width:210px;
+  max-height:calc(100vh - 80px);  /* never taller than viewport */
+  overflow-y:auto;          /* scroll when needed */
+  overflow-x:hidden;
+  background:#1a2744;
+  border:1px solid #2d3e6a;
+  border-radius:10px;
+  box-shadow:0 16px 40px rgba(0,0,0,.6);
+  z-index:9999;
+  padding:4px 0;
+  /* custom scrollbar */
+  scrollbar-width:thin;
+  scrollbar-color:#334155 #1a2744;
+}
+.tbg-drop::-webkit-scrollbar { width:4px; }
+.tbg-drop::-webkit-scrollbar-track { background:#1a2744; }
+.tbg-drop::-webkit-scrollbar-thumb { background:#334155; border-radius:4px; }
+.tbg-drop::-webkit-scrollbar-thumb:hover { background:#475569; }
+.tbg-drop-right { right:0; left:auto; }
+.tbg-drop.open { display:block; }
+
+.tbg-item {
+  display:flex;align-items:center;gap:9px;padding:6px 14px;
+  color:#94a3b8;cursor:pointer;font-size:11px;white-space:nowrap;
+  transition:background .1s,color .1s;border:none;background:none;
+  width:100%;text-align:left;
+}
+.tbg-item:hover { background:rgba(255,255,255,.07); color:#e2e8f0; }
+.tbg-item.active { color:#93c5fd; }
+.tbg-item i { width:14px;text-align:center;font-size:12px; }
+.tbg-sep { height:1px;background:#2d3e6a;margin:3px 0; }
+.tbg-label { font-size:9px;color:#334155;font-weight:700;text-transform:uppercase;
+  letter-spacing:.5px;padding:4px 14px 2px; }
+.tbg-drop-right { left:auto;right:0; }
+</style>
+<!-- ⓪ Файл (context-sensitive) -->
+<div class="tbg">
+  <button class="tbg-btn" onclick="_tbToggle(this)" title="Файл и данные" style="color:#60a5fa;">
+    <i class="fa-solid fa-folder-open" style="color:#60a5fa;"></i>
+    Файл <span class="arrow">▼</span>
+  </button>
+  <div class="tbg-drop">
+    <div class="tbg-label">Режим работы</div>
+    <button class="tbg-item" onclick="switchMode('dxf');_tbClose()" id="menu-tab-dxf"
+      style="color:#93c5fd;font-weight:600;">
+      <i class="fa-solid fa-file-import" style="color:#2563eb;"></i>Чертёж (DXF)
+    </button>
+    <button class="tbg-item" onclick="switchMode('manual');_tbClose()" id="menu-tab-manual">
+      <i class="fa-solid fa-pen-to-square" style="color:#6366f1;"></i>Ручной ввод
+    </button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Чертёж DXF</div>
+    <button class="tbg-item" onclick="document.getElementById('file-input').click();_tbClose()"><i class="fa-solid fa-folder-open" style="color:#60a5fa;"></i>Открыть DXF / DWG</button>
+    <button class="tbg-item" onclick="openGeoreferenceModal&&openGeoreferenceModal();_tbClose()"><i class="fa-solid fa-location-crosshairs" style="color:#34d399;"></i>Геопривязка</button>
+    <button class="tbg-item" onclick="sendPointsToManual&&sendPointsToManual();_tbClose()"><i class="fa-solid fa-share-from-square" style="color:#a5b4fc;"></i>Точки → Ручной режим</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Ручной ввод</div>
+    <button class="tbg-item" onclick="document.getElementById('manual-dxf-input').click();_tbClose()"><i class="fa-solid fa-file-import" style="color:#60a5fa;"></i>Загрузить из DXF</button>
+    <button class="tbg-item" onclick="document.getElementById('manual-txt-input').click();_tbClose()"><i class="fa-solid fa-upload" style="color:#fcd34d;"></i>Импорт TXT / CSV / SDR</button>
+    <button class="tbg-item" onclick="exportManualToTXT&&exportManualToTXT();_tbClose()"><i class="fa-solid fa-download" style="color:#6ee7b7;"></i>Экспорт CSV</button>
+    <button class="tbg-item" onclick="exportManualToDXF&&exportManualToDXF();_tbClose()"><i class="fa-solid fa-file-export" style="color:#a5b4fc;"></i>Экспорт DXF</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Проект</div>
+    <button class="tbg-item" onclick="togglePointsModal&&togglePointsModal();_tbClose()"><i class="fa-solid fa-list-ul"></i>Таблица точек</button>
+    <button class="tbg-item" onclick="toggleDimsModal&&toggleDimsModal();_tbClose()"><i class="fa-solid fa-ruler" style="color:#a5b4fc;"></i>Ведомость размеров</button>
+    <button class="tbg-item" onclick="openCadastreSearch();_tbClose()"><i class="fa-solid fa-magnifying-glass-location" style="color:#f59e0b;"></i>Кадастровый поиск (ПКК)</button>
+    <button class="tbg-item" onclick="open3DViewer&&open3DViewer();_tbClose()"><i class="fa-solid fa-cube" style="color:#d8b4fe;"></i>3D Визуализация</button>
+    <button class="tbg-item" onclick="toggleEarthworksModal&&toggleEarthworksModal();_tbClose()"><i class="fa-solid fa-tractor" style="color:#fb923c;"></i>Объёмы (старый модуль)</button>
+    <div class="tbg-sep"></div>
+    <button class="tbg-item" style="color:#f87171;" onclick="if(confirm('Очистить все точки?'))clearManualPoints&&clearManualPoints();_tbClose()"><i class="fa-solid fa-trash-can" style="color:#f87171;"></i>Очистить точки</button>
+  </div>
+</div>
+<div style="width:1px;height:20px;background:#334155;margin:0 2px;flex-shrink:0;"></div>
+
+
+
+<!-- ① Съёмка -->
+<div class="tbg">
+  <button class="tbg-btn" onclick="_tbToggle(this)" title="Инструменты съёмки">
+    <i class="fa-solid fa-location-dot" style="color:#60a5fa;"></i>
+    Съёмка <span class="arrow">▼</span>
+  </button>
+  <div class="tbg-drop">
+    <div class="tbg-label">Инструменты</div>
+    <button id="tb2-point"  class="tbg-item" onclick="setTool('point');_tbClose()"><i class="fa-solid fa-location-dot" style="color:#60a5fa;"></i>Отметить точку</button>
+    <button id="tb2-interp" class="tbg-item" onclick="setTool('interpolate');_tbClose()"><i class="fa-solid fa-mountain" style="color:#34d399;"></i>Интерполяция Z</button>
+    <button id="tb2-dim"    class="tbg-item" onclick="setTool('dimension');_tbClose()"><i class="fa-solid fa-ruler-horizontal" style="color:#a5b4fc;"></i>Размерная линия</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Пересчёт</div>
+    <button class="tbg-item" onclick="openRebasePanel();_tbClose()"><i class="fa-solid fa-arrows-rotate" style="color:#fcd34d;"></i>Пересчёт координат</button>
+    <button class="tbg-item" onclick="openDxfSearch();_tbClose()"><i class="fa-solid fa-magnifying-glass-location" style="color:#f59e0b;"></i>Поиск по координатам XY</button>
+    <button class="tbg-item" onclick="openCadastreSearch();_tbClose()"><i class="fa-solid fa-map-location-dot" style="color:#34d399;"></i>Кадастровый поиск (ПКК)</button>
+  </div>
+</div>
+
+<!-- ② CAD -->
+<div class="tbg">
+  <button class="tbg-btn" onclick="_tbToggle(this)" title="Режимы черчения">
+    <i class="fa-solid fa-drafting-compass" style="color:#a5b4fc;"></i>
+    CAD <span class="arrow">▼</span>
+  </button>
+  <div class="tbg-drop">
+    <div class="tbg-label">Режимы</div>
+    <button id="tb2-ortho" class="tbg-item" onclick="toggleOrthoMode();_tbClose()"><i class="fa-solid fa-arrows-left-right-to-line"></i>ORTHO <span style="color:#475569;font-size:9px;">F8</span></button>
+    <button id="tb2-grid"  class="tbg-item" onclick="toggleGrid();_tbClose()"><i class="fa-solid fa-border-all"></i>Сетка <span style="color:#475569;font-size:9px;">F7</span></button>
+    <button class="tbg-item" onclick="openGridSettings();_tbClose()"><i class="fa-solid fa-sliders" style="color:#64748b;"></i>Настройки сетки</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Инструменты</div>
+    <button class="tbg-item" onclick="if(typeof activateTextTool==='function')activateTextTool();_tbClose()"><i class="fa-solid fa-font"></i>Текст</button>
+    <button class="tbg-item" onclick="if(typeof toggleMeasure==='function')toggleMeasure();_tbClose()"><i class="fa-solid fa-ruler"></i>Дистанция / азимут</button>
+    <button class="tbg-item" onclick="openNorthPanel();_tbClose()"><i class="fa-solid fa-compass" style="color:#60a5fa;"></i>Азимут Севера</button>
+  </div>
+</div>
+
+<!-- ③ Анализ -->
+<div class="tbg">
+  <button class="tbg-btn" onclick="_tbToggle(this)" title="Аналитические инструменты">
+    <i class="fa-solid fa-draw-polygon" style="color:#6ee7b7;"></i>
+    Анализ <span class="arrow">▼</span>
+  </button>
+  <div class="tbg-drop">
+    <div class="tbg-label">Контуры и заливки</div>
+    <button class="tbg-item" onclick="startContour();_tbClose()"><i class="fa-solid fa-draw-polygon" style="color:#6ee7b7;"></i>Контур / Площадь / Объём</button>
+    <button class="tbg-item" onclick="openDxfFillPanel();_tbClose()"><i class="fa-solid fa-fill-drip" style="color:#a78bfa;"></i>Заливка контуров DXF</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Объекты</div>
+    <button class="tbg-item" onclick="openSymDrawPanel();_tbClose()"><i class="fa-solid fa-signs-post" style="color:#fcd34d;"></i>Условные знаки</button>
+    <button class="tbg-item" onclick="openSymTable();_tbClose()"><i class="fa-solid fa-table-list"></i>Ведомость объектов</button>
+  </div>
+</div>
+
+<!-- ④ DXF -->
+<div class="tbg">
+  <button class="tbg-btn" onclick="_tbToggle(this)" title="Управление DXF">
+    <i class="fa-solid fa-layer-group" style="color:#fcd34d;"></i>
+    DXF <span class="arrow">▼</span>
+  </button>
+  <div class="tbg-drop">
+    <button class="tbg-item" onclick="toggleDxfZPanel();_tbClose()"><i class="fa-solid fa-layer-group" style="color:#60a5fa;"></i>Z-высоты точек</button>
+    <button class="tbg-item" onclick="toggleDxfLayersPanel();_tbClose()"><i class="fa-solid fa-layer-group" style="color:#34d399;"></i>Слои</button>
+    <div class="tbg-sep"></div>
+    <button class="tbg-item" onclick="startPdfFrame();_tbClose()"><i class="fa-solid fa-crop-simple"></i>PDF рамка (кадрирование)</button>
+    <button class="tbg-item" onclick="clearPdfFrame&&clearPdfFrame();_tbClose()"><i class="fa-solid fa-xmark" style="color:#f87171;"></i>Снять рамку</button>
+  </div>
+</div>
+
+<!-- ⑤ Геодезия -->
+<div class="tbg">
+  <button class="tbg-btn" onclick="_tbToggle(this)" title="Геодезические модули">
+    <i class="fa-solid fa-earth-europe" style="color:#34d399;"></i>
+    Геодезия <span class="arrow">▼</span>
+  </button>
+  <div class="tbg-drop">
+    <div class="tbg-label">Исполнительная</div>
+    <button class="tbg-item" onclick="openAsBuiltPanel();_tbClose()"><i class="fa-solid fa-arrows-up-down" style="color:#a5b4fc;"></i>Проект vs Факт</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Земляные работы</div>
+    <button class="tbg-item" onclick="openEarthworksPanel();_tbClose()"><i class="fa-solid fa-mountain-sun" style="color:#6ee7b7;"></i>Картограмма / объёмы</button>
+    <button class="tbg-item" onclick="openProfilesPanel();_tbClose()"><i class="fa-solid fa-chart-line" style="color:#d8b4fe;"></i>Продольный профиль</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Оборудование</div>
+    <button class="tbg-item" onclick="openTacheometerPanel();_tbClose()"><i class="fa-solid fa-satellite-dish" style="color:#fcd34d;"></i>Тахеометр (импорт/экспорт)</button>
+  </div>
+</div>
+
+<!-- ⑥ Отчёты -->
+<div class="tbg">
+  <button class="tbg-btn" onclick="_tbToggle(this)" title="Экспорт и отчёты">
+    <i class="fa-solid fa-file-pdf" style="color:#f87171;"></i>
+    Отчёты <span class="arrow">▼</span>
+  </button>
+  <div class="tbg-drop tbg-drop-right">
+    <div class="tbg-label">PDF</div>
+    <button class="tbg-item" onclick="openGostPdfPanel&&openGostPdfPanel();_tbClose()"><i class="fa-solid fa-file-pdf" style="color:#f87171;"></i>PDF по ГОСТ 21.101</button>
+    <button class="tbg-item" onclick="openPdfSettings&&openPdfSettings();_tbClose()"><i class="fa-solid fa-gear"></i>Настройки PDF</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Документы</div>
+    <button class="tbg-item" onclick="exportPointsToWord&&exportPointsToWord();_tbClose()"><i class="fa-solid fa-file-word" style="color:#60a5fa;"></i>Ведомость Word (DOCX)</button>
+    <button class="tbg-item" onclick="openVORPanel();_tbClose()"><i class="fa-solid fa-file-invoice" style="color:#f87171;"></i>ВОР (объёмы работ)</button>
+    <div class="tbg-sep"></div>
+    <div class="tbg-label">Координаты</div>
+    <button class="tbg-item" onclick="runXYZExport&&runXYZExport();_tbClose()"><i class="fa-solid fa-file-lines"></i>Экспорт XYZ (TXT)</button>
+    <button class="tbg-item" onclick="exportToDXF&&exportToDXF();_tbClose()"><i class="fa-solid fa-file-code"></i>Экспорт DXF</button>
+  </div>
+</div>
+
+<!-- ⑦ Сервис -->
+<div class="tbg" style="margin-left:auto;">
+  <button class="tbg-btn" onclick="_tbToggle(this)" title="Диагностика и консоль">
+    <i class="fa-solid fa-wrench" style="color:#64748b;"></i>
+    <span class="arrow">▼</span>
+  </button>
+  <div class="tbg-drop tbg-drop-right">
+    <button class="tbg-item" onclick="if(typeof openDiagPanel==='function')openDiagPanel();_tbClose()"><i class="fa-solid fa-stethoscope" style="color:#60a5fa;"></i>Диагностика <span style="color:#334155;font-size:9px;">F12</span></button>
+    <button class="tbg-item" onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';if(v){var inp=document.getElementById('cad-cmd-input');if(inp)inp.focus();}})();_tbClose()"><i class="fa-solid fa-terminal"></i>Командная строка <span style="color:#334155;font-size:9px;">:</span></button>
+    <div class="tbg-sep"></div>
+    <button class="tbg-item" onclick="if(typeof openGeoreferenceModal==='function')openGeoreferenceModal();_tbClose()"><i class="fa-solid fa-map-pin" style="color:#fcd34d;"></i>Геопривязка</button>
+    <button class="tbg-item" onclick="if(typeof init3DViewer==='function')init3DViewer();_tbClose()"><i class="fa-solid fa-cube" style="color:#a5b4fc;"></i>3D просмотр</button>
+  </div>
+</div>
+
+<script>
+// ── Toolbar dropdown logic ───────────────────────────────────────────────────
+function _tbToggle(btn) {
+  var drop = btn.nextElementSibling;
+  var isOpen = drop.classList.contains('open');
+  _tbClose();
+  if (!isOpen) {
+    // Position with fixed coords so it's never clipped
+    var rect = btn.getBoundingClientRect();
+    var vw   = window.innerWidth;
+    var dropW = 220; // approx width
+
+    drop.style.top  = rect.bottom + 'px';
+
+    // Flip left/right if not enough space
+    if (drop.classList.contains('tbg-drop-right')) {
+      drop.style.left  = 'auto';
+      drop.style.right = (vw - rect.right) + 'px';
+    } else {
+      var left = rect.left;
+      if (left + dropW > vw) left = Math.max(0, vw - dropW - 8);
+      drop.style.left  = left + 'px';
+      drop.style.right = 'auto';
+    }
+
+    drop.classList.add('open');
+    btn.classList.add('open');
+  }
+}
+function _tbClose() {
+  document.querySelectorAll('.tbg-drop.open').forEach(function(d) {
+    d.classList.remove('open');
+  });
+  document.querySelectorAll('.tbg-btn.open').forEach(function(b) {
+    b.classList.remove('open');
+  });
+}
+// Close on outside click
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.tbg')) _tbClose();
+});
+
+// Update mode indicator when switchMode is called
+(function(){
+  var _origSwitch = window.switchMode;
+  window.switchMode = function(mode) {
+    if(_origSwitch) _origSwitch(mode);
+    var ind  = document.getElementById('mode-indicator');
+    var txt  = document.getElementById('mode-indicator-text');
+    var icon = ind ? ind.querySelector('i') : null;
+    var dm   = document.getElementById('menu-tab-dxf');
+    var mm   = document.getElementById('menu-tab-manual');
+    if(mode === 'dxf') {
+      if(txt)  txt.textContent = 'Чертёж (DXF)';
+      if(icon) icon.className = 'fa-solid fa-file-import';
+      if(ind)  { ind.style.borderColor='#2563eb'; ind.style.background='#1e3a5f'; ind.style.color='#93c5fd'; }
+      if(dm)   { dm.style.color='#93c5fd'; dm.style.fontWeight='600'; }
+      if(mm)   { mm.style.color=''; mm.style.fontWeight=''; }
+    } else {
+      if(txt)  txt.textContent = 'Ручной ввод';
+      if(icon) icon.className = 'fa-solid fa-pen-to-square';
+      if(ind)  { ind.style.borderColor='#6366f1'; ind.style.background='#1e1e3a'; ind.style.color='#a5b4fc'; }
+      if(dm)   { dm.style.color=''; dm.style.fontWeight=''; }
+      if(mm)   { mm.style.color='#a5b4fc'; mm.style.fontWeight='600'; }
+    }
+  };
+})();
+// F7/F8 keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'F7') { e.preventDefault(); toggleGrid(); }
+  if (e.key === 'F8') { e.preventDefault(); toggleOrthoMode(); }
+  if (e.key === 'F12') { e.preventDefault(); if(typeof openDiagPanel==='function')openDiagPanel(); }
+});
+</script>
+
 </div>
 
 <div id="custom-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-[100] hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl p-5 md:p-6 max-w-[90%] md:max-w-md w-full mx-4 transform scale-95 transition-transform duration-300" id="modal-content"><div class="flex items-center gap-3 mb-3"><i id="modal-icon" class="fa-solid fa-circle-exclamation text-xl md:text-2xl text-red-500"></i><h3 id="modal-title" class="text-base md:text-lg font-bold text-slate-800">Сообщение</h3></div><div id="modal-text" class="text-xs md:text-sm text-slate-600 whitespace-pre-wrap mb-4 md:mb-5 leading-relaxed"></div><div class="flex justify-end"><button onclick="hideMessage()" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg transition text-xs md:text-sm font-medium">Понятно</button></div></div></div>
@@ -651,6 +840,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 <script src="/js/profiles.js"></script>
 <script src="/js/tacheometer.js"></script>
 <script src="/js/vor.js"></script>
+<script src="/js/cadastre-search.js"></script>
 <div id="print-overlay"></div>
 <!-- ── Georeferencing Modal ─────────────────────────────────────────── -->
 <div id="georef-modal" class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[110] hidden opacity-0 transition-opacity duration-200">
