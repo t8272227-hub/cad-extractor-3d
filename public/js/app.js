@@ -14,6 +14,12 @@ if(typeof _tpLabel==='undefined')   var _tpLabel='';
 if(typeof _TP==='undefined')        var _TP={};
 
 let georefPickMode=null,secondDxfElements=[],secondDxfVisible=true,secondDxfLinesVisible=true,secondDxfPointsVisible=true,georefTransform=null;
+
+// Grid settings (user-configurable)
+var gridColor      = 'rgba(80,120,200,0.35)'; // color with opacity
+var gridSize       = 0;     // 0 = auto (adaptive), or fixed value in meters
+var gridShowLabels = true;  // show coordinate labels
+var gridShowOrigin = true;  // show red origin cross
 let northAngle=0,showGrid=false,northPickMode=false,northPickP1=null,northPickHover=null;
 let cadSymbols=[],symTool=null,symPoints=[],symProp={};
 let contourPts=[],contourActive=false,contourClosed=false,contourMousePos=null;
@@ -454,10 +460,12 @@ function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext(
   if(showGrid){
     var _sc=scale||1,_px=panX||cv.width/2,_py=panY||cv.height/2;
     cx.save();cx.translate(_px,_py);cx.scale(_sc,-_sc);
-    var _gs=100,_r=cv.width/_sc*2;
-    cx.strokeStyle='rgba(80,120,200,0.35)';cx.lineWidth=0.6/_sc;
+    var _r=cv.width/_sc*2;
+    var _gs=gridSize>0?gridSize:100;
+    cx.strokeStyle=gridColor;cx.lineWidth=0.6/_sc;
     for(var _xi=Math.floor(-_r/_gs)*_gs;_xi<=_r;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,-_r);cx.lineTo(_xi,_r);cx.stroke();}
     for(var _yi=Math.floor(-_r/_gs)*_gs;_yi<=_r;_yi+=_gs){cx.beginPath();cx.moveTo(-_r,_yi);cx.lineTo(_r,_yi);cx.stroke();}
+    if(gridShowOrigin){cx.strokeStyle='rgba(255,80,80,0.5)';cx.lineWidth=1/_sc;cx.beginPath();cx.moveTo(-15/_sc,0);cx.lineTo(15/_sc,0);cx.moveTo(0,-15/_sc);cx.lineTo(0,15/_sc);cx.stroke();}
     cx.restore();
   }
   return;
@@ -471,11 +479,11 @@ function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext(
   var _gCy = _hasData ? (cadMinY+cadMaxY)/2 : cadOriginY;
   var _rw = Math.max(_gW,_gH,10);
   var _mag = Math.pow(10,Math.floor(Math.log10(_rw/6)));
-  var _gs = [1,2,5].reduce(function(a,v){return Math.abs(_rw/6-v*_mag)<Math.abs(_rw/6-a*_mag)?v:a;})*_mag;
+  var _gs = gridSize>0 ? gridSize : [1,2,5].reduce(function(a,v){return Math.abs(_rw/6-v*_mag)<Math.abs(_rw/6-a*_mag)?v:a;})*_mag;
   var _x0=_gCx-_rw, _x1=_gCx+_rw, _y0=_gCy-_rw, _y1=_gCy+_rw;
 
-  // Major grid lines
-  cx.strokeStyle='rgba(80,120,200,0.35)';
+  // Grid lines
+  cx.strokeStyle=gridColor;
   cx.lineWidth=0.6/scale;
   for(var _xi=Math.floor(_x0/_gs)*_gs;_xi<=_x1;_xi+=_gs){
     cx.beginPath();cx.moveTo(_xi,_y0);cx.lineTo(_xi,_y1);cx.stroke();
@@ -485,22 +493,26 @@ function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext(
   }
 
   // Labels
-  cx.fillStyle='rgba(80,120,200,0.5)';
-  cx.font=(9/scale)+'px Arial';
-  cx.textAlign='left'; cx.textBaseline='bottom';
-  for(var _xi2=Math.floor(_x0/_gs)*_gs;_xi2<=_x1;_xi2+=_gs){
-    cx.fillText(_xi2.toFixed(0),_xi2+1/scale,_gCy);
-  }
-  cx.textAlign='left'; cx.textBaseline='top';
-  for(var _yi2=Math.floor(_y0/_gs)*_gs;_yi2<=_y1;_yi2+=_gs){
-    cx.fillText(_yi2.toFixed(0),_gCx,_yi2+1/scale);
+  if(gridShowLabels){
+    var _lr=parseInt(gridColor.replace(/[^,]+,/g,'').replace(/[^\d.]+/g,''))||120;
+    cx.fillStyle=gridColor.replace(/[\d.]+\)$/,'0.6)');
+    cx.font=(9/scale)+'px Arial';
+    cx.textAlign='left'; cx.textBaseline='bottom';
+    for(var _xi2=Math.floor(_x0/_gs)*_gs;_xi2<=_x1;_xi2+=_gs){
+      cx.fillText(_xi2.toFixed(0),_xi2+1/scale,_gCy);
+    }
+    cx.textAlign='left'; cx.textBaseline='top';
+    for(var _yi2=Math.floor(_y0/_gs)*_gs;_yi2<=_y1;_yi2+=_gs){
+      cx.fillText(_yi2.toFixed(0),_gCx,_yi2+1/scale);
+    }
   }
 
-  // Cross at origin
-  cx.strokeStyle='rgba(255,100,100,0.4)';
-  cx.lineWidth=1/scale;
-  cx.beginPath();cx.moveTo(-20/scale,0);cx.lineTo(20/scale,0);
-  cx.moveTo(0,-20/scale);cx.lineTo(0,20/scale);cx.stroke();
+  // Origin cross
+  if(gridShowOrigin){
+    cx.strokeStyle='rgba(255,80,80,0.5)'; cx.lineWidth=1/scale;
+    cx.beginPath();cx.moveTo(-20/scale,0);cx.lineTo(20/scale,0);
+    cx.moveTo(0,-20/scale);cx.lineTo(0,20/scale);cx.stroke();
+  }
   cx.restore();
 }if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}
   // Draw symbols in world space
@@ -530,6 +542,11 @@ if(savedContours.length>0){
       Math.max.apply(null,_spts.map(function(p){return p.y;}))-Math.min.apply(null,_spts.map(function(p){return p.y;})));
     cx.restore();try{cx.save();cx.setTransform(1,0,0,1,0,0);_drawNorthOnCanvas(cx,cv.width,cv.height);cx.restore();
   try{if(typeof _drawDxfFills==='function')_drawDxfFills(cx,scale);}catch(_e){}
+  // Module overlays
+  try{if(typeof AB!=='undefined')AB.draw(cx,scale);}catch(_e){}
+  try{if(typeof EW!=='undefined')EW.draw(cx,scale);}catch(_e){}
+  try{if(typeof PR!=='undefined')PR.draw(cx);}catch(_e){}
+  try{if(typeof TACH!=='undefined')TACH.draw(cx);}catch(_e){}
   try{if(typeof _drawSearchMarker==='function')_drawSearchMarker(cx,scale);}catch(_e){}}catch(e){}
     // Outline
     cx.beginPath();
@@ -4518,4 +4535,156 @@ function _drawDxfFills(cx,sc){
     cx.restore();
   });
   cx.restore();
+}
+
+
+// ── Grid settings panel ────────────────────────────────────────────────────────
+function openGridSettings(){
+  var p=document.getElementById('grid-settings-panel');
+  if(p){p.style.display=p.style.display==='none'?'flex':'none';return;}
+
+  var panel=document.createElement('div');
+  panel.id='grid-settings-panel';
+  panel.style.cssText=
+    'position:fixed;top:90px;left:50%;transform:translateX(-50%);width:280px;'+
+    'background:#1a2744;color:#f1f5f9;border-radius:12px;border:1px solid #2d3e6a;'+
+    'box-shadow:0 16px 48px rgba(0,0,0,.5);z-index:9998;display:flex;'+
+    'flex-direction:column;font-family:Arial,sans-serif;font-size:12px;';
+
+  // Parse current opacity from gridColor
+  var opM = gridColor.match(/[\d.]+\)$/);
+  var curOp = opM ? Math.round(parseFloat(opM[0])*100) : 35;
+  // Parse current RGB
+  var rgbM = gridColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  var curHex = '#5078c8'; // default
+  if(rgbM) curHex='#'+
+    parseInt(rgbM[1]).toString(16).padStart(2,'0')+
+    parseInt(rgbM[2]).toString(16).padStart(2,'0')+
+    parseInt(rgbM[3]).toString(16).padStart(2,'0');
+
+  panel.innerHTML=
+    '<div style="background:#0f1d38;padding:10px 14px;border-bottom:1px solid #2d3e6a;'+
+    'display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'+
+      '<div style="display:flex;align-items:center;gap:8px;">'+
+        '<span style="font-size:16px;">⚙</span>'+
+        '<span style="font-weight:700;font-size:13px;">Настройки сетки</span>'+
+      '</div>'+
+      '<button onclick="document.getElementById(\'grid-settings-panel\').style.display=\'none\'" '+
+      'style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;">✕</button>'+
+    '</div>'+
+    '<div style="padding:14px;display:flex;flex-direction:column;gap:12px;">'+
+
+      // Size
+      '<div>'+
+        '<div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;'+
+        'letter-spacing:.5px;margin-bottom:6px;">Шаг сетки</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;">'+
+          '<input type="number" id="gs-size" min="0" step="1" value="'+(gridSize||0)+'" '+
+          'style="flex:1;background:#2d3e6a;border:1px solid #3d5080;border-radius:6px;'+
+          'color:#60a5fa;padding:5px 8px;font-size:13px;font-family:monospace;outline:none;" '+
+          'oninput="_applyGridSettings()" placeholder="0 = авто">'+
+          '<span style="color:#475569;font-size:10px;">м (0=авто)</span>'+
+        '</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">'+
+          '[1,5,10,50,100,500,1000].forEach не работает в HTML — кнопки ниже'+
+        '</div>'+
+        '<div id="gs-presets" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>'+
+      '</div>'+
+
+      // Color
+      '<div>'+
+        '<div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;'+
+        'letter-spacing:.5px;margin-bottom:6px;">Цвет линий</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;">'+
+          '<input type="color" id="gs-color" value="'+curHex+'" '+
+          'style="width:44px;height:32px;border:none;border-radius:6px;cursor:pointer;padding:0;" '+
+          'oninput="_applyGridSettings()">'+
+          '<div style="flex:1;">'+
+            '<div style="font-size:9px;color:#475569;margin-bottom:3px;">'+
+              'Прозрачность: <span id="gs-op-val">'+curOp+'%</span></div>'+
+            '<input type="range" id="gs-opacity" min="5" max="100" value="'+curOp+'" '+
+            'style="width:100%;accent-color:#3b82f6;" '+
+            'oninput="document.getElementById(\'gs-op-val\').textContent=this.value+\'%\';_applyGridSettings()">'+
+          '</div>'+
+        '</div>'+
+        // Color presets
+        '<div style="display:flex;gap:4px;margin-top:6px;">'+
+          '<button onclick="_gsColorPreset(\'#5078c8\')" title="Синяя" style="width:22px;height:22px;background:#5078c8;border:none;border-radius:3px;cursor:pointer;"></button>'+
+          '<button onclick="_gsColorPreset(\'#10b981\')" title="Зелёная" style="width:22px;height:22px;background:#10b981;border:none;border-radius:3px;cursor:pointer;"></button>'+
+          '<button onclick="_gsColorPreset(\'#f59e0b\')" title="Жёлтая" style="width:22px;height:22px;background:#f59e0b;border:none;border-radius:3px;cursor:pointer;"></button>'+
+          '<button onclick="_gsColorPreset(\'#ef4444\')" title="Красная" style="width:22px;height:22px;background:#ef4444;border:none;border-radius:3px;cursor:pointer;"></button>'+
+          '<button onclick="_gsColorPreset(\'#94a3b8\')" title="Серая" style="width:22px;height:22px;background:#94a3b8;border:none;border-radius:3px;cursor:pointer;"></button>'+
+          '<button onclick="_gsColorPreset(\'#ffffff\')" title="Белая" style="width:22px;height:22px;background:#fff;border:2px solid #334155;border-radius:3px;cursor:pointer;"></button>'+
+        '</div>'+
+      '</div>'+
+
+      // Checkboxes
+      '<div style="display:flex;flex-direction:column;gap:6px;">'+
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;">'+
+          '<input type="checkbox" id="gs-labels" '+(gridShowLabels?'checked':'')+
+          ' onchange="gridShowLabels=this.checked;isDrawingScheduled=false;draw();" '+
+          'style="accent-color:#3b82f6;width:14px;height:14px;">'+
+          '<span>Подписи координат</span>'+
+        '</label>'+
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;">'+
+          '<input type="checkbox" id="gs-origin" '+(gridShowOrigin?'checked':'')+
+          ' onchange="gridShowOrigin=this.checked;isDrawingScheduled=false;draw();" '+
+          'style="accent-color:#ef4444;width:14px;height:14px;">'+
+          '<span>Крест в начале координат (0,0)</span>'+
+        '</label>'+
+      '</div>'+
+
+      // Reset
+      '<button onclick="gridColor=\'rgba(80,120,200,0.35)\';gridSize=0;gridShowLabels=true;gridShowOrigin=true;_refreshGridPanel();_applyGridSettings();" '+
+      'style="background:rgba(255,255,255,.05);border:1px solid #334155;color:#64748b;'+
+      'border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">↺ По умолчанию</button>'+
+
+    '</div>';
+
+  document.body.appendChild(panel);
+
+  // Fill preset buttons
+  var ps=document.getElementById('gs-presets');
+  if(ps)[0,1,5,10,50,100,500,1000].forEach(function(v){
+    var b=document.createElement('button');
+    b.textContent=v===0?'авто':v+'м';
+    b.style.cssText='background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;'+
+      'border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px;';
+    b.onclick=function(){
+      document.getElementById('gs-size').value=v;
+      _applyGridSettings();
+    };
+    ps.appendChild(b);
+  });
+}
+
+function _gsColorPreset(hex){
+  var ci=document.getElementById('gs-color');if(ci)ci.value=hex;
+  _applyGridSettings();
+}
+
+function _refreshGridPanel(){
+  var ci=document.getElementById('gs-color');
+  var oi=document.getElementById('gs-opacity');
+  var si=document.getElementById('gs-size');
+  var rgbM=gridColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if(rgbM&&ci)ci.value='#'+
+    parseInt(rgbM[1]).toString(16).padStart(2,'0')+
+    parseInt(rgbM[2]).toString(16).padStart(2,'0')+
+    parseInt(rgbM[3]).toString(16).padStart(2,'0');
+  var opM=gridColor.match(/[\d.]+\)$/);
+  if(opM&&oi)oi.value=Math.round(parseFloat(opM[0])*100);
+  if(si)si.value=gridSize||0;
+}
+
+function _applyGridSettings(){
+  var ci=document.getElementById('gs-color');
+  var oi=document.getElementById('gs-opacity');
+  var si=document.getElementById('gs-size');
+  var hex=ci?ci.value:'#5078c8';
+  var op=oi?parseInt(oi.value)/100:0.35;
+  var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  gridColor='rgba('+r+','+g+','+b+','+op+')';
+  gridSize=si?Math.max(0,parseFloat(si.value)||0):0;
+  isDrawingScheduled=false;draw();
 }
