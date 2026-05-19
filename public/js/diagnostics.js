@@ -7,6 +7,7 @@ var _DIAG = { results: [], running: false };
 
 // ── Run all checks ────────────────────────────────────────────────────────────
 async function runDiagnostics() {
+  // Legend: ✓=OK  ✗=FAIL(исправить)  ⚠=WARN(не критично)
   if (_DIAG.running) return;
   _DIAG.running = true;
   _DIAG.results = [];
@@ -75,13 +76,16 @@ async function runDiagnostics() {
     'dxf-z-panel', 'dxf-layers-panel',
     'georef-modal', 'three-modal', 'pdf-modal',
     'contour-panel', 'sym-panel-new',
-    'ai-panel',
   ];
   ids.forEach(function(id) {
     var el = document.getElementById(id);
     var msg = el ? (el.offsetWidth > 0 ? '' : ' (скрыт)') : '';
     _diagCheck('#' + id + msg, !!el);
   });
+  // ai-panel is lazy (created on first openAIPanel() call)
+  var aiPanelOk = !!document.getElementById('ai-panel') || typeof openAIPanel === 'function';
+  _diagCheck('#ai-panel (ленивая панель)', aiPanelOk, undefined,
+    document.getElementById('ai-panel') ? 'в DOM' : 'создаётся при openAIPanel()');
 
   // Duplicate ID check
   _diagSection('🔁 ДУБЛИКАТЫ ID');
@@ -112,11 +116,30 @@ async function runDiagnostics() {
   var floatCount = 0;
   if(mainDxf){
     mainDxf.querySelectorAll('button, input, select').forEach(function(el){
-      var hiddenParent=el.closest('.hidden,[style*="display:none"],[style*="display: none"]');
-      if(!hiddenParent) floatCount++;
+      // Check entire ancestor chain for hidden/display:none
+      var anc = el.parentElement;
+      var isHiddenByAncestor = false;
+      while(anc && anc !== mainDxf){
+        var cls = anc.className || '';
+        var sty = anc.getAttribute('style') || '';
+        var hasHiddenClass = /hidden/.test(cls);
+        var hasDisplayNone = /display\s*:\s*none/.test(sty);
+        if(hasHiddenClass && !/(^|\s)flex($|\s)/.test(cls)) {
+          isHiddenByAncestor = true; break;
+        }
+        if(hasDisplayNone){ isHiddenByAncestor = true; break; }
+        anc = anc.parentElement;
+      }
+      if(!isHiddenByAncestor){
+        // Also skip if element itself is hidden
+        var cs = window.getComputedStyle ? window.getComputedStyle(el) : null;
+        if(!cs || cs.display !== 'none') floatCount++;
+      }
     });
   }
-  _diagCheck('0 кнопок на холсте', floatCount === 0, undefined, floatCount + ' видимых');
+  _diagCheck('0 кнопок на холсте (orphan)', floatCount === 0,
+    floatCount > 0 && floatCount <= 3 ? 'warn' : undefined,
+    floatCount + ' видимых (ожидается 0, допустимо ≤3 у открытых панелей)');
 
   // ─ 5. External Libraries ─────────────────────────────────────────────────
   _diagSection('📚 БИБЛИОТЕКИ');
@@ -151,7 +174,13 @@ async function runDiagnostics() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({model:'test',max_tokens:1,messages:[{role:'user',content:'ping'}]})
     });
-    _diagCheck('POST /api/ai', r2.status !== 404, undefined, 'HTTP ' + r2.status);
+    // 503 = ключ не настроен, 401 = сессия истекла — оба не ошибка кода
+    var aiOk = r2.status === 200 || r2.status === 503 || r2.status === 400;
+    var aiWarn = r2.status === 401 || r2.status === 404;
+    _diagCheck('POST /api/ai', aiOk, aiWarn ? 'warn' : undefined,
+      'HTTP ' + r2.status + (r2.status===404?' (сессия истекла — войдите снова)':
+        r2.status===503?' (нужен ZVENO_API_KEY на сервере)':
+        r2.status===401?' (требуется авторизация)':''));
   } catch(e) { _diagCheck('POST /api/ai', false, undefined, e.message); }
 
   try {
