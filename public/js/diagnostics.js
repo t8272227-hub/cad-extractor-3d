@@ -103,12 +103,20 @@ async function runDiagnostics() {
     var rect = cv.getBoundingClientRect();
     var topEl = document.elementFromPoint(rect.left + rect.width/2, rect.top + rect.height/2);
     var isCanvas = topEl === cv || (topEl && topEl.id === 'cad-canvas');
-    _diagCheck('холст не перекрыт', isCanvas, undefined, topEl ? '#'+topEl.id+' / .'+topEl.className.toString().split(' ')[0] : '?');
+    var isModal = topEl && (topEl.id==='modal-text'||!!topEl.closest('#custom-modal')||!!topEl.closest('[id$="-modal"]'));
+    _diagCheck('холст не перекрыт', isCanvas||isModal, isModal?'warn':undefined,
+      topEl ? '#'+topEl.id+' / .'+topEl.className.toString().split(' ')[0] : 'ok');
   }
   // Float elements on canvas
   var mainDxf = document.getElementById('mode-dxf');
-  var floatCount = mainDxf ? mainDxf.querySelectorAll('button, input, select').length : -1;
-  _diagCheck('0 кнопок на холсте', floatCount === 0, undefined, floatCount + ' элем.');
+  var floatCount = 0;
+  if(mainDxf){
+    mainDxf.querySelectorAll('button, input, select').forEach(function(el){
+      var hiddenParent=el.closest('.hidden,[style*="display:none"],[style*="display: none"]');
+      if(!hiddenParent) floatCount++;
+    });
+  }
+  _diagCheck('0 кнопок на холсте', floatCount === 0, undefined, floatCount + ' видимых');
 
   // ─ 5. External Libraries ─────────────────────────────────────────────────
   _diagSection('📚 БИБЛИОТЕКИ');

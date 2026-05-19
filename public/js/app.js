@@ -3287,8 +3287,45 @@ var _aiHistory=[];
 
 function openAIPanel(){
   var p=document.getElementById('ai-panel');
-  if(p)p.style.display='flex';
-  if(typeof _setupAIPanel==='function')_setupAIPanel();
+  if(p){ p.style.display=p.style.display==='none'?'flex':'none'; return; }
+  p=document.createElement('div');
+  p.id='ai-panel';
+  p.style.cssText='position:fixed;top:90px;right:16px;width:380px;max-height:80vh;'+
+    'background:#1a2744;border:1px solid #2d3e6a;border-radius:12px;'+
+    'box-shadow:0 20px 60px rgba(0,0,0,.5);z-index:9998;display:flex;'+
+    'flex-direction:column;font-family:Arial,sans-serif;font-size:12px;';
+  p.innerHTML=
+    '<div style="background:#0f1d38;padding:10px 14px;border-bottom:1px solid #2d3e6a;'+
+    'display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'+
+      '<div style="display:flex;align-items:center;gap:8px;">'+
+        '<span style="font-size:16px;">&#x1F916;</span>'+
+        '<span style="font-weight:700;font-size:13px;color:#f1f5f9;">&#x418;&#x418; &#x410;&#x43D;&#x430;&#x43B;&#x438;&#x437;</span>'+
+      '</div>'+
+      '<button onclick="document.getElementById(\'ai-panel\').style.display=\'none\'" '+
+      'style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;">&#x2715;</button>'+
+    '</div>'+
+    '<div id="ai-messages" style="flex:1;overflow-y:auto;padding:12px;'+
+    'display:flex;flex-direction:column;gap:8px;min-height:120px;max-height:300px;">'+
+      '<div style="color:#334155;font-size:11px;text-align:center;padding:20px;">'+
+      '&#x417;&#x430;&#x433;&#x440;&#x443;&#x437;&#x438;&#x442;&#x435; DXF &#x434;&#x43B;&#x44F; &#x430;&#x43D;&#x430;&#x43B;&#x438;&#x437;&#x430;</div>'+
+    '</div>'+
+    '<div id="ai-typing" style="display:none;font-size:10px;color:#475569;padding:4px 12px;text-align:center;">'+
+    '&#x1F916; &#x410;&#x43D;&#x430;&#x43B;&#x438;&#x437;&#x438;&#x440;&#x443;&#x435;&#x442;...</div>'+
+    '<div style="padding:10px 12px;border-top:1px solid #1e3a5f;display:flex;gap:6px;">'+
+      '<select id="ai-model" style="width:120px;background:#2d3e6a;border:1px solid #3d5080;'+
+      'border-radius:6px;color:#f1f5f9;padding:5px 7px;font-size:11px;">'+
+        '<option value="gpt-4o">GPT-4o</option>'+
+        '<option value="gpt-4o-mini">GPT-4o-mini</option>'+
+      '</select>'+
+      '<input type="text" id="ai-input" placeholder="Задайте вопрос..." '+
+      'style="flex:1;background:#2d3e6a;border:1px solid #3d5080;border-radius:6px;'+
+      'color:#f1f5f9;padding:6px 10px;font-size:12px;outline:none;" '+
+      'onkeydown="if(event.key===\'Enter\')sendAIMessage()">'+
+      '<button id="ai-send-btn" onclick="sendAIMessage()" '+
+      'style="background:#2563eb;border:none;color:#fff;border-radius:6px;'+
+      'padding:6px 12px;cursor:pointer;font-size:12px;font-weight:700;">&#x25B6;</button>'+
+    '</div>';
+  document.body.appendChild(p);
 }
 function closeAIPanel(){
   var p=document.getElementById('ai-panel');
@@ -4687,4 +4724,35 @@ function _applyGridSettings(){
   gridColor='rgba('+r+','+g+','+b+','+op+')';
   gridSize=si?Math.max(0,parseFloat(si.value)||0):0;
   isDrawingScheduled=false;draw();
+}
+
+function runMenuDiagnostics(){
+  var tests=[
+    {label:'setTool()',            fn:function(){return typeof setTool==='function';}},
+    {label:'addInterpolatedPoint()',fn:function(){return typeof addInterpolatedPoint==='function';}},
+    {label:'toggleOrthoMode()',    fn:function(){return typeof toggleOrthoMode==='function';}},
+    {label:'toggleGrid()',         fn:function(){return typeof toggleGrid==='function';}},
+    {label:'activateTextTool()',   fn:function(){return typeof activateTextTool==='function';}},
+    {label:'toggleMeasure()',      fn:function(){return typeof toggleMeasure==='function';}},
+    {label:'startContour()',       fn:function(){return typeof startContour==='function';}},
+    {label:'openSymDrawPanel()',   fn:function(){return typeof openSymDrawPanel==='function';}},
+    {label:'openSymTable()',       fn:function(){return typeof openSymTable==='function';}},
+    {label:'toggleDxfZPanel()',    fn:function(){return typeof toggleDxfZPanel==='function'&&!!document.getElementById('dxf-z-panel');}},
+    {label:'startPdfFrame()',      fn:function(){return typeof startPdfFrame==='function';}},
+    {label:'openPdfSettings()',    fn:function(){return typeof openPdfSettings==='function';}},
+    {label:'exportToDXF()',        fn:function(){return typeof exportToDXF==='function';}},
+    {label:'runXYZExport()',       fn:function(){return typeof runXYZExport==='function';}},
+    {label:'openGeoreferenceModal()',fn:function(){return typeof openGeoreferenceModal==='function';}},
+    {label:'init3DViewer()',       fn:function(){return typeof init3DViewer==='function';}},
+    {label:'openAIPanel()',        fn:function(){return typeof openAIPanel==='function';}},
+    {label:'openAsBuiltPanel()',   fn:function(){return typeof openAsBuiltPanel==='function';}},
+    {label:'openEarthworksPanel()',fn:function(){return typeof openEarthworksPanel==='function';}},
+    {label:'openProfilesPanel()',  fn:function(){return typeof openProfilesPanel==='function';}},
+    {label:'openTacheometerPanel()',fn:function(){return typeof openTacheometerPanel==='function';}},
+    {label:'openVORPanel()',       fn:function(){return typeof openVORPanel==='function';}},
+    {label:'openCadastreSearch()', fn:function(){return typeof openCadastreSearch==='function';}},
+    {label:'openDiagPanel()',      fn:function(){return typeof openDiagPanel==='function';}},
+    {label:'canvas ready',         fn:function(){var cv=document.getElementById('cad-canvas');return cv&&cv.width>0;}},
+  ];
+  return tests.map(function(t){var ok=false;try{ok=!!t.fn();}catch(e){}return{label:t.label,ok:ok};});
 }
