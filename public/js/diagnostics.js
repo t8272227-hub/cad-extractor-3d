@@ -126,6 +126,19 @@ async function runDiagnostics() {
   _diagCheck('Font Awesome',  document.querySelector('[class*="fa-"]') !== null || _testFAFont());
   _diagCheck('Tailwind CSS',  typeof window.tailwind !== 'undefined' || document.querySelector('[class*="flex"]') !== null);
 
+  // ─ 5b. DXF Load Capability ─────────────────────────────────────────────────
+  _diagSection('📂 ЗАГРУЗКА DXF');
+  _diagCheck('DxfParser library',  typeof DxfParser !== 'undefined' || typeof window.DxfParser !== 'undefined');
+  _diagCheck('file-input element', !!document.getElementById('file-input'));
+  _diagCheck('processCADData()',   typeof processCADData === 'function');
+  _diagCheck('updateTable() safe', (function(){
+    // Check that updateTable won't crash (export-btn may be missing)
+    try{ updateTable(); return true; } catch(e){ return false; }
+  })(), undefined, 'null-safe');
+  _diagCheck('updateDimsTable() safe', (function(){
+    try{ updateDimsTable(); return true; } catch(e){ return false; }
+  })(), undefined, 'null-safe');
+
   // ─ 6. API Endpoints ──────────────────────────────────────────────────────
   _diagSection('🌐 API СЕРВЕР');
   try {
