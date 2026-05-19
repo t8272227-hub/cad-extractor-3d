@@ -128,6 +128,58 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style></head><body class="bg-slate-100 h-screen flex flex-col font-sans text-slate-800 overflow-hidden">
+<!-- Loading overlay — hides when app ready -->
+<div id="app-loading" style="position:fixed;inset:0;background:#0f172a;z-index:99999;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  font-family:Arial,sans-serif;transition:opacity .4s ease;">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <i class="fa-solid fa-drafting-compass" style="color:#60a5fa;font-size:28px;"></i>
+    <span style="color:#f1f5f9;font-size:18px;font-weight:700;">CAD Extractor 3D</span>
+  </div>
+  <div style="width:200px;height:3px;background:#1e293b;border-radius:3px;overflow:hidden;">
+    <div id="app-loading-bar" style="height:100%;background:#2563eb;border-radius:3px;
+      width:0;transition:width .3s ease;"></div>
+  </div>
+  <div id="app-loading-text" style="color:#475569;font-size:11px;font-family:monospace;">
+    Инициализация...</div>
+</div>
+
+<script>
+(function(){
+  var overlay = document.getElementById('app-loading');
+  var bar     = document.getElementById('app-loading-bar');
+  var txt     = document.getElementById('app-loading-text');
+  var steps   = [
+    [10,  'Загрузка библиотек...'],
+    [40,  'Инициализация холста...'],
+    [70,  'Настройка интерфейса...'],
+    [90,  'Почти готово...'],
+    [100, 'Готово']
+  ];
+  var si = 0;
+  function next(){
+    if(si >= steps.length) return;
+    bar.style.width = steps[si][0] + '%';
+    txt.textContent = steps[si][1];
+    si++;
+    setTimeout(next, si < steps.length ? 300 : 100);
+  }
+  next();
+  // Hide after window.onload + small delay for canvas init
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      overlay.style.opacity = '0';
+      setTimeout(function(){ overlay.style.display = 'none'; }, 400);
+    }, 600);
+  });
+  // Fallback: force hide after 8s
+  setTimeout(function(){
+    overlay.style.opacity = '0';
+    setTimeout(function(){ overlay.style.display = 'none'; }, 400);
+  }, 8000);
+})();
+</script>
+
 <header class="bg-slate-900 text-white flex items-center justify-between shadow-md z-30 relative shrink-0" style="height:44px;padding:0 14px;">
 
   <!-- Logo only -->
@@ -235,6 +287,49 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
 .tbg-sep { height:1px;background:#2d3e6a;margin:3px 0; }
 .tbg-label { font-size:9px;color:#334155;font-weight:700;text-transform:uppercase;
   letter-spacing:.5px;padding:4px 14px 2px; }
+
+/* ── Mode-aware dimming ───────────────────────────────────────────────────── */
+/* DXF items disabled in manual mode */
+body.mode-manual .tbg-item[data-mode="dxf"] {
+  opacity: 0.35;
+  pointer-events: none;
+  cursor: default;
+}
+body.mode-manual .tbg-item[data-mode="dxf"]::after {
+  content: ' ✕';
+  font-size: 8px;
+  color: #475569;
+  margin-left: 4px;
+}
+/* Manual items disabled in DXF mode */
+body.mode-dxf .tbg-item[data-mode="manual"] {
+  opacity: 0.35;
+  pointer-events: none;
+  cursor: default;
+}
+body.mode-dxf .tbg-item[data-mode="manual"]::after {
+  content: ' ✕';
+  font-size: 8px;
+  color: #475569;
+  margin-left: 4px;
+}
+/* Tooltip on hover of disabled items */
+body.mode-manual .tbg-item[data-mode="dxf"]:hover::before,
+body.mode-dxf .tbg-item[data-mode="manual"]:hover::before {
+  content: 'Недоступно в текущем режиме';
+  position: fixed;
+  background: #0f172a;
+  color: #f87171;
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 99999;
+  pointer-events: none;
+  border: 1px solid #334155;
+  margin-top: -30px;
+  margin-left: 8px;
+}
 .tbg-drop-right { left:auto;right:0; }
 </style>
 <!-- ⓪ Файл (context-sensitive) -->
@@ -254,15 +349,15 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     </button>
     <div class="tbg-sep"></div>
     <div class="tbg-label">Чертёж DXF</div>
-    <button class="tbg-item" onclick="document.getElementById('file-input').click();_tbClose()"><i class="fa-solid fa-folder-open" style="color:#60a5fa;"></i>Открыть DXF / DWG</button>
-    <button class="tbg-item" onclick="openGeoreferenceModal&&openGeoreferenceModal();_tbClose()"><i class="fa-solid fa-location-crosshairs" style="color:#34d399;"></i>Геопривязка</button>
-    <button class="tbg-item" onclick="sendPointsToManual&&sendPointsToManual();_tbClose()"><i class="fa-solid fa-share-from-square" style="color:#a5b4fc;"></i>Точки → Ручной режим</button>
+    <button class="tbg-item" data-mode="dxf" onclick="document.getElementById('file-input').click();_tbClose()"><i class="fa-solid fa-folder-open" style="color:#60a5fa;"></i>Открыть DXF / DWG</button>
+    <button class="tbg-item" data-mode="dxf" onclick="openGeoreferenceModal&&openGeoreferenceModal();_tbClose()"><i class="fa-solid fa-location-crosshairs" style="color:#34d399;"></i>Геопривязка</button>
+    <button class="tbg-item" data-mode="dxf" onclick="sendPointsToManual&&sendPointsToManual();_tbClose()"><i class="fa-solid fa-share-from-square" style="color:#a5b4fc;"></i>Точки → Ручной режим</button>
     <div class="tbg-sep"></div>
     <div class="tbg-label">Ручной ввод</div>
-    <button class="tbg-item" onclick="document.getElementById('manual-dxf-input').click();_tbClose()"><i class="fa-solid fa-file-import" style="color:#60a5fa;"></i>Загрузить из DXF</button>
-    <button class="tbg-item" onclick="document.getElementById('manual-txt-input').click();_tbClose()"><i class="fa-solid fa-upload" style="color:#fcd34d;"></i>Импорт TXT / CSV / SDR</button>
-    <button class="tbg-item" onclick="exportManualToTXT&&exportManualToTXT();_tbClose()"><i class="fa-solid fa-download" style="color:#6ee7b7;"></i>Экспорт CSV</button>
-    <button class="tbg-item" onclick="exportManualToDXF&&exportManualToDXF();_tbClose()"><i class="fa-solid fa-file-export" style="color:#a5b4fc;"></i>Экспорт DXF</button>
+    <button class="tbg-item" data-mode="manual" onclick="document.getElementById('manual-dxf-input').click();_tbClose()"><i class="fa-solid fa-file-import" style="color:#60a5fa;"></i>Загрузить из DXF</button>
+    <button class="tbg-item" data-mode="manual" onclick="document.getElementById('manual-txt-input').click();_tbClose()"><i class="fa-solid fa-upload" style="color:#fcd34d;"></i>Импорт TXT / CSV / SDR</button>
+    <button class="tbg-item" data-mode="manual" onclick="exportManualToTXT&&exportManualToTXT();_tbClose()"><i class="fa-solid fa-download" style="color:#6ee7b7;"></i>Экспорт CSV</button>
+    <button class="tbg-item" data-mode="manual" onclick="exportManualToDXF&&exportManualToDXF();_tbClose()"><i class="fa-solid fa-file-export" style="color:#a5b4fc;"></i>Экспорт DXF</button>
     <div class="tbg-sep"></div>
     <div class="tbg-label">Проект</div>
     <button class="tbg-item" onclick="togglePointsModal&&togglePointsModal();_tbClose()"><i class="fa-solid fa-list-ul"></i>Таблица точек</button>
@@ -271,7 +366,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     <button class="tbg-item" onclick="open3DViewer&&open3DViewer();_tbClose()"><i class="fa-solid fa-cube" style="color:#d8b4fe;"></i>3D Визуализация</button>
     <button class="tbg-item" onclick="toggleEarthworksModal&&toggleEarthworksModal();_tbClose()"><i class="fa-solid fa-tractor" style="color:#fb923c;"></i>Объёмы (старый модуль)</button>
     <div class="tbg-sep"></div>
-    <button class="tbg-item" style="color:#f87171;" onclick="if(confirm('Очистить все точки?'))clearManualPoints&&clearManualPoints();_tbClose()"><i class="fa-solid fa-trash-can" style="color:#f87171;"></i>Очистить точки</button>
+    <button class="tbg-item" data-mode="manual" style="color:#f87171;" onclick="if(confirm('Очистить все точки?'))clearManualPoints&&clearManualPoints();_tbClose()"><i class="fa-solid fa-trash-can" style="color:#f87171;"></i>Очистить точки</button>
   </div>
 </div>
 <div style="width:1px;height:20px;background:#334155;margin:0 2px;flex-shrink:0;"></div>
@@ -292,7 +387,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     <div class="tbg-sep"></div>
     <div class="tbg-label">Пересчёт</div>
     <button class="tbg-item" onclick="openRebasePanel();_tbClose()"><i class="fa-solid fa-arrows-rotate" style="color:#fcd34d;"></i>Пересчёт координат</button>
-    <button class="tbg-item" onclick="openDxfSearch();_tbClose()"><i class="fa-solid fa-magnifying-glass-location" style="color:#f59e0b;"></i>Поиск по координатам XY</button>
+    <button class="tbg-item" data-mode="dxf" onclick="openDxfSearch();_tbClose()"><i class="fa-solid fa-magnifying-glass-location" style="color:#f59e0b;"></i>Поиск по координатам XY</button>
     <button class="tbg-item" onclick="openCadastreSearch();_tbClose()"><i class="fa-solid fa-map-location-dot" style="color:#34d399;"></i>Кадастровый поиск (ПКК)</button>
   </div>
 </div>
@@ -325,7 +420,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
   <div class="tbg-drop">
     <div class="tbg-label">Контуры и заливки</div>
     <button class="tbg-item" onclick="startContour();_tbClose()"><i class="fa-solid fa-draw-polygon" style="color:#6ee7b7;"></i>Контур / Площадь / Объём</button>
-    <button class="tbg-item" onclick="openDxfFillPanel();_tbClose()"><i class="fa-solid fa-fill-drip" style="color:#a78bfa;"></i>Заливка контуров DXF</button>
+    <button class="tbg-item" data-mode="dxf" onclick="openDxfFillPanel();_tbClose()"><i class="fa-solid fa-fill-drip" style="color:#a78bfa;"></i>Заливка контуров DXF</button>
     <div class="tbg-sep"></div>
     <div class="tbg-label">Объекты</div>
     <button class="tbg-item" onclick="openSymDrawPanel();_tbClose()"><i class="fa-solid fa-signs-post" style="color:#fcd34d;"></i>Условные знаки</button>
@@ -340,10 +435,10 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     DXF <span class="arrow">▼</span>
   </button>
   <div class="tbg-drop">
-    <button class="tbg-item" onclick="toggleDxfZPanel();_tbClose()"><i class="fa-solid fa-layer-group" style="color:#60a5fa;"></i>Z-высоты точек</button>
-    <button class="tbg-item" onclick="toggleDxfLayersPanel();_tbClose()"><i class="fa-solid fa-layer-group" style="color:#34d399;"></i>Слои</button>
+    <button class="tbg-item" data-mode="dxf" onclick="toggleDxfZPanel();_tbClose()"><i class="fa-solid fa-layer-group" style="color:#60a5fa;"></i>Z-высоты точек</button>
+    <button class="tbg-item" data-mode="dxf" onclick="toggleDxfLayersPanel();_tbClose()"><i class="fa-solid fa-layer-group" style="color:#34d399;"></i>Слои</button>
     <div class="tbg-sep"></div>
-    <button class="tbg-item" onclick="startPdfFrame();_tbClose()"><i class="fa-solid fa-crop-simple"></i>PDF рамка (кадрирование)</button>
+    <button class="tbg-item" data-mode="dxf" onclick="startPdfFrame();_tbClose()"><i class="fa-solid fa-crop-simple"></i>PDF рамка (кадрирование)</button>
     <button class="tbg-item" onclick="clearPdfFrame&&clearPdfFrame();_tbClose()"><i class="fa-solid fa-xmark" style="color:#f87171;"></i>Снять рамку</button>
   </div>
 </div>
@@ -356,11 +451,11 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
   </button>
   <div class="tbg-drop">
     <div class="tbg-label">Исполнительная</div>
-    <button class="tbg-item" onclick="openAsBuiltPanel();_tbClose()"><i class="fa-solid fa-arrows-up-down" style="color:#a5b4fc;"></i>Проект vs Факт</button>
+    <button class="tbg-item" data-mode="dxf" onclick="openAsBuiltPanel();_tbClose()"><i class="fa-solid fa-arrows-up-down" style="color:#a5b4fc;"></i>Проект vs Факт</button>
     <div class="tbg-sep"></div>
     <div class="tbg-label">Земляные работы</div>
-    <button class="tbg-item" onclick="openEarthworksPanel();_tbClose()"><i class="fa-solid fa-mountain-sun" style="color:#6ee7b7;"></i>Картограмма / объёмы</button>
-    <button class="tbg-item" onclick="openProfilesPanel();_tbClose()"><i class="fa-solid fa-chart-line" style="color:#d8b4fe;"></i>Продольный профиль</button>
+    <button class="tbg-item" data-mode="dxf" onclick="openEarthworksPanel();_tbClose()"><i class="fa-solid fa-mountain-sun" style="color:#6ee7b7;"></i>Картограмма / объёмы</button>
+    <button class="tbg-item" data-mode="dxf" onclick="openProfilesPanel();_tbClose()"><i class="fa-solid fa-chart-line" style="color:#d8b4fe;"></i>Продольный профиль</button>
     <div class="tbg-sep"></div>
     <div class="tbg-label">Оборудование</div>
     <button class="tbg-item" onclick="openTacheometerPanel();_tbClose()"><i class="fa-solid fa-satellite-dish" style="color:#fcd34d;"></i>Тахеометр (импорт/экспорт)</button>
@@ -398,7 +493,7 @@ canvas{touch-action:none;outline:none;-webkit-tap-highlight-color:transparent}
     <button class="tbg-item" onclick="if(typeof openDiagPanel==='function')openDiagPanel();_tbClose()"><i class="fa-solid fa-stethoscope" style="color:#60a5fa;"></i>Диагностика <span style="color:#334155;font-size:9px;">F12</span></button>
     <button class="tbg-item" onclick="(function(){var p=document.getElementById('cad-console-panel');if(!p)return;var v=p.style.display==='none'||!p.style.display;p.style.display=v?'flex':'none';if(v){var inp=document.getElementById('cad-cmd-input');if(inp)inp.focus();}})();_tbClose()"><i class="fa-solid fa-terminal"></i>Командная строка <span style="color:#334155;font-size:9px;">:</span></button>
     <div class="tbg-sep"></div>
-    <button class="tbg-item" onclick="if(typeof openGeoreferenceModal==='function')openGeoreferenceModal();_tbClose()"><i class="fa-solid fa-map-pin" style="color:#fcd34d;"></i>Геопривязка</button>
+    <button class="tbg-item" data-mode="dxf" onclick="if(typeof openGeoreferenceModal==='function')openGeoreferenceModal();_tbClose()"><i class="fa-solid fa-map-pin" style="color:#fcd34d;"></i>Геопривязка</button>
     <button class="tbg-item" onclick="if(typeof init3DViewer==='function')init3DViewer();_tbClose()"><i class="fa-solid fa-cube" style="color:#a5b4fc;"></i>3D просмотр</button>
   </div>
 </div>
@@ -444,12 +539,17 @@ function _tbClose() {
 document.addEventListener('click', function(e) {
   if (!e.target.closest('.tbg')) _tbClose();
 });
+// Set initial mode class
+document.body.classList.add('mode-dxf');
 
 // Update mode indicator when switchMode is called
 (function(){
   var _origSwitch = window.switchMode;
   window.switchMode = function(mode) {
     if(_origSwitch) _origSwitch(mode);
+    // Set body class for CSS dimming
+    document.body.classList.remove('mode-dxf', 'mode-manual');
+    document.body.classList.add('mode-' + mode);
     var ind  = document.getElementById('mode-indicator');
     var txt  = document.getElementById('mode-indicator-text');
     var icon = ind ? ind.querySelector('i') : null;
