@@ -910,7 +910,7 @@ document.addEventListener('keydown', function(e) {
 
   </div><!-- /content -->
 </div>
-</div>
+
 <div id="earthworks-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl w-full max-w-[95%] md:max-w-lg mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh] overflow-y-auto" id="earthworks-content"><div class="p-3 md:p-4 border-b border-slate-200 flex justify-between items-center bg-orange-50 rounded-t-xl shrink-0"><h2 class="font-bold text-orange-800 flex items-center gap-2 text-sm md:text-base"><i class="fa-solid fa-cubes"></i> План земляных работ</h2><button onclick="toggleEarthworksModal()" class="text-slate-400 hover:text-slate-700 transition p-1"><i class="fa-solid fa-xmark text-lg md:text-xl"></i></button></div><div class="p-4 md:p-6 flex flex-col gap-3 md:gap-4 shrink-0"><div class="bg-slate-50 p-3 rounded-lg border border-slate-200"><label class="block text-[10px] md:text-xs font-semibold text-slate-700 mb-2">Область расчета:</label><div class="flex items-center gap-4 mb-2"><label class="text-xs flex items-center gap-1 cursor-pointer"><input type="radio" name="ew-bounds-type" value="auto" checked onchange="toggleEwBoundsInput()"> Все точки</label><label class="text-xs flex items-center gap-1 cursor-pointer"><input type="radio" name="ew-bounds-type" value="drawn" onchange="toggleEwBoundsInput()"> Полигон</label></div><div id="ew-custom-pts-div"><label class="block text-[9px] md:text-[10px] text-slate-500 mb-1">Или номера точек (через запятую):</label><input type="text" id="ew-boundary-points" class="w-full border border-slate-300 rounded px-2 py-1.5 text-xs focus:ring-orange-500" placeholder="Например: 1, 2, 4"></div></div><div class="flex flex-col md:flex-row gap-3 md:gap-4"><div class="flex-1"><label class="block text-[10px] md:text-xs font-semibold text-slate-600 mb-1">Отметка дна (Z)</label><div class="flex"><input type="number" id="ew-target-z" class="w-full border border-slate-300 rounded-l px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500" placeholder="Значение"><select id="ew-z-type" class="border-y border-r border-slate-300 rounded-r px-1.5 md:px-2 py-1.5 md:py-2 text-xs md:text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-500"><option value="abs">Абс.</option><option value="rel">Отн.</option></select></div></div><div class="flex-1"><label class="block text-[10px] md:text-xs font-semibold text-slate-600 mb-1">Отступ, м</label><input type="number" id="ew-offset" value="2" class="w-full border border-slate-300 rounded px-2 md:px-3 py-1.5 md:py-2 text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"></div></div><button onclick="calculateEarthworks()" class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 md:py-2.5 rounded-lg transition shadow-md flex items-center justify-center gap-2 mt-1 md:mt-2 text-sm"><i class="fa-solid fa-calculator"></i> Выполнить расчет</button><div id="ew-result-box" class="hidden mt-2 md:mt-4 p-3 md:p-4 bg-slate-50 border border-slate-200 rounded-lg"><h3 class="text-xs md:text-sm font-bold text-slate-800 mb-2 md:mb-3 border-b border-slate-200 pb-1.5 md:pb-2">Результаты расчета</h3><div class="grid grid-cols-2 gap-2 md:gap-3 text-[10px] md:text-sm"><div class="text-slate-500">Площадь с отступом:</div><div class="font-mono font-bold text-slate-800 text-right"><span id="ew-res-area">0</span> м²</div><div class="text-slate-500">Ср. отметка земли:</div><div class="font-mono font-bold text-sky-700 text-right"><span id="ew-res-avgz">0</span> м</div><div class="text-slate-500">Ср. глубина работ:</div><div class="font-mono font-bold text-amber-600 text-right"><span id="ew-res-depth">0</span> м</div><div class="text-slate-500 font-bold mt-1 pt-1 md:mt-2 md:pt-2 border-t border-slate-200">Итоговый объем:</div><div class="font-mono font-bold text-emerald-600 text-base md:text-lg text-right mt-1 pt-1 md:mt-2 md:pt-2 border-t border-slate-200"><span id="ew-res-volume">0</span> м³</div></div></div></div></div></div>
 <div id="points-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl w-full max-w-[95%] md:max-w-2xl mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[85vh]" id="points-modal-content"><div class="p-3 md:p-4 border-b border-slate-200 flex justify-between items-center bg-slate-100 rounded-t-xl shrink-0"><h2 class="font-semibold text-slate-700 text-sm md:text-base">Ординаты точек</h2><div class="flex gap-1 md:gap-2"><button onclick="clearPoints()" class="text-slate-400 hover:text-red-600 transition p-1" title="Очистить все"><i class="fa-solid fa-trash-can"></i></button><button onclick="togglePointsModal()" class="text-slate-400 hover:text-slate-700 transition p-1" title="Закрыть"><i class="fa-solid fa-xmark text-lg md:text-xl"></i></button></div></div><div class="flex-1 overflow-y-auto p-2 md:p-4" id="table-container"><table class="w-full text-[10px] md:text-sm text-left"><thead class="text-[9px] md:text-xs text-slate-500 uppercase bg-slate-200 sticky top-0 z-10"><tr><th class="px-2 md:px-3 py-1.5 md:py-2 rounded-tl-md">№</th><th class="px-2 md:px-3 py-1.5 md:py-2">X</th><th class="px-2 md:px-3 py-1.5 md:py-2">Y</th><th class="px-2 md:px-3 py-1.5 md:py-2">Z</th><th class="px-1 md:px-3 py-1.5 md:py-2">Тип</th><th class="px-1 md:px-2 py-1.5 md:py-2 rounded-tr-md w-6 md:w-8"></th></tr></thead><tbody id="points-tbody" class="divide-y divide-slate-200"><tr id="empty-state"><td colspan="6" class="px-3 py-8 text-center text-slate-400 italic">Нет точек.</td></tr></tbody></table></div></div></div>
 <div id="dims-modal" class="fixed inset-0 bg-slate-900/50 items-center justify-center z-50 hidden opacity-0 transition-opacity duration-300 flex"><div class="bg-white rounded-xl shadow-2xl w-full max-w-[95%] md:max-w-md mx-4 transform scale-95 transition-transform duration-300 flex flex-col max-h-[85vh]" id="dims-modal-content"><div class="p-3 md:p-4 border-b border-slate-200 flex justify-between items-center bg-slate-100 rounded-t-xl shrink-0"><h2 class="font-bold text-slate-700 text-sm md:text-base">Размерные линии</h2><div class="flex gap-1 md:gap-2"><button onclick="clearDims()" class="text-slate-400 hover:text-red-600 transition p-1" title="Очистить все"><i class="fa-solid fa-trash-can"></i></button><button onclick="toggleDimsModal()" class="text-slate-400 hover:text-slate-700 transition p-1" title="Закрыть"><i class="fa-solid fa-xmark text-lg md:text-xl"></i></button></div></div><div class="flex-1 overflow-y-auto p-2 md:p-4" id="dims-container"><table class="w-full text-[10px] md:text-sm text-left"><thead class="text-[9px] md:text-xs text-slate-500 uppercase bg-slate-200 sticky top-0 z-10"><tr><th class="px-2 md:px-3 py-1.5 md:py-2 rounded-tl-md">Точки</th><th class="px-2 md:px-3 py-1.5 md:py-2">Длина</th><th class="px-1 md:px-2 py-1.5 md:py-2 rounded-tr-md w-6 md:w-8"></th></tr></thead><tbody id="dims-tbody" class="divide-y divide-slate-200"><tr id="dims-empty-state"><td colspan="3" class="px-3 py-8 text-center text-slate-400 italic">Нет линий.</td></tr></tbody></table></div></div></div>
@@ -1231,7 +1231,7 @@ document.addEventListener('keydown', function(e) {
   </div>
 </div>
 </div>
-</div>
+
 
 
 <!-- Symbols Table Panel -->
@@ -1524,7 +1524,7 @@ document.addEventListener('keydown', function(e) {
 </div>
 
 <!-- Snap popup -->
-<div id="snap-popup" style="position:fixed;bottom:36px;left:80px;background:#1e293b;
+<div id="snap-popup" style="position:fixed;bottom:38px;left:4px;background:#1e293b;
   border-radius:10px 10px 0 0;box-shadow:0 -4px 16px rgba(0,0,0,.4);
   border:1px solid #334155;border-bottom:none;z-index:600;
   padding:10px 12px 8px;display:none;color:#f1f5f9;font-size:12px;">
@@ -1624,6 +1624,18 @@ window.addEventListener('load', function() {
 
   console.log('[PATCH] Runtime fixes applied ✓');
 }, false);
+</script>
+
+
+<script>
+// Close snap-popup on outside click
+document.addEventListener('click', function(e) {
+  var sp = document.getElementById('snap-popup');
+  if (!sp || sp.style.display === 'none') return;
+  var trigger = e.target.closest('[onclick*="toggleSnapPanel"]');
+  var inside  = e.target.closest('#snap-popup');
+  if (!trigger && !inside) sp.style.display = 'none';
+}, true);
 </script>
 
 </body></html>
