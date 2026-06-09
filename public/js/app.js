@@ -16,11 +16,12 @@ if(typeof _TP==='undefined')        var _TP={};
 let georefPickMode=null,secondDxfElements=[],secondDxfVisible=true,secondDxfLinesVisible=true,secondDxfPointsVisible=true,georefTransform=null;
 
 // Grid settings (user-configurable)
-var gridColor      = 'rgba(80,120,200,0.35)'; // color with opacity
+var gridColor      = 'rgba(80,120,200,0.55)'; // visible on white canvas // color with opacity
 var gridSize       = 0;     // 0 = auto (adaptive), or fixed value in meters
 var gridShowLabels = true;  // show coordinate labels
 var gridShowOrigin = true;  // show red origin cross
-let northAngle=0,showGrid=false,northPickMode=false,northPickP1=null,northPickHover=null;
+// showGrid declared in grid module below
+let northAngle=0,northPickMode=false,northPickP1=null,northPickHover=null;
 let cadSymbols=[],symTool=null,symPoints=[],symProp={};
 let contourPts=[],contourActive=false,contourClosed=false,contourMousePos=null;
 let savedContours=[]; // stored filled areas [{pts,material,color,area,volume}]
@@ -456,65 +457,9 @@ function draw(){const cv=document.getElementById('cad-canvas'),cx=cv.getContext(
   for(let y=0;y<cv.height;y+=50*pr){cx.beginPath();cx.moveTo(0,y);cx.lineTo(cv.width,y);cx.stroke();}
   cx.fillStyle='#94a3b8';cx.font=`${16*pr}px sans-serif`;cx.textAlign='center';
   cx.fillText('Откройте файл для начала работы',cv.width/2,cv.height/2);cx.textAlign='left';
-  // Draw grid overlay even without DXF if enabled
-  if(showGrid){
-    var _sc=scale||1,_px=panX||cv.width/2,_py=panY||cv.height/2;
-    cx.save();cx.translate(_px,_py);cx.scale(_sc,-_sc);
-    var _r=cv.width/_sc*2;
-    var _gs=gridSize>0?gridSize:100;
-    cx.strokeStyle=gridColor;cx.lineWidth=0.6/_sc;
-    for(var _xi=Math.floor(-_r/_gs)*_gs;_xi<=_r;_xi+=_gs){cx.beginPath();cx.moveTo(_xi,-_r);cx.lineTo(_xi,_r);cx.stroke();}
-    for(var _yi=Math.floor(-_r/_gs)*_gs;_yi<=_r;_yi+=_gs){cx.beginPath();cx.moveTo(-_r,_yi);cx.lineTo(_r,_yi);cx.stroke();}
-    if(gridShowOrigin){cx.strokeStyle='rgba(255,80,80,0.5)';cx.lineWidth=1/_sc;cx.beginPath();cx.moveTo(-15/_sc,0);cx.lineTo(15/_sc,0);cx.moveTo(0,-15/_sc);cx.lineTo(0,15/_sc);cx.stroke();}
-    cx.restore();
-  }
+  _drawGrid(cx,cv,false);
   return;
-}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);if(showGrid){
-  cx.save();
-  // Use DXF bounds if loaded, else use canvas world bounds
-  var _hasData=cadMaxX>cadMinX;
-  var _gW = _hasData ? cadMaxX-cadMinX : cv.width/scale*2;
-  var _gH = _hasData ? cadMaxY-cadMinY : cv.height/scale*2;
-  var _gCx = _hasData ? (cadMinX+cadMaxX)/2 : cadOriginX;
-  var _gCy = _hasData ? (cadMinY+cadMaxY)/2 : cadOriginY;
-  var _rw = Math.max(_gW,_gH,10);
-  var _mag = Math.pow(10,Math.floor(Math.log10(_rw/6)));
-  var _gs = gridSize>0 ? gridSize : [1,2,5].reduce(function(a,v){return Math.abs(_rw/6-v*_mag)<Math.abs(_rw/6-a*_mag)?v:a;})*_mag;
-  var _x0=_gCx-_rw, _x1=_gCx+_rw, _y0=_gCy-_rw, _y1=_gCy+_rw;
-
-  // Grid lines
-  cx.strokeStyle=gridColor;
-  cx.lineWidth=0.6/scale;
-  for(var _xi=Math.floor(_x0/_gs)*_gs;_xi<=_x1;_xi+=_gs){
-    cx.beginPath();cx.moveTo(_xi,_y0);cx.lineTo(_xi,_y1);cx.stroke();
-  }
-  for(var _yi=Math.floor(_y0/_gs)*_gs;_yi<=_y1;_yi+=_gs){
-    cx.beginPath();cx.moveTo(_x0,_yi);cx.lineTo(_x1,_yi);cx.stroke();
-  }
-
-  // Labels
-  if(gridShowLabels){
-    var _lr=parseInt(gridColor.replace(/[^,]+,/g,'').replace(/[^\d.]+/g,''))||120;
-    cx.fillStyle=gridColor.replace(/[\d.]+\)$/,'0.6)');
-    cx.font=(9/scale)+'px Arial';
-    cx.textAlign='left'; cx.textBaseline='bottom';
-    for(var _xi2=Math.floor(_x0/_gs)*_gs;_xi2<=_x1;_xi2+=_gs){
-      cx.fillText(_xi2.toFixed(0),_xi2+1/scale,_gCy);
-    }
-    cx.textAlign='left'; cx.textBaseline='top';
-    for(var _yi2=Math.floor(_y0/_gs)*_gs;_yi2<=_y1;_yi2+=_gs){
-      cx.fillText(_yi2.toFixed(0),_gCx,_yi2+1/scale);
-    }
-  }
-
-  // Origin cross
-  if(gridShowOrigin){
-    cx.strokeStyle='rgba(255,80,80,0.5)'; cx.lineWidth=1/scale;
-    cx.beginPath();cx.moveTo(-20/scale,0);cx.lineTo(20/scale,0);
-    cx.moveTo(0,-20/scale);cx.lineTo(0,20/scale);cx.stroke();
-  }
-  cx.restore();
-}if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}
+}cx.save();if(northAngle!==0){cx.translate(cv.width/2,cv.height/2);cx.rotate(-northAngle*Math.PI/180);cx.translate(-cv.width/2,-cv.height/2);}cx.translate(panX,panY);cx.scale(scale,-scale);_drawGrid(cx,cv,true);if(northPickHover){cx.save();cx.strokeStyle="#f59e0b";cx.lineWidth=1.5/scale;cx.beginPath();cx.arc(northPickHover.x-cadOriginX,northPickHover.y-cadOriginY,5/scale,0,Math.PI*2);cx.stroke();cx.restore();}cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;cx.lineCap='round';cx.lineJoin='round';cx.stroke(cachedPath);if(secondDxfElements&&secondDxfElements.length>0&&secondDxfVisible){if(secondDxfLinesVisible){const sp2=new Path2D();secondDxfElements.forEach(e=>{if(e.type==='POLYLINE'){let f=true;e.pts.forEach(p=>{if(f){sp2.moveTo(p.x-cadOriginX,p.y-cadOriginY);f=false;}else sp2.lineTo(p.x-cadOriginX,p.y-cadOriginY);});if(e.closed)sp2.closePath();}else if(e.type==='CIRCLE'){sp2.moveTo((e.c.x-cadOriginX)+e.r,e.c.y-cadOriginY);sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,0,Math.PI*2);}else if(e.type==='ARC'){sp2.moveTo((e.c.x-cadOriginX)+e.r*Math.cos(e.sa),(e.c.y-cadOriginY)+e.r*Math.sin(e.sa));sp2.arc(e.c.x-cadOriginX,e.c.y-cadOriginY,e.r,e.sa,e.ea,false);}});cx.strokeStyle='#f97316';cx.lineWidth=(1.8/scale)*pr;cx.lineCap='round';cx.stroke(sp2);}if(secondDxfPointsVisible){const _nr=2.5/scale*pr;secondDxfElements.forEach(e=>{if(e.type==='POINT'){const _px=e.p.x-cadOriginX,_py=e.p.y-cadOriginY,_cr=4/scale*pr;cx.strokeStyle='#ea580c';cx.lineWidth=1.5/scale*pr;cx.beginPath();cx.moveTo(_px-_cr,_py);cx.lineTo(_px+_cr,_py);cx.moveTo(_px,_py-_cr);cx.lineTo(_px,_py+_cr);cx.stroke();cx.beginPath();cx.arc(_px,_py,_nr*1.4,0,Math.PI*2);cx.fillStyle='#ea580c';cx.fill();cx.strokeStyle='#fff';cx.lineWidth=0.5/scale*pr;cx.stroke();}else if(e.type==='TEXT'&&e.text){const _th=Math.max(e.h||0.3,4/scale*pr);cx.save();cx.translate(e.p.x-cadOriginX,e.p.y-cadOriginY);cx.scale(1/scale,-1/scale);cx.font='bold '+(Math.max(_th*scale,8))+'px sans-serif';cx.fillStyle='#c2410c';cx.textBaseline='bottom';cx.fillText(e.text,3,0);cx.restore();}});cx.strokeStyle=lineColor;cx.lineWidth=(1.2/scale)*pr;}}
   // Draw symbols in world space
   _drawSymbols(cx,scale,cadOriginX,cadOriginY,pr);
   // Live symbol preview
@@ -2708,9 +2653,19 @@ function saveContourToReport(){
 }
 
 function toggleSnapPanel(){
-  var p=document.getElementById('snap-panel');
+  var p=document.getElementById('snap-popup');
   if(!p)return;
-  p.style.display=(p.style.display==='none'||p.style.display==='')?'block':'none';
+  var isHidden=(p.style.display==='none'||!p.style.display);
+  p.style.display=isHidden?'block':'none';
+  // Sync checkboxes to current snapModes when opening
+  if(isHidden){
+    var nd=document.getElementById('snap-nodes');
+    var ln=document.getElementById('snap-lines');
+    var mp=document.getElementById('snap-midpoints');
+    if(nd) nd.checked=snapModes.nodes!==false;
+    if(ln) ln.checked=snapModes.lines!==false;
+    if(mp) mp.checked=!!snapModes.midpoints;
+  }
 }
 function updateSnapModes(){
   snapModes.nodes   =document.getElementById('snap-nodes')   ?document.getElementById('snap-nodes').checked   :true;
@@ -2721,9 +2676,11 @@ function updateSnapModes(){
   if(snapModes.nodes)active.push('Узлы');
   if(snapModes.lines)active.push('Линии');
   if(snapModes.midpoints)active.push('Середина');
-  var lbl=document.getElementById('snap-mode-label');
-  if(lbl)lbl.textContent=active.length?active.join('+'):'Выкл';
-  var h2=document.getElementById('hud-snap-mode');if(h2)h2.textContent=active.length?active.join('+'):'Выкл';
+  var modes=active.length?active.join('+'):'Выкл';
+  var h2=document.getElementById('hud-snap-mode');if(h2)h2.textContent=modes;
+  // Snap icon: green if any active, grey if none
+  var si=document.getElementById('hud-snap');
+  if(si)si.style.color=active.length?'#f59e0b':'#334155';
 }
 
 function editPtField(id,field,val){
@@ -4187,29 +4144,8 @@ function _updateHudScale(){
   el.textContent=m>0?'1:'+m.toFixed(3):'—';
 }
 
-function toggleGrid(){
-  // Toggle state
-  showGrid = !showGrid;
-  if(typeof cadTools!=='undefined') cadTools.gridVisible = showGrid;
+// toggleGrid defined below
 
-  // Update button
-  var btn=document.getElementById('tb2-grid');
-  if(btn){
-    btn.style.background    = showGrid?'rgba(37,99,235,.3)':'transparent';
-    btn.style.borderColor   = showGrid?'#2563eb':'transparent';
-    btn.style.color         = showGrid?'#93c5fd':'#94a3b8';
-    btn.style.fontWeight    = showGrid?'bold':'normal';
-  }
-  // Update status bar indicator
-  var sb=document.getElementById('sb-grid');
-  if(sb) sb.style.display = showGrid?'inline':'none';
-
-  // Force immediate synchronous redraw so grid appears/disappears instantly
-  isDrawingScheduled = false;
-  draw();
-
-  showMessage('Grid', showGrid?'Сетка включена ✓':'Сетка выключена', 'info');
-}
 function toggleOrthoMode(){
   if(typeof cadTools!=='undefined'){cadTools.orthoMode=!cadTools.orthoMode;cadTools.polarEnabled=false;}
   var on=typeof cadTools!=='undefined'?cadTools.orthoMode:false;
@@ -4591,155 +4527,16 @@ function _drawDxfFills(cx,sc){
 
 
 // ── Grid settings panel ────────────────────────────────────────────────────────
-function openGridSettings(){
-  var p=document.getElementById('grid-settings-panel');
-  if(p){p.style.display=p.style.display==='none'?'flex':'none';return;}
 
-  var panel=document.createElement('div');
-  panel.id='grid-settings-panel';
-  panel.style.cssText=
-    'position:fixed;top:90px;left:50%;transform:translateX(-50%);width:280px;'+
-    'background:#1a2744;color:#f1f5f9;border-radius:12px;border:1px solid #2d3e6a;'+
-    'box-shadow:0 16px 48px rgba(0,0,0,.5);z-index:9998;display:flex;'+
-    'flex-direction:column;font-family:Arial,sans-serif;font-size:12px;';
 
-  // Parse current opacity from gridColor
-  var opM = gridColor.match(/[\d.]+\)$/);
-  var curOp = opM ? Math.round(parseFloat(opM[0])*100) : 35;
-  // Parse current RGB
-  var rgbM = gridColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-  var curHex = '#5078c8'; // default
-  if(rgbM) curHex='#'+
-    parseInt(rgbM[1]).toString(16).padStart(2,'0')+
-    parseInt(rgbM[2]).toString(16).padStart(2,'0')+
-    parseInt(rgbM[3]).toString(16).padStart(2,'0');
+// _gsColorPreset defined below
 
-  panel.innerHTML=
-    '<div style="background:#0f1d38;padding:10px 14px;border-bottom:1px solid #2d3e6a;'+
-    'display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'+
-      '<div style="display:flex;align-items:center;gap:8px;">'+
-        '<span style="font-size:16px;">⚙</span>'+
-        '<span style="font-weight:700;font-size:13px;">Настройки сетки</span>'+
-      '</div>'+
-      '<button onclick="document.getElementById(\'grid-settings-panel\').style.display=\'none\'" '+
-      'style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;">✕</button>'+
-    '</div>'+
-    '<div style="padding:14px;display:flex;flex-direction:column;gap:12px;">'+
 
-      // Size
-      '<div>'+
-        '<div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;'+
-        'letter-spacing:.5px;margin-bottom:6px;">Шаг сетки</div>'+
-        '<div style="display:flex;align-items:center;gap:8px;">'+
-          '<input type="number" id="gs-size" min="0" step="1" value="'+(gridSize||0)+'" '+
-          'style="flex:1;background:#2d3e6a;border:1px solid #3d5080;border-radius:6px;'+
-          'color:#60a5fa;padding:5px 8px;font-size:13px;font-family:monospace;outline:none;" '+
-          'oninput="_applyGridSettings()" placeholder="0 = авто">'+
-          '<span style="color:#475569;font-size:10px;">м (0=авто)</span>'+
-        '</div>'+
-        '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">'+
-          '[1,5,10,50,100,500,1000].forEach не работает в HTML — кнопки ниже'+
-        '</div>'+
-        '<div id="gs-presets" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;"></div>'+
-      '</div>'+
+// _refreshGridPanel defined below
 
-      // Color
-      '<div>'+
-        '<div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;'+
-        'letter-spacing:.5px;margin-bottom:6px;">Цвет линий</div>'+
-        '<div style="display:flex;align-items:center;gap:8px;">'+
-          '<input type="color" id="gs-color" value="'+curHex+'" '+
-          'style="width:44px;height:32px;border:none;border-radius:6px;cursor:pointer;padding:0;" '+
-          'oninput="_applyGridSettings()">'+
-          '<div style="flex:1;">'+
-            '<div style="font-size:9px;color:#475569;margin-bottom:3px;">'+
-              'Прозрачность: <span id="gs-op-val">'+curOp+'%</span></div>'+
-            '<input type="range" id="gs-opacity" min="5" max="100" value="'+curOp+'" '+
-            'style="width:100%;accent-color:#3b82f6;" '+
-            'oninput="document.getElementById(\'gs-op-val\').textContent=this.value+\'%\';_applyGridSettings()">'+
-          '</div>'+
-        '</div>'+
-        // Color presets
-        '<div style="display:flex;gap:4px;margin-top:6px;">'+
-          '<button onclick="_gsColorPreset(\'#5078c8\')" title="Синяя" style="width:22px;height:22px;background:#5078c8;border:none;border-radius:3px;cursor:pointer;"></button>'+
-          '<button onclick="_gsColorPreset(\'#10b981\')" title="Зелёная" style="width:22px;height:22px;background:#10b981;border:none;border-radius:3px;cursor:pointer;"></button>'+
-          '<button onclick="_gsColorPreset(\'#f59e0b\')" title="Жёлтая" style="width:22px;height:22px;background:#f59e0b;border:none;border-radius:3px;cursor:pointer;"></button>'+
-          '<button onclick="_gsColorPreset(\'#ef4444\')" title="Красная" style="width:22px;height:22px;background:#ef4444;border:none;border-radius:3px;cursor:pointer;"></button>'+
-          '<button onclick="_gsColorPreset(\'#94a3b8\')" title="Серая" style="width:22px;height:22px;background:#94a3b8;border:none;border-radius:3px;cursor:pointer;"></button>'+
-          '<button onclick="_gsColorPreset(\'#ffffff\')" title="Белая" style="width:22px;height:22px;background:#fff;border:2px solid #334155;border-radius:3px;cursor:pointer;"></button>'+
-        '</div>'+
-      '</div>'+
 
-      // Checkboxes
-      '<div style="display:flex;flex-direction:column;gap:6px;">'+
-        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;">'+
-          '<input type="checkbox" id="gs-labels" '+(gridShowLabels?'checked':'')+
-          ' onchange="gridShowLabels=this.checked;isDrawingScheduled=false;draw();" '+
-          'style="accent-color:#3b82f6;width:14px;height:14px;">'+
-          '<span>Подписи координат</span>'+
-        '</label>'+
-        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;">'+
-          '<input type="checkbox" id="gs-origin" '+(gridShowOrigin?'checked':'')+
-          ' onchange="gridShowOrigin=this.checked;isDrawingScheduled=false;draw();" '+
-          'style="accent-color:#ef4444;width:14px;height:14px;">'+
-          '<span>Крест в начале координат (0,0)</span>'+
-        '</label>'+
-      '</div>'+
+// _applyGridSettings defined below
 
-      // Reset
-      '<button onclick="gridColor=\'rgba(80,120,200,0.35)\';gridSize=0;gridShowLabels=true;gridShowOrigin=true;_refreshGridPanel();_applyGridSettings();" '+
-      'style="background:rgba(255,255,255,.05);border:1px solid #334155;color:#64748b;'+
-      'border-radius:6px;padding:6px;cursor:pointer;font-size:11px;">↺ По умолчанию</button>'+
-
-    '</div>';
-
-  document.body.appendChild(panel);
-
-  // Fill preset buttons
-  var ps=document.getElementById('gs-presets');
-  if(ps)[0,1,5,10,50,100,500,1000].forEach(function(v){
-    var b=document.createElement('button');
-    b.textContent=v===0?'авто':v+'м';
-    b.style.cssText='background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;'+
-      'border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px;';
-    b.onclick=function(){
-      document.getElementById('gs-size').value=v;
-      _applyGridSettings();
-    };
-    ps.appendChild(b);
-  });
-}
-
-function _gsColorPreset(hex){
-  var ci=document.getElementById('gs-color');if(ci)ci.value=hex;
-  _applyGridSettings();
-}
-
-function _refreshGridPanel(){
-  var ci=document.getElementById('gs-color');
-  var oi=document.getElementById('gs-opacity');
-  var si=document.getElementById('gs-size');
-  var rgbM=gridColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-  if(rgbM&&ci)ci.value='#'+
-    parseInt(rgbM[1]).toString(16).padStart(2,'0')+
-    parseInt(rgbM[2]).toString(16).padStart(2,'0')+
-    parseInt(rgbM[3]).toString(16).padStart(2,'0');
-  var opM=gridColor.match(/[\d.]+\)$/);
-  if(opM&&oi)oi.value=Math.round(parseFloat(opM[0])*100);
-  if(si)si.value=gridSize||0;
-}
-
-function _applyGridSettings(){
-  var ci=document.getElementById('gs-color');
-  var oi=document.getElementById('gs-opacity');
-  var si=document.getElementById('gs-size');
-  var hex=ci?ci.value:'#5078c8';
-  var op=oi?parseInt(oi.value)/100:0.35;
-  var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  gridColor='rgba('+r+','+g+','+b+','+op+')';
-  gridSize=si?Math.max(0,parseFloat(si.value)||0):0;
-  isDrawingScheduled=false;draw();
-}
 
 function runMenuDiagnostics(){
   var tests=[
@@ -4770,4 +4567,299 @@ function runMenuDiagnostics(){
     {label:'canvas ready',         fn:function(){var cv=document.getElementById('cad-canvas');return cv&&cv.width>0;}},
   ];
   return tests.map(function(t){var ok=false;try{ok=!!t.fn();}catch(e){}return{label:t.label,ok:ok};});
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GRID MODULE — clean single-source implementation
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Global grid state (var = window property, accessible from any script)
+var showGrid        = false;
+var gridColor       = '#5078c8';   // hex color
+var gridOpacity     = 0.55;        // 0..1
+var gridSize        = 0;           // 0=auto
+var gridShowLabels  = true;
+var gridShowOrigin  = true;
+
+// Compute rgba string from current settings
+function _gridRGBA(extraOp) {
+  var op = extraOp != null ? extraOp : gridOpacity;
+  var r = parseInt(gridColor.slice(1,3)||'50',16)||80;
+  var g = parseInt(gridColor.slice(3,5)||'78',16)||120;
+  var b = parseInt(gridColor.slice(5,7)||'c8',16)||200;
+  return 'rgba('+r+','+g+','+b+','+op.toFixed(2)+')';
+}
+
+// Core drawing — called from draw() each frame
+function _drawGrid(cx, cv, inDXFSpace) {
+  if (!showGrid) return;
+  cx.save();
+
+  var W = cv.width, H = cv.height;
+
+  if (!inDXFSpace) {
+    // No DXF: screen-space grid, origin at canvas center
+    var sc   = (typeof scale !== 'undefined' && scale > 0) ? scale : 1;
+    var offX = (typeof panX !== 'undefined') ? panX : W/2;
+    var offY = (typeof panY !== 'undefined') ? panY : H/2;
+    cx.setTransform(1,0,0,1,0,0);  // screen coords
+    var step_w = gridSize > 0 ? gridSize * sc : Math.max(20, 100*sc);
+    // Draw lines every step_w pixels
+    var startX = ((offX % step_w) + step_w) % step_w;
+    var startY = ((offY % step_w) + step_w) % step_w;
+    cx.strokeStyle = _gridRGBA();
+    cx.lineWidth   = 1;
+    // Vertical
+    for (var x = startX - step_w; x <= W + step_w; x += step_w) {
+      cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x, H); cx.stroke();
+    }
+    // Horizontal
+    for (var y = startY - step_w; y <= H + step_w; y += step_w) {
+      cx.beginPath(); cx.moveTo(0, y); cx.lineTo(W, y); cx.stroke();
+    }
+    // Origin crosshair (screen position)
+    if (gridShowOrigin && offX >= 0 && offX <= W && offY >= 0 && offY <= H) {
+      cx.strokeStyle = 'rgba(220,50,50,0.6)';
+      cx.lineWidth = 1.5;
+      cx.beginPath();
+      cx.moveTo(offX-12,offY); cx.lineTo(offX+12,offY);
+      cx.moveTo(offX,offY-12); cx.lineTo(offX,offY+12);
+      cx.stroke();
+    }
+  } else {
+    // DXF loaded: world-space grid (transform already applied by draw())
+    var sc2  = (typeof scale !== 'undefined' && scale > 0) ? scale : 1;
+    var step;
+    if (gridSize > 0) {
+      step = gridSize;
+    } else {
+      // Adaptive: ~8 lines across visible width
+      var worldW = W / sc2;
+      var mag    = Math.pow(10, Math.floor(Math.log10(worldW / 8)));
+      step = [1,2,5].reduce(function(a,v){
+        return Math.abs(worldW/8 - v*mag) < Math.abs(worldW/8 - a*mag) ? v : a;
+      }) * mag;
+    }
+
+    // Visible world bounds
+    var panX2  = (typeof panX !== 'undefined') ? panX : 0;
+    var panY2  = (typeof panY !== 'undefined') ? panY : 0;
+    // In draw() world coords: screenX = worldX*sc + panX → worldX = (screenX-panX)/sc
+    var wxMin  = (-panX2) / sc2 - step;
+    var wxMax  = (W - panX2) / sc2 + step;
+    var wyMin  = (panY2 - H) / sc2 - step;
+    var wyMax  =  panY2 / sc2 + step;
+
+    cx.strokeStyle = _gridRGBA();
+    cx.lineWidth   = 0.5 / sc2;
+
+    // Vertical lines
+    var xi0 = Math.floor(wxMin/step)*step;
+    for (var xi = xi0; xi <= wxMax; xi += step) {
+      cx.beginPath(); cx.moveTo(xi, wyMin); cx.lineTo(xi, wyMax); cx.stroke();
+    }
+    // Horizontal lines
+    var yi0 = Math.floor(wyMin/step)*step;
+    for (var yi = yi0; yi <= wyMax; yi += step) {
+      cx.beginPath(); cx.moveTo(wxMin, yi); cx.lineTo(wxMax, yi); cx.stroke();
+    }
+
+    // Labels
+    if (gridShowLabels && sc2 > 0.01) {
+      cx.fillStyle   = _gridRGBA(0.7);
+      cx.font        = (9/sc2)+'px Arial';
+      cx.textAlign   = 'left';
+      cx.textBaseline= 'bottom';
+      var labelX = wxMin + step;
+      for (var xi2 = Math.floor(wxMin/step)*step; xi2 <= wxMax; xi2 += step) {
+        cx.fillText(xi2.toFixed(0), xi2 + 1/sc2, 0);
+      }
+      cx.textBaseline='top';
+      for (var yi2 = Math.floor(wyMin/step)*step; yi2 <= wyMax; yi2 += step) {
+        if (Math.abs(yi2) > step*0.1)
+          cx.fillText(yi2.toFixed(0), wxMin + 1/sc2, yi2 + 1/sc2);
+      }
+    }
+
+    // Origin cross
+    if (gridShowOrigin) {
+      cx.strokeStyle = 'rgba(220,50,50,0.5)';
+      cx.lineWidth   = 1.5 / sc2;
+      cx.beginPath();
+      cx.moveTo(-16/sc2,0); cx.lineTo(16/sc2,0);
+      cx.moveTo(0,-16/sc2); cx.lineTo(0,16/sc2);
+      cx.stroke();
+    }
+  }
+  cx.restore();
+}
+
+// Toggle grid on/off
+function toggleGrid() {
+  showGrid = !showGrid;
+  // Sync cadTools
+  if (typeof cadTools !== 'undefined') cadTools.gridVisible = showGrid;
+  // Update toolbar button style
+  var btn = document.getElementById('tb2-grid');
+  if (btn) {
+    btn.style.background  = showGrid ? 'rgba(37,99,235,.3)' : 'transparent';
+    btn.style.borderColor = showGrid ? '#2563eb'           : 'transparent';
+    btn.style.color       = showGrid ? '#93c5fd'           : '#94a3b8';
+  }
+  // Status bar badge
+  var sb = document.getElementById('sb-grid');
+  if (sb) sb.style.display = showGrid ? 'inline' : 'none';
+  // Redraw immediately
+  isDrawingScheduled = false;
+  draw();
+}
+
+// Apply settings from panel
+function _applyGridSettings() {
+  var ci  = document.getElementById('gs-color');
+  var oi  = document.getElementById('gs-opacity');
+  var si  = document.getElementById('gs-size');
+  var ov  = document.getElementById('gs-op-val');
+  if (ci)  gridColor   = ci.value;
+  if (oi)  gridOpacity = parseInt(oi.value) / 100;
+  if (si)  gridSize    = Math.max(0, parseFloat(si.value) || 0);
+  if (ov)  ov.textContent = Math.round(gridOpacity*100) + '%';
+  isDrawingScheduled = false;
+  draw();
+}
+
+// Open settings panel (fixed structure, no innerHTML complexity)
+function openGridSettings() {
+  var exist = document.getElementById('grid-settings-panel');
+  if (exist) {
+    exist.style.display = exist.style.display === 'none' ? 'flex' : 'none';
+    return;
+  }
+
+  var p = document.createElement('div');
+  p.id = 'grid-settings-panel';
+  p.style.cssText =
+    'position:fixed;top:90px;left:50%;transform:translateX(-50%);width:280px;' +
+    'background:#1a2744;border:1px solid #2d3e6a;border-radius:12px;' +
+    'box-shadow:0 16px 40px rgba(0,0,0,.6);z-index:9999;display:flex;' +
+    'flex-direction:column;font-family:Arial,sans-serif;font-size:12px;color:#f1f5f9;';
+
+  // Build DOM directly (no innerHTML, no string escaping)
+  // Header
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'background:#0f1d38;padding:10px 14px;border-bottom:1px solid #2d3e6a;' +
+    'display:flex;align-items:center;justify-content:space-between;border-radius:12px 12px 0 0;';
+  hdr.innerHTML = '<span style="font-weight:700;font-size:13px;">⚙ Настройки сетки</span>';
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'background:none;border:none;color:#64748b;cursor:pointer;font-size:18px;';
+  closeBtn.onclick = function(){ p.style.display='none'; };
+  hdr.appendChild(closeBtn);
+  p.appendChild(hdr);
+
+  // Body
+  var body = document.createElement('div');
+  body.style.cssText = 'padding:14px;display:flex;flex-direction:column;gap:12px;';
+
+  // Color + Opacity row
+  var colorRow = document.createElement('div');
+  colorRow.innerHTML = '<div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Цвет и прозрачность</div>';
+  var colorFlex = document.createElement('div');
+  colorFlex.style.cssText = 'display:flex;align-items:center;gap:10px;';
+
+  var colorInput = document.createElement('input');
+  colorInput.type = 'color'; colorInput.id = 'gs-color'; colorInput.value = gridColor;
+  colorInput.style.cssText = 'width:44px;height:32px;border:none;border-radius:6px;cursor:pointer;padding:0;';
+  colorInput.oninput = _applyGridSettings;
+
+  var opDiv = document.createElement('div');
+  opDiv.style.flex = '1';
+  var opLabel = document.createElement('div');
+  opLabel.style.cssText = 'font-size:9px;color:#475569;margin-bottom:3px;';
+  opLabel.innerHTML = 'Прозрачность: <span id="gs-op-val">' + Math.round(gridOpacity*100) + '%</span>';
+  var opInput = document.createElement('input');
+  opInput.type = 'range'; opInput.id = 'gs-opacity';
+  opInput.min = '5'; opInput.max = '100'; opInput.value = Math.round(gridOpacity*100);
+  opInput.style.cssText = 'width:100%;accent-color:#3b82f6;';
+  opInput.oninput = _applyGridSettings;
+  opDiv.appendChild(opLabel); opDiv.appendChild(opInput);
+  colorFlex.appendChild(colorInput); colorFlex.appendChild(opDiv);
+  colorRow.appendChild(colorFlex);
+
+  // Color presets
+  var presetDiv = document.createElement('div');
+  presetDiv.style.cssText = 'display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;';
+  var presetColors = ['#5078c8','#10b981','#f59e0b','#ef4444','#94a3b8','#ffffff'];
+  presetColors.forEach(function(col){
+    var btn = document.createElement('button');
+    btn.style.cssText = 'width:22px;height:22px;background:'+col+';border:1px solid #334155;border-radius:3px;cursor:pointer;';
+    btn.onclick = function(){ gridColor=col; var ci=document.getElementById('gs-color'); if(ci)ci.value=col; _applyGridSettings(); };
+    presetDiv.appendChild(btn);
+  });
+  colorRow.appendChild(presetDiv);
+  body.appendChild(colorRow);
+
+  // Grid step
+  var stepRow = document.createElement('div');
+  stepRow.innerHTML = '<div style="font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Шаг сетки</div>';
+  var stepFlex = document.createElement('div');
+  stepFlex.style.cssText = 'display:flex;align-items:center;gap:8px;';
+  var stepInput = document.createElement('input');
+  stepInput.type='number'; stepInput.id='gs-size'; stepInput.min='0'; stepInput.step='1';
+  stepInput.value = gridSize;
+  stepInput.placeholder='0 = авто';
+  stepInput.style.cssText = 'width:80px;background:#2d3e6a;border:1px solid #3d5080;border-radius:6px;color:#60a5fa;padding:5px 8px;font-size:13px;outline:none;';
+  stepInput.oninput = _applyGridSettings;
+  stepFlex.appendChild(stepInput);
+  stepFlex.innerHTML += '<span style="color:#475569;font-size:10px;">м (0=авто)</span>';
+  stepRow.appendChild(stepFlex);
+
+  // Preset steps
+  var stepPresets = document.createElement('div');
+  stepPresets.style.cssText = 'display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;';
+  [0,1,5,10,50,100,500,1000].forEach(function(v){
+    var btn = document.createElement('button');
+    btn.textContent = v===0?'авто':v+'м';
+    btn.style.cssText='background:#2d3e6a;border:1px solid #3d5080;color:#94a3b8;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:10px;';
+    btn.onclick=function(){ var si=document.getElementById('gs-size'); if(si)si.value=v; gridSize=v; isDrawingScheduled=false; draw(); };
+    stepPresets.appendChild(btn);
+  });
+  stepRow.appendChild(stepPresets);
+  body.appendChild(stepRow);
+
+  // Checkboxes
+  var chkDiv = document.createElement('div');
+  chkDiv.style.cssText='display:flex;flex-direction:column;gap:6px;';
+  function makeChk(label, getter, setter){
+    var lbl=document.createElement('label');
+    lbl.style.cssText='display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;';
+    var chk=document.createElement('input');
+    chk.type='checkbox'; chk.checked=getter();
+    chk.style.cssText='accent-color:#3b82f6;width:14px;height:14px;';
+    chk.onchange=function(){ setter(this.checked); isDrawingScheduled=false; draw(); };
+    lbl.appendChild(chk);
+    lbl.appendChild(document.createTextNode(label));
+    return lbl;
+  }
+  chkDiv.appendChild(makeChk('Подписи координат', function(){return gridShowLabels;}, function(v){gridShowLabels=v;}));
+  chkDiv.appendChild(makeChk('Крест в нач. координат (0,0)', function(){return gridShowOrigin;}, function(v){gridShowOrigin=v;}));
+  body.appendChild(chkDiv);
+
+  // Reset button
+  var resetBtn = document.createElement('button');
+  resetBtn.textContent='↺ По умолчанию';
+  resetBtn.style.cssText='background:rgba(255,255,255,.05);border:1px solid #334155;color:#64748b;border-radius:6px;padding:7px;cursor:pointer;font-size:11px;';
+  resetBtn.onclick=function(){
+    gridColor='#5078c8'; gridOpacity=0.55; gridSize=0; gridShowLabels=true; gridShowOrigin=true;
+    var ci=document.getElementById('gs-color'); if(ci)ci.value=gridColor;
+    var oi=document.getElementById('gs-opacity'); if(oi)oi.value=55;
+    var si=document.getElementById('gs-size'); if(si)si.value=0;
+    var ov=document.getElementById('gs-op-val'); if(ov)ov.textContent='55%';
+    isDrawingScheduled=false; draw();
+  };
+  body.appendChild(resetBtn);
+  p.appendChild(body);
+
+  document.body.appendChild(p);
 }
